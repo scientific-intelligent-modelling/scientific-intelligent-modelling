@@ -1,0 +1,3 @@
+[submodule "libs/gplearn"]
+	path = libs/gplearn
+	url = https://github.com/trevorstephens/gplearn.git
