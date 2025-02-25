@@ -6,15 +6,15 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "scientific-intelligent-modelling"  # pip install 时使用的包名
+name = "scientific_intelligent_modelling"
 version = "0.1.0"
-description = "A single toolkit that wraps gplearn (and possibly other modules)."
+description = "A unified toolkit that integrates many external libraries"
 readme = "README.md"
 authors = [
-  { name = "YourName", email = "your.email@example.com" }
+  { name = "kai li", email = "kai.li@ia.ac.cn" }
 ]
 license = { file = "LICENSE" }
-keywords = ["genetic programming", "symbolic regression", "modeling"]
+keywords = ["modeling", "gplearn", "integration"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License"
@@ -23,9 +23,8 @@ requires-python = ">=3.7"
 
 # 如果你的库还依赖 numpy / scipy / pandas 等，可以在此声明
 dependencies = [
-    "numpy>=1.20.0",
-    "scipy>=1.6.0",
-    "pandas>=1.2.0"
+    "scikit-learn>=1.0.2",
+    "joblib>=1.0.0"
 ]
 
 [tool.setuptools]
