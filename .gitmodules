@@ -1,3 +1,6 @@
 [submodule "scientific_intelligent_modelling/sublibs/gplearn"]
 	path = scientific_intelligent_modelling/sublibs/gplearn
 	url = git@github.com:trevorstephens/gplearn.git
+[submodule "scientific_intelligent_modelling/sublibs/PySR"]
+	path = scientific_intelligent_modelling/sublibs/PySR
+	url = git@github.com:MilesCranmer/PySR.git
