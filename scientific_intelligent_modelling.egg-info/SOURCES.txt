@@ -1,9 +1,0 @@
-LICENSE
-README.md
-pyproject.toml
-scientific_intelligent_modelling/__init__.py
-scientific_intelligent_modelling.egg-info/PKG-INFO
-scientific_intelligent_modelling.egg-info/SOURCES.txt
-scientific_intelligent_modelling.egg-info/dependency_links.txt
-scientific_intelligent_modelling.egg-info/requires.txt
-scientific_intelligent_modelling.egg-info/top_level.txt

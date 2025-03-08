@@ -1,2 +1,2 @@
-./build
-./scientific_intelligent_modelling.egg-info
+build/
+scientific_intelligent_modelling.egg-info/
