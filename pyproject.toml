@@ -1,34 +1,36 @@
 [build-system]
-requires = [
-    "setuptools>=61.0",
-    "wheel"
-]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "scientific_intelligent_modelling"
-version = "0.1.0"
+version = "0.1.1"
 description = "A unified toolkit that integrates many external libraries"
 readme = "README.md"
-authors = [
-  { name = "kai li", email = "kai.li@ia.ac.cn" }
-]
+authors = [{ name = "kai li", email = "kai.li@ia.ac.cn" }]
 license = { file = "LICENSE" }
 keywords = ["modeling", "gplearn", "integration"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License"
+    "License :: OSI Approved :: MIT License",
 ]
 requires-python = ">=3.7"
 
 # 如果你的库还依赖 numpy / scipy / pandas 等，可以在此声明
 dependencies = [
+    "sympy>=1.0.0,<2.0.0",
+    "pandas>=0.21.0,<3.0.0",
+    "numpy>=1.13.0,<3.0.0",
     "scikit-learn>=1.0.2",
-    "joblib>=1.0.0"
+    "juliacall==0.9.24",
+    "click>=7.0.0,<9.0.0",
+    "setuptools>=50.0.0",
+    "joblib>=1.0.0",
 ]
 
 [tool.setuptools]
-packages = { find = { where = ["scientific_intelligent_modelling"] } }
+packages = ["scientific_intelligent_modelling"]
+package-dir = { scientific_intelligent_modelling = "scientific_intelligent_modelling" }
 include-package-data = true
 
 # [tool.setuptools.packages.find]

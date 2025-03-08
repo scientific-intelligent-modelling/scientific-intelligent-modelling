@@ -5,9 +5,10 @@
 
 # 再导出外部库的 “适配器” 中最常用的对象
 from .adapters.gplearn_adapter import SymbolicRegressor, SymbolicTransformer
-
+from .adapters.pysr_adapter import PySRRegressor
 __all__ = [
     # "main_func",
     "SymbolicRegressor",
     "SymbolicTransformer",
+    "PySRRegressor"
 ]
