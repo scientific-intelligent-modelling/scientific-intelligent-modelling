@@ -1,2 +1,4 @@
 build/
 scientific_intelligent_modelling.egg-info/
+__pycache__/
+*.pyc

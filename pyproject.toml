@@ -14,24 +14,14 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
 ]
-requires-python = ">=3.7"
+requires-python = ">=3.10" # 修改为 3.10 以满足 pysr 要求
 
-# 如果你的库还依赖 numpy / scipy / pandas 等，可以在此声明
 dependencies = [
-    "sympy>=1.0.0,<2.0.0",
-    "pandas>=0.21.0,<3.0.0",
-    "numpy>=1.13.0,<3.0.0",
-    "scikit-learn>=1.0.2",
-    "juliacall==0.9.24",
-    "click>=7.0.0,<9.0.0",
-    "setuptools>=50.0.0",
-    "joblib>=1.0.0",
+    "pysr>=1.5.2",   # 直接依赖 pysr，pysr 内部已经声明所需的依赖
+    "joblib>=1.0.0", # 如果你的项目还需要其它库，再额外添加
 ]
 
 [tool.setuptools]
 packages = ["scientific_intelligent_modelling"]
 package-dir = { scientific_intelligent_modelling = "scientific_intelligent_modelling" }
 include-package-data = true
-
-# [tool.setuptools.packages.find]
-# where = ["scientific_intelligent_modelling"]
