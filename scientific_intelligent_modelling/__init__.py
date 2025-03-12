@@ -1,14 +1,19 @@
 # scientific_intelligent_modelling/__init__.py
 
-# 导出一些核心的东西（假设你自己写的在 core 里）
-# from .core.main_function import main_func
-
-# 再导出外部库的 “适配器” 中最常用的对象
-from .adapters.gplearn_adapter import SymbolicRegressor, SymbolicTransformer
-from .adapters.pysr_adapter import PySRRegressor
 __all__ = [
-    # "main_func",
     "SymbolicRegressor",
     "SymbolicTransformer",
     "PySRRegressor"
 ]
+
+def __getattr__(name):
+    if name == "SymbolicRegressor":
+        from .adapters.gplearn_adapter import SymbolicRegressor
+        return SymbolicRegressor
+    elif name == "SymbolicTransformer":
+        from .adapters.gplearn_adapter import SymbolicTransformer
+        return SymbolicTransformer
+    elif name == "PySRRegressor":
+        from .adapters.pysr_adapter import PySRRegressor
+        return PySRRegressor
+    raise AttributeError(f"module {__name__} has no attribute {name}")
