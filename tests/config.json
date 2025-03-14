@@ -1,0 +1,44 @@
+{
+    "dataset": {
+      "name": "example_dataset",
+      "path": "data/example.csv",
+      "format": "csv",
+      "features": ["x1", "x2", "x3"],
+      "target": "y",
+    //   "train_test_split": 0.8,
+      "normalization": true
+    },
+    "tools": {
+      "gplearn": {
+        "population_size": 1000,
+        "generations": 20,
+        "function_set": ["add", "sub", "mul", "div"],
+        "metric": "mean absolute error",
+        "parsimony_coefficient": 0.01,
+        "random_state": 42
+      },
+      "deap": {
+        "population_size": 500,
+        "generations": 50,
+        "mutation_rate": 0.2,
+        "crossover_rate": 0.5,
+        "elitism": true,
+        "random_state": 42
+      },
+      "pySR": {
+        "niterations": 40,
+        "maxsize": 30,
+        "binary_operators": ["+", "-", "*", "/"],
+        "unary_operators": ["sin", "cos", "exp"],
+        "loss": "L2",
+        "complexity_ratio": 1e-3
+      }
+    },
+    "global_settings": {
+      "parallel": true,
+      "n_jobs": 4,
+      "logging_level": "info",
+      "seed": 1234
+    }
+  }
+  

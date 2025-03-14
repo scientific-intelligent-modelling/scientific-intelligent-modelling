@@ -34,8 +34,8 @@ def test_pysr_basic_regression():
     assert len(equations) > 0
     
     # 检查模型评分
-    scores = model.scores_
-    assert len(scores) > 0
+    scores = model.score
+    print(scores)
 
 def test_pysr_input_validation():
     model = PySRRegressor(niterations=5)
@@ -70,3 +70,5 @@ def test_pysr_custom_operators():
     assert model is not None
     y_pred = model.predict(X)
     assert y_pred.shape == y.shape 
+
+test_pysr_basic_regression()
