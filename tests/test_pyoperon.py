@@ -7,11 +7,11 @@ from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import r2_score, make_scorer, mean_squared_error
 from sklearn.ensemble import RandomForestRegressor
 
-# from pyoperon.sklearn import SymbolicRegressor
-from scientific_intelligent_modelling import OperonRegressor
+from pyoperon.sklearn import SymbolicRegressor
+from pyoperon import R2, MSE, InfixFormatter, FitLeastSquares, Interpreter
 
-D_train = pd.read_csv('datasets/example.csv', sep=',')
-D_test = pd.read_csv('datasets/example.csv', sep=',')
+D_train = pd.read_csv('./datasets/example.csv', sep=',')
+D_test = pd.read_csv('./datasets/example.csv', sep=',')
 
 X_train, y_train = D_train.iloc[:,:-1], D_train.iloc[:,-1]
 X_test, y_test = D_test.iloc[:,:-1], D_train.iloc[:,-1]
@@ -24,7 +24,7 @@ from sympy import parse_expr
 import matplotlib.pyplot as plt
 from copy import deepcopy
 
-reg = OperonRegressor(
+reg = SymbolicRegressor(
         allowed_symbols= "add,sub,mul,aq,sin,constant,variable",
         brood_size= 10,
         comparison_factor= 0,
@@ -37,16 +37,16 @@ reg = OperonRegressor(
         initialization_max_length= 10,
         initialization_method= "btc",
         irregularity_bias= 0.0,
-        # local_search_probability=1.0,
-        # lamarckian_probability=1.0,
-        # optimizer_iterations=1,
-        # optimizer='lm',
+        local_search_probability=1.0,
+        lamarckian_probability=1.0,
+        optimizer_iterations=1,
+        optimizer='lm',
         male_selector= "tournament",
         max_depth= 10,
         max_evaluations= 1000000,
         max_length= 50,
         max_selection_pressure= 100,
-        # model_selection_criterion= "minimum_description_length",
+        model_selection_criterion= "minimum_description_length",
         mutation_probability= 0.25,
         n_threads= 32,
         objectives= [ 'r2', 'length' ],

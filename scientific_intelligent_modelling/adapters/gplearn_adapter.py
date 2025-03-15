@@ -1,7 +1,7 @@
 # gplearn_adapter.py
 # 假设你要封装 gplearn.genetic 里的 SymbolicRegressor / SymbolicTransformer
 
-from ..sublibs.gplearn.gplearn.genetic import (
+from gplearn import (
     SymbolicRegressor as _SymbolicRegressor
 )
 
