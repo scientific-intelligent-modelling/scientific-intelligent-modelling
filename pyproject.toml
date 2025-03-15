@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scientific_intelligent_modelling"
-version = "0.1.1"
+version = "0.1.3"
 description = "A unified toolkit that integrates many external libraries"
 readme = "README.md"
 authors = [{ name = "kai li", email = "kai.li@ia.ac.cn" }]
@@ -19,6 +19,7 @@ requires-python = ">=3.10" # 修改为 3.10 以满足 pysr 要求
 dependencies = [
     "pysr>=1.5.2",   # 直接依赖 pysr，pysr 内部已经声明所需的依赖
     "joblib>=1.0.0", # 如果你的项目还需要其它库，再额外添加
+    "pyoperon @ ./dependencies/pyoperon-0.5.0-cp310-cp310-manylinux_2_28_x86_64.whl",      # 添加 pyoperon 依赖
 ]
 
 [tool.setuptools]

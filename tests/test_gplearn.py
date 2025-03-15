@@ -7,7 +7,7 @@ from sklearn.utils.validation import check_random_state
 from sklearn.model_selection import train_test_split
 
 # import scientific_intelligent_modelling as sim
-from scientific_intelligent_modelling import SymbolicRegressor
+from scientific_intelligent_modelling import GplearnRegressor
 
 if __name__ == '__main__':
     # 读取生成的数据集
@@ -31,7 +31,7 @@ if __name__ == '__main__':
     print(f"目标函数: y = sin(x1) + x2^2 - 0.5*x3 + 0.1*x1*x2*x3")
     
     # 配置并运行符号回归
-    est_gp = SymbolicRegressor(
+    est_gp = GplearnRegressor(
         population_size=5000, 
         generations=20,
         stopping_criteria=0.01, 
