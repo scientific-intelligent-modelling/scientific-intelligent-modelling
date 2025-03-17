@@ -7,8 +7,7 @@ from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import r2_score, make_scorer, mean_squared_error
 from sklearn.ensemble import RandomForestRegressor
 
-from pyoperon.sklearn import SymbolicRegressor
-from pyoperon import R2, MSE, InfixFormatter, FitLeastSquares, Interpreter
+from scientific_intelligent_modelling import OperonRegressor
 
 D_train = pd.read_csv('./datasets/example.csv', sep=',')
 D_test = pd.read_csv('./datasets/example.csv', sep=',')
@@ -24,7 +23,7 @@ from sympy import parse_expr
 import matplotlib.pyplot as plt
 from copy import deepcopy
 
-reg = SymbolicRegressor(
+reg = OperonRegressor(
         allowed_symbols= "add,sub,mul,aq,sin,constant,variable",
         brood_size= 10,
         comparison_factor= 0,

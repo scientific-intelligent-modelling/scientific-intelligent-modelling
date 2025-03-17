@@ -1,24 +1,31 @@
 # scientific-intelligent-modelling
 
-具体任务
-暂时无法在飞书文档外展示此内容
-先构建一个内部的github/gitee项目@张紫闻 
-需要集成的算法/框架：
-- 基于符号回归的建模算法
-  - 遗传类
-    - gplearn：https://github.com/trevorstephens/gplearn
-    - pysr：https://github.com/MilesCranmer/PySR
-    - operon：https://github.com/heal-research/operon，https://github.com/heal-research/pyoperon
-    - evogp：https://github.com/EMI-Group/evogp
-  - 强化学习类
-  - 预训练模型类
-  - 大语言模型类
-- 微分方程建模（发现）算法
-  - pysindy：https://github.com/dynamicslab/pysindy
-- 组合优化问题建模算法
-  - 基于prompt的方法
-    - Chain-of-Experts：https://github.com/xzymustbexzy/Chain-of-Experts
-    - OptiMUS：https://github.com/teshnizi/OptiMUS
-  - 基于大模型微调的方法
-    - ORLM：https://github.com/Cardinal-Operations/ORLM
-    - LLMOPT：https://github.com/caigaojiang/LLMOPT
+## Installation
+
+``` bash
+conda create -n python310 python=3.10
+```
+
+在虚拟环境中安装cuda环境，cuda版本为11.8
+``` bash
+conda install -c nvidia cuda-toolkit=11.8 
+```
+
+执行完之后，使用
+which nvcc
+查看，nvcc所在的区域，若nvcc在虚拟路径内，如`/home/ziwen/anaconda3/envs/python310/bin/nvcc` 则为安装成功。
+
+然后在虚拟环境中执行：
+``` bash
+mkdir -p $CONDA_PREFIX/etc/conda/activate.d
+echo 'export CUDA_HOME=$(dirname $(dirname $(which nvcc)))' > $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
+echo 'export PATH=$CUDA_HOME/bin:$PATH' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
+echo 'export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
+```
+
+
+### 基本安装（没有 PyTorch）
+pip install .
+
+### Torch 安装
+pip install ".[torch]"
