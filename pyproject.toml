@@ -4,24 +4,23 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scientific_intelligent_modelling"
-version = "0.2.2"
+version = "1.0.0"
 description = "A unified toolkit that integrates many external libraries"
 readme = "README.md"
 authors = [{ name = "kai li", email = "kai.li@ia.ac.cn" }]
-license = { file = "LICENSE" }
+license = {text = "MIT"}
 keywords = ["modeling", "gplearn", "integration", "pytorch"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
 ]
-requires-python = ">=3.10" # 修改为 3.10 以满足 pysr 要求
+requires-python = ">=3.8" # 基解释器版本无所谓
 
 dependencies = [
-    "pysr>=1.5.2",   
-    "joblib>=1.0.0",  
-    "pyoperon>=0.5.0",  
-    "gplearn>=0.4.2",
-    #"evogp @ git+https://github.com/EMI-Group/evogp.git",
+    "numpy>=1.18.0",
+    "networkx>=2.5",
+    "pyyaml>=5.1",
 ]
 
 
@@ -29,3 +28,13 @@ dependencies = [
 packages = ["scientific_intelligent_modelling"]
 package-dir = { scientific_intelligent_modelling = "scientific_intelligent_modelling" }
 include-package-data = true
+
+[tool.mypy]
+warn_return_any = true          #当函数返回Any类型时发出警告
+warn_unused_configs = true      #提醒未使用的配置选项
+disallow_untyped_defs = true    #要求所有函数都有类型注解
+disallow_incomplete_defs = true #要求函数的所有参数和返回值都有类型注解
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]           #指定测试文件所在的目录
+python_files = "test_*.py"      #指定哪些文件被视为测试文件（以"test_"开头的.py文件）

@@ -1,0 +1,22 @@
+{
+    "cuda_versions": {
+      "11.1": {
+        "conda_env_name": "sim_cuda_11_1",
+        "python_version": "3.10",
+        "channels": ["pytorch", "nvidia", "conda-forge"],
+        "packages": ["cudatoolkit=11.1"]
+      },
+      "11.8": {
+        "conda_env_name": "sim_cuda_11_8",
+        "python_version": "3.10",
+        "channels": ["pytorch", "nvidia", "conda-forge"],
+        "packages": ["cudatoolkit=11.8"]
+      },
+      "base": {
+        "conda_env_name": "sim",
+        "python_version": "3.10",
+        "packages": ["pip", "ipython"]
+      }
+    }
+  }
+  

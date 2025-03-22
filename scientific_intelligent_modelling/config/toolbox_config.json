@@ -1,0 +1,11 @@
+{
+    "default_cuda": "11.7",
+    "auto_env_creation": true,
+    "subprocess_timeout": 3600,
+    "memory_limit": 16000,
+    "tool_mapping": {
+      "torch_1_8_tool": {"cuda": "11.8", "priority": "high"},
+      "sklearn_tool": {"cuda": null, "priority": "medium"}
+    }
+    
+}

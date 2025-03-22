@@ -1,9 +1,0 @@
-name: python310
-channels:
-  - nvidia
-  - conda-forge
-  - defaults
-dependencies:
-  - cuda-toolkit=11.8
-  - cudnn=8.2
-  - cuda-nvcc=11.8
