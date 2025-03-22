@@ -22,7 +22,9 @@ echo 'export CUDA_HOME=$(dirname $(dirname $(which nvcc)))' > $CONDA_PREFIX/etc/
 echo 'export PATH=$CUDA_HOME/bin:$PATH' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
 echo 'export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
 ```
-
+### 
+先提前安装pytorch
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 
 ### 基本安装（没有 PyTorch）
 pip install .
