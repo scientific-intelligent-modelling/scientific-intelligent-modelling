@@ -15,11 +15,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("cuda_conda_manager")
 
-class CudaCondaManager:
-    """管理CUDA Conda环境"""
+class EnvironmentManager:
+    """管理Conda环境"""
     
     def __init__(self):
-        self.cuda_config = config_manager.get_config("cuda_config")
+        self.conda_envs_config = config_manager.get_config("envs_config")
         self.conda_base_path = self._get_conda_base_path()
     
     def _get_conda_base_path(self):
@@ -39,7 +39,7 @@ class CudaCondaManager:
             logger.error(f"获取conda路径失败: {e}")
             return None
     
-    def environment_exists(self, env_name):
+    def environment_exists(self, conda_env_name):
         """检查指定的conda环境是否存在"""
         try:
             result = subprocess.run(
@@ -51,24 +51,23 @@ class CudaCondaManager:
             import json
             env_list = json.loads(result.stdout)
             env_names = [os.path.basename(env) for env in env_list['envs']]
-            return env_name in env_names
+            return conda_env_name in env_names
         except Exception as e:
             logger.error(f"检查环境失败: {e}")
             return False
     
-    def create_cuda_environment(self, cuda_version):
+    def create_conda_environment(self, conda_env_name):
         """创建指定CUDA版本的conda环境"""
-        cuda_versions = self.cuda_config.get("cuda_versions", {})
+        conda_env_list = self.conda_envs_config.get("env_list", {})
         
-        if cuda_version not in cuda_versions:
-            logger.error(f"不支持的CUDA版本: {cuda_version}")
+        if conda_env_name not in conda_env_list:
+            logger.error(f"不支持的CUDA版本: {conda_env_name}")
             return False
         
-        env_config = cuda_versions[cuda_version]
-        env_name = env_config.get("conda_env_name")
+        env_config = conda_env_list[conda_env_name]
         
-        if self.environment_exists(env_name):
-            logger.info(f"环境{env_name}已存在")
+        if self.environment_exists(conda_env_name):
+            logger.info(f"环境{conda_env_name}已存在")
             return True
         
         # 构建创建环境的命令
@@ -76,30 +75,30 @@ class CudaCondaManager:
         packages = " ".join(env_config.get("packages", []))
         python_version = env_config.get("python_version", "3.8")
         
-        cmd = f"conda create -n {env_name} python={python_version} {packages} {channels} -y"
+        cmd = f"conda create -n {conda_env_name} python={python_version} {packages} {channels} -y"
         
         try:
-            logger.info(f"正在创建环境: {env_name}")
+            logger.info(f"正在创建环境: {conda_env_name}")
             subprocess.run(cmd, shell=True, check=True)
-            logger.info(f"环境{env_name}创建成功")
+            logger.info(f"环境{conda_env_name}创建成功")
             return True
         except subprocess.CalledProcessError as e:
             logger.error(f"创建环境失败: {e}")
             return False
     
-    def get_environment_python(self, env_name):
+    def get_environment_python(self, conda_env_name):
         """获取指定环境的Python可执行文件路径"""
         if not self.conda_base_path:
             return None
         
         if os.name == 'nt':  # Windows
-            python_path = os.path.join(self.conda_base_path, "envs", env_name, "python.exe")
+            python_path = os.path.join(self.conda_base_path, "envs", conda_env_name, "python.exe")
         else:  # Linux/MacOS
-            python_path = os.path.join(self.conda_base_path, "envs", env_name, "bin", "python")
+            python_path = os.path.join(self.conda_base_path, "envs", conda_env_name, "bin", "python")
         
         if os.path.exists(python_path):
             return python_path
         return None
 
 # 创建全局CUDA管理器实例
-cuda_manager = CudaCondaManager()
+environment_manager = EnvironmentManager()

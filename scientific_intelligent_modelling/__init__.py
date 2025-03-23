@@ -14,12 +14,12 @@ class LazyToolLoader:
     def __getattr__(self, name):
         if self._tool is None:
             from .enhanced_subprocess import ToolProxy
-            self._tool = ToolProxy(self.tool_name, self.cuda_version)
+            self._tool = ToolProxy(self.tool_name)
         return getattr(self._tool, name)
 
 # 使用延迟加载
 sklearn_tool = LazyToolLoader('sklearn_tool')
-torch_tool = LazyToolLoader('torch_1_8_tool', cuda_version="11.8")
+torch_tool = LazyToolLoader('torch_1_8_tool')
 
 # 导出工具
 __all__ = ['sklearn_tool', 'torch_tool']

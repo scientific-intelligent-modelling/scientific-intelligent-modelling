@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 
 from .config_manager import config_manager
-from .cuda_conda_manager import cuda_manager
+from .environment_manager import environment_manager
 
 # 配置日志
 logging.basicConfig(
@@ -22,27 +22,23 @@ logger = logging.getLogger("enhanced_subprocess")
 class EnhancedSubprocess:
     """增强的子进程类，支持在隔离环境中运行代码"""
     
-    def __init__(self, cuda_version=None, env_name=None):
+    def __init__(self, env_name=None):
         """
         初始化子进程管理器
         
         Args:
-            cuda_version (str, optional): CUDA版本，如"11.1"
             env_name (str, optional): 环境名称，如果指定则优先使用
         """
         if env_name:
             self.env_name = env_name
-        elif cuda_version:
-            self.env_name = config_manager.get_cuda_env_name(cuda_version)
         else:
-            # 使用base环境
-            self.env_name = config_manager.get_cuda_env_name("base")
+            raise ValueError("必须指定环境名称")
         
-        self.python_executable = cuda_manager.get_environment_python(self.env_name)
+        self.python_executable = environment_manager.get_environment_python(self.env_name)
         if not self.python_executable:
             logger.warning(f"未找到环境{self.env_name}的Python，尝试创建环境")
-            cuda_manager.create_cuda_environment(cuda_version or "base")
-            self.python_executable = cuda_manager.get_environment_python(self.env_name)
+            environment_manager.create_conda_environment(self.env_name)
+            self.python_executable = environment_manager.get_environment_python(self.env_name)
         
         self.timeout = config_manager.get_config("toolbox_config").get("subprocess_timeout", 3600)
     
@@ -154,22 +150,17 @@ except Exception as e:
 class ToolProxy:
     """工具代理类，用于透明地在隔离环境中调用工具函数"""
     
-    def __init__(self, tool_name, cuda_version=None):
+    def __init__(self, tool_name):
         """
         初始化工具代理
         
         Args:
             tool_name (str): 工具名称
-            cuda_version (str, optional): CUDA版本
         """
         self.tool_name = tool_name
         
-        if cuda_version is None:
-            self.cuda_version = config_manager.get_tool_cuda_version(tool_name)
-        else:
-            self.cuda_version = cuda_version
-            
-        self.subprocess_runner = EnhancedSubprocess(cuda_version=self.cuda_version)
+        self.env_name = config_manager.get_env_name_by_tool(tool_name)
+        self.subprocess_runner = EnhancedSubprocess(self.env_name)
         
     def __getattr__(self, name):
         """拦截属性访问，返回可在隔离环境中执行的函数"""

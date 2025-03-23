@@ -28,23 +28,23 @@ class ConfigManager:
     def get_config(self, config_name):
         """获取指定配置"""
         return self.configs.get(config_name, {})
-    
-    def get_tool_cuda_version(self, tool_name):
-        """获取工具对应的CUDA版本"""
+
+    def get_env_name_by_tool(self, tool_name):
+        """获取工具对应的conda环境名称"""
         toolbox_config = self.get_config("toolbox_config")
         tool_mapping = toolbox_config.get("tool_mapping", {})
         
         if tool_name in tool_mapping:
-            return tool_mapping[tool_name].get("cuda")
-        return toolbox_config.get("default_cuda")
+            return tool_mapping[tool_name].get("env")
+        return None
     
-    def get_cuda_env_name(self, cuda_version):
-        """获取CUDA版本对应的conda环境名称"""
-        cuda_config = self.get_config("cuda_config")
-        cuda_versions = cuda_config.get("cuda_versions", {})
+    def get_env_config(self, env_name):
+        """获取指定conda环境的配置"""
+        envs_config = self.get_config("envs_config")
+        env_list = envs_config.get("env_list", {})
         
-        if cuda_version in cuda_versions:
-            return cuda_versions[cuda_version].get("conda_env_name")
+        if env_name in env_list:
+            return env_list.get(env_name)
         return None
 
 # 创建全局配置管理器实例
