@@ -10,7 +10,7 @@ class ConfigManager:
     def __init__(self, config_dir=None):
         if config_dir is None:
             # 如果未指定配置目录，使用包内的config目录
-            self.config_dir = Path(__file__).parent / "config"
+            self.config_dir = Path(__file__).parent.parent / "config"
         else:
             self.config_dir = Path(config_dir)
         

@@ -24,7 +24,7 @@ def main():
             raise ValueError("命令中缺少工具名称")
         
         # 导入工具包装器
-        wrapper_module = importlib.import_module(f"tools.{tool_name}_wrapper.wrapper")
+        wrapper_module = importlib.import_module(f"scientific_intelligent_modelling.tools.{tool_name}_wrapper.wrapper")
         
         # 执行命令
         result = execute_command(wrapper_module, command)
@@ -45,11 +45,11 @@ def main():
         sys.exit(1)
 
 def execute_command(module, command):
-    """根据命令类型和工具执行相应操作"""
+    """根据命令类型执行相应操作"""
     action = command['action']
     tool_name = command['tool_name']
     
-    # 获取正确的类
+    # 获取正确的回归器类
     regressor_class = get_regressor_class(module, tool_name)
     
     if action == 'fit':
@@ -58,28 +58,29 @@ def execute_command(module, command):
         return handle_predict(regressor_class, command)
     else:
         raise ValueError(f"未知操作: {action}")
-    
+
 def get_regressor_class(module, tool_name):
     """根据工具名获取对应的回归器类"""
+    # 工具名到类名的映射
     class_mapping = {
         'gplearn': 'GPLearnRegressor',
         'pysr': 'PySRRegressor',
         'srbench': 'SRBenchRegressor',
-        # 其他工具映射
+        # 添加其他工具的映射...
     }
     
     class_name = class_mapping.get(tool_name)
     if class_name and hasattr(module, class_name):
         return getattr(module, class_name)
     
-    # 后备方案：尝试使用模块中的任何回归器类
+    # 后备方案：尝试查找任何以Regressor结尾的类
     for attr_name in dir(module):
         if attr_name.endswith('Regressor'):
             return getattr(module, attr_name)
     
     raise ValueError(f"在模块 {module.__name__} 中未找到合适的回归器类")
 
-def handle_fit(module, command):
+def handle_fit(regressor_class, command):
     """处理fit操作"""
     import numpy as np
     
@@ -92,7 +93,7 @@ def handle_fit(module, command):
     y = np.array(data['y'])
     
     # 创建回归器并训练
-    regressor = module.SymbolicRegressor(**params)
+    regressor = regressor_class(**params)  # 使用动态获取的类
     regressor.fit(X, y)
     
     # 序列化模型状态
@@ -111,7 +112,7 @@ def handle_fit(module, command):
         'model_state': model_state
     }
 
-def handle_predict(module, command):
+def handle_predict(regressor_class, command):
     """处理predict操作"""
     import numpy as np
     
@@ -123,7 +124,7 @@ def handle_predict(module, command):
     X = np.array(data['X'])
     
     # 重建回归器并预测
-    regressor = module.SymbolicRegressor()
+    regressor = regressor_class()  # 使用动态获取的类
     
     # 如果有from_dict方法，用它加载状态
     if hasattr(regressor, 'from_dict'):
