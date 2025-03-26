@@ -11,8 +11,8 @@ y = X[:, 0]**2 + np.sin(X[:, 1]) + 0.1*np.random.randn(100)
 # 使用不同工具进行对比
 models = {
     'gplearn': SymbolicRegressor('gplearn', population_size=1000, generations=20),
-    # 'pysr': SymbolicRegressor('pysr', niterations=100),
-    # 'srbench': SymbolicRegressor('srbench', method='operon')
+    #'pysr': SymbolicRegressor('pysr', niterations=100),
+    #'srbench': SymbolicRegressor('srbench', method='operon')
 }
 
 results = {}

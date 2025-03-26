@@ -10,7 +10,7 @@
       "channels": ["pytorch", "nvidia", "conda-forge"],
       "packages": ["cudatoolkit=11.8"]
     },
-    "test":{
+    "test": {
       "python_version": "3.10",
       "packages": ["pip", "ipython", "gplearn"]
     },
@@ -18,6 +18,13 @@
       "python_version": "3.10",
       "packages": ["pip", "ipython"],
       "comments": "这是工具箱的基环境，里面不装任何的依赖包"
+    },
+    "pip_env": {
+      "python_version": "3.10",
+      "packages": ["pip", "requests", "numpy"],
+      "post_install_commands": [
+        "pip install ."
+      ]
     }
   }
 }
