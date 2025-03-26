@@ -5,6 +5,10 @@ import importlib
 import sys
 import traceback
 import os
+from config_manager import config_manager
+
+print(f"当前工作目录: {os.getcwd()}")
+print(f"脚本所在目录: {os.path.dirname(os.path.abspath(__file__))}")
 
 def main():
     """子进程执行入口点"""
@@ -59,24 +63,36 @@ def execute_command(module, command):
     else:
         raise ValueError(f"未知操作: {action}")
 
+# 从配置管理器获取工具映射
+def get_class_mapping_from_config():
+    # 获取toolbox配置
+    toolbox_config = config_manager.get_config("toolbox_config")
+    tool_mapping = toolbox_config.get("tool_mapping", {})
+    
+    # 构建工具名到类名的映射
+    class_mapping = {}
+    for tool_name, tool_info in tool_mapping.items():
+        class_mapping[tool_name] = tool_info.get("regressor")
+    
+    # 如果需要添加配置中没有的映射，可以在这里手动添加
+    if "srbench" not in class_mapping:
+        class_mapping["srbench"] = "SRBenchRegressor"
+        
+    return class_mapping
+
 def get_regressor_class(module, tool_name):
     """根据工具名获取对应的回归器类"""
     # 工具名到类名的映射
-    class_mapping = {
-        'gplearn': 'GPLearnRegressor',
-        'pysr': 'PySRRegressor',
-        'srbench': 'SRBenchRegressor',
-        # 添加其他工具的映射...
-    }
+    class_mapping = get_class_mapping_from_config()
     
     class_name = class_mapping.get(tool_name)
     if class_name and hasattr(module, class_name):
         return getattr(module, class_name)
     
-    # 后备方案：尝试查找任何以Regressor结尾的类
-    for attr_name in dir(module):
-        if attr_name.endswith('Regressor'):
-            return getattr(module, attr_name)
+    # # 后备方案：尝试查找任何以Regressor结尾的类
+    # for attr_name in dir(module):
+    #     if attr_name.endswith('Regressor'):
+    #         return getattr(module, attr_name)
     
     raise ValueError(f"在模块 {module.__name__} 中未找到合适的回归器类")
 

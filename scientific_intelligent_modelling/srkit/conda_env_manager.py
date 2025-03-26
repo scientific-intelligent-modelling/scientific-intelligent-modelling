@@ -44,7 +44,9 @@ class EnvManager:
     def check_conda_installed(self):
         """检查是否安装Conda并可在PATH中使用"""
         try:
-            subprocess.run(["conda", "--version"], capture_output=True, check=True)
+            subprocess.run(["conda", "--version"], 
+                           capture_output=True, 
+                           check=True)
             return True
         except (subprocess.SubprocessError, FileNotFoundError):
             print("错误: Conda未安装或不在PATH中。")
@@ -66,22 +68,22 @@ class EnvManager:
             if comments:
                 print(f"   备注: {comments}")
             
-            # 打印包信息
-            packages = env_details.get("packages", [])
-            if packages:
-                print(f"   包: {', '.join(packages)}")
+            # # 打印包信息
+            # packages = env_details.get("packages", [])
+            # if packages:
+            #     print(f"   包: {', '.join(packages)}")
             
-            # 打印渠道信息
-            channels = env_details.get("channels", [])
-            if channels:
-                print(f"   渠道: {', '.join(channels)}")
+            # # 打印渠道信息
+            # channels = env_details.get("channels", [])
+            # if channels:
+            #     print(f"   渠道: {', '.join(channels)}")
                 
             # 打印安装后命令
-            post_commands = env_details.get("post_install_commands", [])
-            if post_commands:
-                print(f"   安装后命令:")
-                for cmd in post_commands:
-                    print(f"     - {cmd}")
+            # post_commands = env_details.get("post_install_commands", [])
+            # if post_commands:
+            #     print(f"   安装后命令:")
+            #     for cmd in post_commands:
+            #         print(f"     - {cmd}")
             
             print()  # 空行提高可读性
     
@@ -177,11 +179,9 @@ class EnvManager:
         if env_name not in existing_envs:
             return False, f"环境 '{env_name}' 不存在"
         
-        # 检查环境中是否安装了所需的包
-        required_packages = env_config.get("packages", [])
-        
-        if required_packages:
-            # 获取环境中已安装的包
+        # 检查环境中是否安装了所需的conda包
+        conda_packages = env_config.get("conda_packages", [])
+        if conda_packages:
             try:
                 result = subprocess.run(
                     ["conda", "list", "--name", env_name], 
@@ -198,19 +198,53 @@ class EnvManager:
                             pkg_name = parts[0]
                             installed_packages.append(pkg_name)
                 
-                # 检查所需的包是否都已安装
+                # 检查所需的conda包是否都已安装
                 missing_packages = []
-                for package in required_packages:
+                for package in conda_packages:
                     # 处理包名可能包含版本号的情况
                     package_name = package.split('=')[0] if '=' in package else package
                     if package_name not in installed_packages:
                         missing_packages.append(package_name)
                 
                 if missing_packages:
-                    return False, f"环境 '{env_name}' 缺少必需的包: {', '.join(missing_packages)}"
+                    return False, f"环境 '{env_name}' 缺少必需的conda包: {', '.join(missing_packages)}"
                         
             except subprocess.CalledProcessError as e:
-                return False, f"检查环境 '{env_name}' 的包时出错: {e}"
+                return False, f"检查环境 '{env_name}' 的conda包时出错: {e}"
+        
+        # 检查环境中是否安装了所需的pip包
+        pip_packages = env_config.get("pip_packages", [])
+        if pip_packages:
+            try:
+                result = subprocess.run(
+                    ["conda", "run", "-n", env_name, "pip", "list"], 
+                    capture_output=True, 
+                    text=True, 
+                    check=True
+                )
+                
+                installed_pip_packages = []
+                for line in result.stdout.splitlines():
+                    if line and not line.startswith('Package') and not line.startswith('-'):
+                        parts = line.split()
+                        if len(parts) >= 1:
+                            pkg_name = parts[0].lower()  # pip包名通常是小写的
+                            installed_pip_packages.append(pkg_name)
+                
+                # 检查所需的pip包是否都已安装
+                missing_pip_packages = []
+                for package in pip_packages:
+                    # 处理包名可能包含版本号的情况
+                    package_name = package.split('=')[0] if '=' in package else package
+                    package_name = package_name.lower()  # 转换为小写以进行比较
+                    if package_name not in installed_pip_packages:
+                        missing_pip_packages.append(package_name)
+                
+                if missing_pip_packages:
+                    return False, f"环境 '{env_name}' 缺少必需的pip包: {', '.join(missing_pip_packages)}"
+                        
+            except subprocess.CalledProcessError as e:
+                return False, f"检查环境 '{env_name}' 的pip包时出错: {e}"
         
         # 检查Python版本是否匹配
         required_python = env_config.get("python_version")
@@ -239,7 +273,7 @@ class EnvManager:
                 return False, f"环境 '{env_name}' 缺少必需的后处理命令: {', '.join(missing_commands)}"
         
         return True, None
-    
+
     def check_all_environments(self):
         """
         检查所有配置的环境的状态。
@@ -276,7 +310,7 @@ class EnvManager:
         
         return configured_envs, unconfigured_envs
 
-    
+
     def create_environment(self, env_name):
         """根据配置创建Conda环境，如果环境已存在且满足条件则跳过创建"""
         # 先检查环境是否已存在且满足条件
@@ -301,12 +335,13 @@ class EnvManager:
         if not env_details:
             print(f"错误: 配置中未找到环境'{env_name}'。")
             return False
-    
+
         python_version = env_details.get("python_version", "3.10")
-        packages = env_details.get("packages", [])
+        conda_packages = env_details.get("conda_packages", [])
+        pip_packages = env_details.get("pip_packages", [])
         channels = env_details.get("channels", [])
         post_commands = env_details.get("post_install_commands", [])
-    
+
         # 构建conda create命令
         cmd = ["conda", "create", "-y", "-n", env_name, f"python={python_version}"]
         
@@ -314,13 +349,50 @@ class EnvManager:
         for channel in channels:
             cmd.extend(["-c", channel])
         
-        # 添加指定的包
-        cmd.extend(packages)
+        # 添加指定的conda包
+        cmd.extend(conda_packages)
         
         print(f"创建环境'{env_name}'...")
         try:
             # 执行conda create命令
-            subprocess.run(cmd, check=True)
+            subprocess.run(cmd, check=True,
+                    capture_output=True,
+                    text=True,)
+            
+            # 安装pip包
+            if pip_packages:
+                print(f"为'{env_name}'安装pip包...")
+                all_pip_packages_installed = True
+                
+                for package in pip_packages:
+                    print(f"正在安装pip包: {package}...")
+                    pip_cmd = ["conda", "run", "-n", env_name, "pip", "install", package]
+                    
+                    try:
+                        # 使用直接输出到终端的方式运行命令
+                        subprocess.run(
+                            pip_cmd, 
+                            check=True,
+                            capture_output=True,
+                            # stdout=None,  # 直接输出到终端
+                            # stderr=None   # 直接输出到终端
+                        )
+                        print(f"pip包 {package} 安装完成。")
+                    except subprocess.CalledProcessError as e:
+                        print(f"安装pip包 {package} 时出错: {e}")
+                        all_pip_packages_installed = False
+                        
+                        # 可以选择是否继续安装其他包
+                        if input(f"安装 {package} 失败。是否继续安装其他包? (y/n): ").lower() != 'y':
+                            return False
+                
+                if not all_pip_packages_installed:
+                    print("警告: 某些pip包安装失败")
+                    if input("是否继续环境创建过程? (y/n): ").lower() != 'y':
+                        return False
+                else:
+                    print("所有pip包安装完成。")
+
             
             # 执行安装后命令
             if post_commands:
@@ -328,37 +400,48 @@ class EnvManager:
                 all_commands_succeeded = True
                 
                 for command in post_commands:
-                    print(f"执行: {command}")
+                    print(f"\n==== 开始执行后处理命令: {command} ====")
                     try:
-                        # 使用conda run在新环境中执行命令，并捕获输出
-                        result = subprocess.run(
-                            ["conda", "run", "-n", env_name] + command.split(), 
-                            check=True, 
-                            capture_output=True, 
-                            text=True
+                        # 将命令按照引号和空格正确拆分
+                        import shlex
+                        command_parts = shlex.split(command)
+                        
+                        # 使用conda run在新环境中执行命令，不捕获输出而是直接显示
+                        full_command = ["conda", "run", "-n", env_name] + command_parts
+                        print(f"完整命令: {' '.join(full_command)}")
+                        
+                        # 执行命令，直接将输出显示到终端
+                        subprocess.run(
+                            full_command,
+                            check=True,
+                            capture_output=True,
+                            # stdout=None,  # 直接输出到终端
+                            # stderr=None   # 直接输出到终端
                         )
-                        print(f"命令执行成功！输出:\n{result.stdout}")
+                        
+                        print(f"==== 后处理命令执行成功 ====")
                         
                         # 记录成功执行的命令
                         self.record_post_command_execution(env_name, command)
                         
                     except subprocess.CalledProcessError as e:
                         all_commands_succeeded = False
-                        print(f"命令 '{command}' 执行失败: {e}")
-                        print(f"错误输出: {e.stderr}")
+                        print(f"==== 后处理命令执行失败 ====")
+                        print(f"错误信息: {e}")
                         
                         # 可以选择是否继续执行剩余命令
-                        if input("是否继续执行剩余命令? (y/n): ").lower() != 'y':
+                        if input("命令执行失败。是否继续执行下一个命令? (y/n): ").lower() != 'y':
                             break
                 
                 if all_commands_succeeded:
-                    print(f"所有后处理命令执行成功！")
+                    print(f"\n所有后处理命令执行成功！")
                 else:
-                    print(f"警告: 某些后处理命令执行失败")
+                    print(f"\n警告: 某些后处理命令执行失败")
             return True
         except subprocess.CalledProcessError as e:
             print(f"创建环境'{env_name}'时出错: {e}")
             return False
+
     
     def delete_environment(self, env_name):
         """删除Conda环境"""

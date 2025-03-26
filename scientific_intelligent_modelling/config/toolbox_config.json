@@ -3,8 +3,8 @@
   "subprocess_timeout": 3600,
   "memory_limit": 16000,
   "tool_mapping": {
-    "torch_1_8_tool": {"env": "sim_cuda_11_8", "priority": "high"},
-    "sklearn_tool": {"env": "test", "priority": "medium"},
-    "gplearn": {"env": "test", "priority": "medium"}
+    "gplearn": {"env": "test", "regressor": "GPLearnRegressor"},
+    "pysr": {"env": "test", "regressor": "PySRRegressor"},
+    "pyoperon": {"env": "test", "regressor": "medium"}
   }
 }

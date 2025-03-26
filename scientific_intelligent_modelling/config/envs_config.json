@@ -3,30 +3,39 @@
     "sim_cuda_11_1": {
       "python_version": "3.10",
       "channels": ["pytorch", "nvidia", "conda-forge"],
-      "packages": ["cudatoolkit=11.1"]
+      "conda_packages": ["cudatoolkit=11.1"],
+      "pip_packages": []
     },
     "sim_cuda_11_8": {
       "python_version": "3.10",
       "channels": ["pytorch", "nvidia", "conda-forge"],
-      "packages": ["cudatoolkit=11.8"]
+      "conda_packages": ["cudatoolkit=11.8"],
+      "pip_packages": []
     },
     "test": {
       "python_version": "3.10",
-      "packages": ["pip", "ipython", "gplearn"],
+      "conda_packages": ["pip", "ipython"],
+      "pip_packages": ["gplearn", "pysr", "pyoperon"],
+      "comments": "测试环境，目前可以运行gplearn, pysr, pyoperon",
       "post_install_commands": [
         "pip install -e ."
       ]
     },
     "sim": {
       "python_version": "3.10",
-      "packages": ["pip", "ipython"],
-      "comments": "这是工具箱的基环境，里面不装任何的依赖包"
+      "conda_packages": ["pip", "ipython"],
+      "pip_packages": [],
+      "comments": "这是工具箱的基环境，里面不装任何的依赖包",
+      "post_install_commands": [
+        "pip install -e ."
+      ]
     },
     "pip_env": {
       "python_version": "3.10",
-      "packages": ["pip", "requests", "numpy"],
+      "conda_packages": ["pip"],
+      "pip_packages": ["requests", "numpy"],
       "post_install_commands": [
-        "pip install ."
+        "pip install -e ."
       ]
     }
   }
