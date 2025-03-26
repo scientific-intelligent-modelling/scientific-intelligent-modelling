@@ -7,7 +7,7 @@ import numpy as np
 from pathlib import Path
 
 from .config_manager import config_manager
-from .environment_manager import environment_manager
+from .conda_env_manager import env_manager
 
 class SymbolicRegressor:
     def __init__(self, tool_name, **kwargs):
@@ -28,9 +28,9 @@ class SymbolicRegressor:
             raise ValueError(f"未找到工具 '{tool_name}' 的环境配置")
         
         # 检查环境是否存在
-        if not environment_manager.environment_exists(self.env_name):
+        if not env_manager.check_environment(self.env_name):
             print(f"环境 '{self.env_name}' 不存在，正在创建...")
-            success = environment_manager.create_conda_environment(self.env_name)
+            success = env_manager.create_environment(self.env_name)
             if not success:
                 raise RuntimeError(f"无法创建环境 '{self.env_name}'")
     
@@ -110,7 +110,7 @@ class SymbolicRegressor:
     def _execute_subprocess(self, command):
         """执行子进程命令"""
         # 获取Python解释器路径
-        python_path = environment_manager.get_environment_python(self.env_name)
+        python_path = env_manager.get_env_python(self.env_name)
         if not python_path:
             raise RuntimeError(f"无法获取环境 '{self.env_name}' 的Python路径")
         
@@ -142,6 +142,12 @@ class SymbolicRegressor:
             
             return result
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"子进程执行失败: {e}")
+            # 读取结果
+            with open(result_path, 'r') as f:
+                result = json.load(f)
+            raise RuntimeError(f"子进程执行失败: {e}\n{result.get('traceback', '')}")
         except Exception as e:
-            raise RuntimeError(f"执行命令时发生错误: {e}")
+            # 读取结果
+            with open(result_path, 'r') as f:
+                result = json.load(f)
+            raise RuntimeError(f"执行命令时发生错误: {e}\n{result.get('traceback', '')}")

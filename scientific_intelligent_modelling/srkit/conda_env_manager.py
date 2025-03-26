@@ -4,8 +4,17 @@ import subprocess
 import os
 import sys
 import json
+import logging
 from pathlib import Path
 from .config_manager import config_manager
+
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger("conda_env_manager")
 
 class EnvManager:
     """管理Conda环境的创建和删除"""
@@ -13,7 +22,25 @@ class EnvManager:
     def __init__(self):
         self.config_manager = config_manager
         self.env_config = self.config_manager.get_config("envs_config")
-    
+        self.conda_base_path = self._get_conda_base_path()
+
+    def _get_conda_base_path(self):
+        """获取conda安装路径"""
+        try:
+            # 使用conda info命令获取conda的安装信息
+            result = subprocess.run(
+                ["conda", "info", "--json"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            import json
+            conda_info = json.loads(result.stdout)
+            return conda_info['conda_prefix']
+        except Exception as e:
+            logger.error(f"获取conda路径失败: {e}")
+            return None
+        
     def check_conda_installed(self):
         """检查是否安装Conda并可在PATH中使用"""
         try:
@@ -79,7 +106,20 @@ class EnvManager:
         except (subprocess.CalledProcessError, json.JSONDecodeError) as e:
             print(f"获取环境路径时出错: {e}")
             return None
-    
+    def get_env_python(self, conda_env_name):
+        """获取指定环境的Python可执行文件路径"""
+        if not self.conda_base_path:
+            return None
+        
+        if os.name == 'nt':  # Windows
+            python_path = os.path.join(self.conda_base_path, "envs", conda_env_name, "python.exe")
+        else:  # Linux/MacOS
+            python_path = os.path.join(self.conda_base_path, "envs", conda_env_name, "bin", "python")
+        
+        if os.path.exists(python_path):
+            return python_path
+        return None
+
     def get_post_commands_marker_path(self, env_name):
         """获取记录已执行后处理命令的标记文件路径"""
         env_path = self.get_env_path(env_name)
@@ -203,6 +243,7 @@ class EnvManager:
     def check_all_environments(self):
         """
         检查所有配置的环境的状态。
+        每检查一个环境就输出一个，并且在全部检查完后进行汇总。
         
         返回:
             - configured_envs: 已经配置好的环境列表
@@ -212,14 +253,29 @@ class EnvManager:
         configured_envs = []
         unconfigured_envs = []
         
+        print("开始检查所有环境...")
         for env_name in env_list:
             exists, reason = self.check_environment(env_name)
             if exists:
                 configured_envs.append(env_name)
+                print(f"环境 '{env_name}' 配置正确。")
             else:
                 unconfigured_envs.append((env_name, reason))
+                print(f"环境 '{env_name}' 配置失败: {reason}")
+        
+        # 汇总结果
+        print("\n检查完成，汇总结果:")
+        print(f"配置正确的环境: {len(configured_envs)} 个")
+        if configured_envs:
+            print("  - " + "\n  - ".join(configured_envs))
+        
+        print(f"配置失败的环境: {len(unconfigured_envs)} 个")
+        if unconfigured_envs:
+            for env_name, reason in unconfigured_envs:
+                print(f"  - {env_name}: {reason}")
         
         return configured_envs, unconfigured_envs
+
     
     def create_environment(self, env_name):
         """根据配置创建Conda环境，如果环境已存在且满足条件则跳过创建"""
@@ -425,21 +481,6 @@ class EnvManager:
             
             elif choice == "3":
                 configured_envs, unconfigured_envs = self.check_all_environments()
-                
-                print("\n**环境状态检查结果:**")
-                print("\n已配置好的环境:")
-                if configured_envs:
-                    for i, env_name in enumerate(configured_envs, 1):
-                        print(f"{i}. {env_name}")
-                else:
-                    print("  [无]")
-                
-                print("\n未配置好的环境:")
-                if unconfigured_envs:
-                    for i, (env_name, reason) in enumerate(unconfigured_envs, 1):
-                        print(f"{i}. {env_name} - 原因: {reason}")
-                else:
-                    print("  [无]")
             
             elif choice == "4":
                 print("退出Conda环境管理器。再见!")
@@ -448,10 +489,12 @@ class EnvManager:
             else:
                 print("无效选择。请输入1到4之间的数字。")
 
+
+env_manager = EnvManager()
+
 def main():
     """主函数"""
     # 导入ConfigManager
-    env_manager = EnvManager()
     env_manager.run_cli()
 
 if __name__ == "__main__":

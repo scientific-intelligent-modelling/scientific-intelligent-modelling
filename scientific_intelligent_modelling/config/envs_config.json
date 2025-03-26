@@ -12,7 +12,10 @@
     },
     "test": {
       "python_version": "3.10",
-      "packages": ["pip", "ipython", "gplearn"]
+      "packages": ["pip", "ipython", "gplearn"],
+      "post_install_commands": [
+        "pip install -e ."
+      ]
     },
     "sim": {
       "python_version": "3.10",
