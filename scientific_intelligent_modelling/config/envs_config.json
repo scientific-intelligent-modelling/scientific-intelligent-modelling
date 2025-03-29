@@ -1,17 +1,5 @@
 {
   "env_list": {
-    "sim_cuda_11_1": {
-      "python_version": "3.10",
-      "channels": ["pytorch", "nvidia", "conda-forge"],
-      "conda_packages": ["cudatoolkit=11.1"],
-      "pip_packages": []
-    },
-    "sim_cuda_11_8": {
-      "python_version": "3.10",
-      "channels": ["pytorch", "nvidia", "conda-forge"],
-      "conda_packages": ["cudatoolkit=11.8"],
-      "pip_packages": []
-    },
     "test": {
       "python_version": "3.10",
       "conda_packages": ["pip", "ipython"],

@@ -107,6 +107,95 @@ class SymbolicRegressor:
         predictions = result.get('predictions', [])
         return np.array(predictions)
     
+    def get_optimal_equation(self):
+        """
+        获取模型学习到的最优符号方程
+        
+        返回:
+            equation: 符号方程的字符串表示
+        """
+        # 检查模型是否已训练
+        if self.model_state is None:
+            raise ValueError("模型尚未训练，请先调用fit方法")
+        
+        # 创建命令
+        command = {
+            'action': 'get_optimal_equation',
+            'model_state': self.model_state,
+            'tool_name': self.tool_name
+        }
+        
+        # 执行命令并获取结果
+        result = self._execute_subprocess(command)
+        
+        # 检查结果
+        if 'error' in result:
+            raise RuntimeError(f"获取方程失败: {result['message']}\n{result.get('traceback', '')}")
+        
+        # 返回方程
+        return result.get('equation', '')
+    
+
+    def get_total_equations(self):
+        """
+        获取模型学习到的所有符号方程
+        
+        返回:
+            equations: 符号方程的字符串表示列表
+        """
+        # 检查模型是否已训练
+        if self.model_state is None:
+            raise ValueError("模型尚未训练，请先调用fit方法")
+        
+        # 创建命令
+        command = {
+            'action': 'get_total_equations',
+            'model_state': self.model_state,
+            'tool_name': self.tool_name
+        }
+        
+        # 执行命令并获取结果
+        result = self._execute_subprocess(command)
+        
+        # 检查结果
+        if 'error' in result:
+            raise RuntimeError(f"获取所有方程失败: {result['message']}\n{result.get('traceback', '')}")
+        
+        # 返回方程列表
+        return result.get('equations', [])
+
+
+    def __str__(self):
+        """
+        返回模型的字符串表示
+        
+        返回:
+            model_str: 模型的字符串表示
+        """
+        # 基础信息
+        model_str = f"SymbolicRegressor(tool='{self.tool_name}'"
+        
+        # 添加主要参数
+        for key, value in self.params.items():
+            if key in ['population_size', 'generations', 'n_components', 'binary_operators', 
+                    'unary_operators', 'parsimony_coefficient', 'max_samples', 'random_state']:
+                model_str += f", {key}={value}"
+        
+        model_str += ")"
+        
+        # 如果模型已训练，添加方程
+        if self.model_state is not None:
+            try:
+                equation = self.get_equation()
+                model_str += f"\n最佳方程: {equation}"
+            except Exception as e:
+                model_str += f"\n模型已训练，但无法获取方程: {str(e)}"
+        else:
+            model_str += "\n模型尚未训练"
+        
+        return model_str
+
+
     def _execute_subprocess(self, command):
         """执行子进程命令"""
         # 获取Python解释器路径

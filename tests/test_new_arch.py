@@ -11,7 +11,7 @@ y = X[:, 0]**2 + np.sin(X[:, 1]) + 0.1*np.random.randn(100)
 # 使用不同工具进行对比
 models = {
     'gplearn': SymbolicRegressor('gplearn', population_size=1000, generations=20),
-    #'pysr': SymbolicRegressor('pysr', niterations=100),
+    # 'pysr': SymbolicRegressor('pysr', niterations=100),
     #'srbench': SymbolicRegressor('srbench', method='operon')
 }
 
@@ -19,7 +19,8 @@ results = {}
 for name, model in models.items():
     print(f"训练 {name} 模型...")
     model.fit(X, y)
-    
+    print(f"{name} 方程: {model.get_optimal_equation()}")
+    print(f"{name} 方程: {model.get_total_equations()}")
     predictions = model.predict(X)
     mse = mean_squared_error(y, predictions)
     results[name] = mse

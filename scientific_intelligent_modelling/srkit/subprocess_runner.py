@@ -60,8 +60,80 @@ def execute_command(module, command):
         return handle_fit(regressor_class, command)
     elif action == 'predict':
         return handle_predict(regressor_class, command)
+    elif action == 'get_optimal_equation':
+        return handle_get_optimal_equation(regressor_class, command)
+    elif action == 'get_total_equations':
+        return handle_get_total_equations(regressor_class, command)
     else:
         raise ValueError(f"未知操作: {action}")
+
+def handle_get_optimal_equation(regressor_class, command):
+    """处理get_optimal_equation操作，获取最优方程"""
+    # 提取模型状态
+    model_state = command['model_state']
+    
+    # 重建回归器
+    regressor = regressor_class()
+    
+    # 如果有from_dict方法，用它加载状态
+    if hasattr(regressor, 'from_dict'):
+        regressor.from_dict(model_state)
+    
+    # 获取方程
+    equation = None
+    
+    # 不同工具可能有不同的获取方程的方法，尝试几种常见方法
+    if hasattr(regressor, 'get_optimal_equation'):
+        equation = regressor.get_optimal_equation()
+    elif hasattr(regressor, 'get_equation'):
+        equation = regressor.get_equation()
+    elif hasattr(regressor, 'get_model_string'):
+        equation = regressor.get_model_string()
+    elif hasattr(regressor, 'symbolic_model'):
+        equation = str(regressor.symbolic_model)
+    elif hasattr(regressor, 'best_'):
+        equation = str(regressor.best_)
+    elif hasattr(regressor, 'program_'):
+        equation = str(regressor.program_)
+    else:
+        raise ValueError("无法从模型中提取最优方程表达式")
+    
+    return {
+        'success': True,
+        'equation': equation
+    }
+
+def handle_get_total_equations(regressor_class, command):
+    """处理get_total_equations操作，获取所有方程"""
+    # 提取模型状态
+    model_state = command['model_state']
+    
+    # 重建回归器
+    regressor = regressor_class()
+    
+    # 如果有from_dict方法，用它加载状态
+    if hasattr(regressor, 'from_dict'):
+        regressor.from_dict(model_state)
+    
+    # 获取所有方程
+    equations = None
+    
+    # 尝试不同的方法获取所有方程
+    if hasattr(regressor, 'get_total_equations'):
+        equations = regressor.get_total_equations()
+    elif hasattr(regressor, 'get_all_equations'):
+        equations = regressor.get_all_equations()
+    elif hasattr(regressor, 'hall_of_fame_'):
+        equations = [str(program) for program in regressor.hall_of_fame_]
+    elif hasattr(regressor, 'models_'):
+        equations = [str(model) for model in regressor.models_]
+    else:
+        raise ValueError("无法从模型中提取所有方程表达式")
+    
+    return {
+        'success': True,
+        'equations': equations
+    }
 
 # 从配置管理器获取工具映射
 def get_class_mapping_from_config():
