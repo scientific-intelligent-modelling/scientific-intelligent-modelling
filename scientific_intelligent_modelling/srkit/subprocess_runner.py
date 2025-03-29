@@ -70,14 +70,14 @@ def execute_command(module, command):
 def handle_get_optimal_equation(regressor_class, command):
     """处理get_optimal_equation操作，获取最优方程"""
     # 提取模型状态
-    model_state = command['model_state']
+    serialized_model = command['serialized_model']
     
     # 重建回归器
     regressor = regressor_class()
     
-    # 如果有from_dict方法，用它加载状态
-    if hasattr(regressor, 'from_dict'):
-        regressor.from_dict(model_state)
+    # 如果有deserialize方法，用它加载状态
+    if hasattr(regressor, 'deserialize'):
+        regressor = regressor.deserialize(serialized_model)
     
     # 获取方程
     equation = None
@@ -106,14 +106,14 @@ def handle_get_optimal_equation(regressor_class, command):
 def handle_get_total_equations(regressor_class, command):
     """处理get_total_equations操作，获取所有方程"""
     # 提取模型状态
-    model_state = command['model_state']
+    serialized_model = command['serialized_model']
     
     # 重建回归器
     regressor = regressor_class()
     
-    # 如果有from_dict方法，用它加载状态
-    if hasattr(regressor, 'from_dict'):
-        regressor.from_dict(model_state)
+    # 如果有deserialize方法，用它加载状态
+    if hasattr(regressor, 'deserialize'):
+        regressor = regressor.deserialize(serialized_model)
     
     # 获取所有方程
     equations = None
@@ -185,19 +185,15 @@ def handle_fit(regressor_class, command):
     regressor.fit(X, y)
     
     # 序列化模型状态
-    model_state = {}
-    if hasattr(regressor, 'to_dict'):
-        model_state = regressor.to_dict()
+    serialized_model = None
+    if hasattr(regressor, 'serialize'):
+        serialized_model = regressor.serialize()
     else:
-        # 尝试简单序列化属性
-        model_state = {
-            'params': params,
-            # 可以添加其他通用属性
-        }
+        raise ValueError(f"回归器 {regressor_class.__name__} 未实现serialize方法")
     
     return {
         'success': True,
-        'model_state': model_state
+        'serialized_model': serialized_model
     }
 
 def handle_predict(regressor_class, command):
@@ -206,7 +202,7 @@ def handle_predict(regressor_class, command):
     
     # 提取数据和模型状态
     data = command['data']
-    model_state = command['model_state']
+    serialized_model = command['serialized_model']
     
     # 转换为numpy数组
     X = np.array(data['X'])
@@ -214,9 +210,9 @@ def handle_predict(regressor_class, command):
     # 重建回归器并预测
     regressor = regressor_class()  # 使用动态获取的类
     
-    # 如果有from_dict方法，用它加载状态
-    if hasattr(regressor, 'from_dict'):
-        regressor.from_dict(model_state)
+    # 如果有deserialize方法，用它加载状态
+    if hasattr(regressor, 'deserialize'):
+        regressor = regressor.deserialize(serialized_model)
     
     # 执行预测
     predictions = regressor.predict(X)

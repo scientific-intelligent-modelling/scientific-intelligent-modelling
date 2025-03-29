@@ -42,24 +42,3 @@ class GPLearnRegressor(BaseWrapper):
         # 返回模型的字符串表示，这就是拟合的方程
         return [str(self.model)]
     
-    def to_dict(self):
-        """将模型序列化为字典"""
-        if self.model is None:
-            return {'params': self.params}
-        
-        # 使用pickle序列化模型
-        model_bytes = pickle.dumps(self.model)
-        model_b64 = base64.b64encode(model_bytes).decode('utf-8')
-        
-        return {
-            'params': self.params,
-            'model_b64': model_b64
-        }
-    
-    def from_dict(self, state_dict):
-        """从字典反序列化模型"""
-        self.params = state_dict.get('params', {})
-        
-        if 'model_b64' in state_dict:
-            model_bytes = base64.b64decode(state_dict['model_b64'])
-            self.model = pickle.loads(model_bytes)

@@ -20,7 +20,7 @@ class SymbolicRegressor:
         """
         self.tool_name = tool_name
         self.params = kwargs
-        self.model_state = None
+        self.serialized_model = None
         
         # 使用config_manager获取环境名称
         self.env_name = config_manager.get_env_name_by_tool(tool_name)
@@ -67,7 +67,7 @@ class SymbolicRegressor:
             raise RuntimeError(f"训练失败: {result['message']}\n{result.get('traceback', '')}")
         
         # 保存模型状态
-        self.model_state = result.get('model_state', {})
+        self.serialized_model = result.get('serialized_model', {})
         return self
     
     def predict(self, X):
@@ -81,7 +81,7 @@ class SymbolicRegressor:
             predictions: 预测结果
         """
         # 检查模型是否已训练
-        if self.model_state is None:
+        if self.serialized_model is None:
             raise ValueError("模型尚未训练，请先调用fit方法")
         
         # 准备数据
@@ -92,7 +92,7 @@ class SymbolicRegressor:
         command = {
             'action': 'predict',
             'data': {'X': X},
-            'model_state': self.model_state,
+            'serialized_model': self.serialized_model,
             'tool_name': self.tool_name
         }
         
@@ -115,13 +115,13 @@ class SymbolicRegressor:
             equation: 符号方程的字符串表示
         """
         # 检查模型是否已训练
-        if self.model_state is None:
+        if self.serialized_model is None:
             raise ValueError("模型尚未训练，请先调用fit方法")
         
         # 创建命令
         command = {
             'action': 'get_optimal_equation',
-            'model_state': self.model_state,
+            'serialized_model': self.serialized_model,
             'tool_name': self.tool_name
         }
         
@@ -144,13 +144,13 @@ class SymbolicRegressor:
             equations: 符号方程的字符串表示列表
         """
         # 检查模型是否已训练
-        if self.model_state is None:
+        if self.serialized_model is None:
             raise ValueError("模型尚未训练，请先调用fit方法")
         
         # 创建命令
         command = {
             'action': 'get_total_equations',
-            'model_state': self.model_state,
+            'serialized_model': self.serialized_model,
             'tool_name': self.tool_name
         }
         
@@ -184,7 +184,7 @@ class SymbolicRegressor:
         model_str += ")"
         
         # 如果模型已训练，添加方程
-        if self.model_state is not None:
+        if self.serialized_model is not None:
             try:
                 equation = self.get_equation()
                 model_str += f"\n最佳方程: {equation}"

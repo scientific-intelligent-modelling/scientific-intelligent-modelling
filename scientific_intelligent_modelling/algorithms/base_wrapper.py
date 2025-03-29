@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+import pickle
+import base64
 
 class BaseWrapper(ABC):
     """所有估计器的基类"""
@@ -23,20 +25,22 @@ class BaseWrapper(ABC):
         """获得所有方程"""
         pass
 
+    def serialize(self):
+        """将整个类实例序列化为字符串"""
+        # 使用pickle序列化整个类实例
+        instance_bytes = pickle.dumps(self)
+        # 将字节转换为base64编码的字符串
+        instance_b64 = base64.b64encode(instance_bytes).decode('utf-8')
+        return instance_b64
 
-
-
-
-
-    @abstractmethod
-    def to_dict(self):
-        """将模型序列化为字典"""
-        pass
-    
-    @abstractmethod
-    def from_dict(self, state_dict):
-        """从字典反序列化模型"""
-        pass
+    @classmethod
+    def deserialize(cls, instance_b64):
+        """从序列化的字符串反序列化为类实例"""
+        # 将base64编码的字符串转换回字节
+        instance_bytes = base64.b64decode(instance_b64)
+        # 使用pickle从字节重建类实例
+        instance = pickle.loads(instance_bytes)
+        return instance
         
     def __str__(self):
         """返回模型的字符串表示"""
