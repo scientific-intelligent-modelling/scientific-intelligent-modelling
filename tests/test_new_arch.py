@@ -1,4 +1,5 @@
 # tests/compare_methods.py
+#########
 import scientific_intelligent_modelling
 from scientific_intelligent_modelling.srkit.regressor import SymbolicRegressor
 import numpy as np

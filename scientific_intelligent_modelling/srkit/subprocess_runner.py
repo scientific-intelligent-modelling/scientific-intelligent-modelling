@@ -28,7 +28,7 @@ def main():
             raise ValueError("命令中缺少工具名称")
         
         # 导入工具包装器
-        wrapper_module = importlib.import_module(f"scientific_intelligent_modelling.tools.{tool_name}_wrapper.wrapper")
+        wrapper_module = importlib.import_module(f"scientific_intelligent_modelling.algorithms.{tool_name}_wrapper.wrapper")
         
         # 执行命令
         result = execute_command(wrapper_module, command)
