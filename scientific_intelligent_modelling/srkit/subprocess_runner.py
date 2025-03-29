@@ -7,8 +7,8 @@ import traceback
 import os
 from config_manager import config_manager
 
-print(f"当前工作目录: {os.getcwd()}")
-print(f"脚本所在目录: {os.path.dirname(os.path.abspath(__file__))}")
+# print(f"当前工作目录: {os.getcwd()}")
+# print(f"脚本所在目录: {os.path.dirname(os.path.abspath(__file__))}")
 
 def main():
     """子进程执行入口点"""

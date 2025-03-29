@@ -23,7 +23,6 @@ class ConfigManager:
             config_name = config_file.stem
             with open(config_file, 'r') as f:
                 self.configs[config_name] = json.load(f)
-        print(self.configs)
     
     def get_config(self, config_name):
         """获取指定配置"""
