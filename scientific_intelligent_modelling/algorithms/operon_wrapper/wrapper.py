@@ -43,7 +43,7 @@ class OperonRegressor(BaseWrapper):
         # 返回模型的字符串表示，这就是拟合的方程
         return [str(self.model)]
   
-  if __name__ == "__main__":
+if __name__ == "__main__":
     # 测试代码
     import numpy as np
     from pysr import PySRRegressor
