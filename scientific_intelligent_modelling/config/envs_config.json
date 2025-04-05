@@ -25,6 +25,14 @@
       "post_install_commands": [
         "pip install -e ."
       ]
+    },
+    "llmsr": {
+      "python_version": "3.10",
+      "conda_packages": ["pip"],
+      "pip_packages": ["requests", "numpy"],
+      "post_install_commands": [
+        "pip install -e ."
+      ]
     }
   }
 }
