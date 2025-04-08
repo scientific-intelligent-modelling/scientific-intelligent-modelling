@@ -2,36 +2,65 @@
   "env_list": {
     "test": {
       "python_version": "3.10",
-      "conda_packages": ["pip", "ipython"],
-      "pip_packages": ["gplearn", "pysr", "pyoperon"],
+      "conda_packages": [
+        "pip",
+        "uv"
+      ],
+      "pip_packages": [
+        "gplearn",
+        "pysr",
+        "pyoperon"
+      ],
+      "channels": [
+        "conda-forge"
+      ],
       "comments": "测试环境，目前可以运行gplearn, pysr, pyoperon",
       "post_install_commands": [
-        "pip install -e ."
+        "uv pip install -e ."
       ]
     },
     "sim": {
       "python_version": "3.10",
-      "conda_packages": ["pip", "ipython"],
+      "conda_packages": [
+        "pip",
+        "uv"
+      ],
       "pip_packages": [],
-      "comments": "这是工具箱的基环境，里面不装任何的依赖包",
-      "post_install_commands": [
-        "pip install -e ."
-      ]
+      "comments": "这是工具箱的基环境，里面不装任何的依赖包"
     },
     "pip_env": {
       "python_version": "3.10",
-      "conda_packages": ["pip"],
-      "pip_packages": ["requests", "numpy"],
+      "conda_packages": [
+        "pip",
+        "uv"
+      ],
+      "channels": [
+        "conda-forge"
+      ],
+      "pip_packages": [
+        "requests",
+        "numpy"
+      ],
       "post_install_commands": [
-        "pip install -e ."
+        "uv pip install -e ."
       ]
     },
     "llmsr": {
-      "python_version": "3.10",
-      "conda_packages": ["pip"],
-      "pip_packages": ["requests", "numpy"],
+      "python_version": "3.11.7",
+      "conda_packages": [
+        "pip",
+        "uv"
+      ],
+      "channels": [
+        "conda-forge"
+      ],
+      "pip_packages": [
+        "requests",
+        "numpy"
+      ],
       "post_install_commands": [
-        "pip install -e ."
+        "uv pip install -e .",
+        "uv pip install -r ./scientific_intelligent_modelling/algorithms/llmsr_wrapper/llmsr/requirements.txt --index-strategy unsafe-best-match"
       ]
     }
   }

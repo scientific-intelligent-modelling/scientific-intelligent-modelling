@@ -1,0 +1,13 @@
+name: sim
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.10
+  - uv
+  - pip
+variables:
+  # UV 相关环境变量
+  UV_INSTALLER_GHE_BASE_URL: "https://ghproxy.cn/https://github.com"
+  UV_PYTHON_INSTALL_MIRROR: "https://ghproxy.cn/https://github.com/indygreg/python-build-standalone/releases/download"
+  UV_DEFAULT_INDEX: "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"

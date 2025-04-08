@@ -28,14 +28,15 @@ class EnvManager:
         """获取conda安装路径"""
         try:
             # 使用conda info命令获取conda的安装信息
-            result = subprocess.run(
-                ["conda", "info", "--json"],
-                capture_output=True,
-                text=True,
-                check=True
+            returncode, stdout, stderr = self.run_command(
+                ["conda", "info", "--json"], show_output=False
             )
             import json
-            conda_info = json.loads(result.stdout)
+            conda_info = json.loads(stdout)
+            # ANSI 转义序列
+            GREEN = "\033[92m"  # 绿色
+            RESET = "\033[0m"  # 重置颜色
+            print(f"{GREEN}conda_prefix: {conda_info['conda_prefix']}{RESET}")
             return conda_info['conda_prefix']
         except Exception as e:
             logger.error(f"获取conda路径失败: {e}")
@@ -44,9 +45,7 @@ class EnvManager:
     def check_conda_installed(self):
         """检查是否安装Conda并可在PATH中使用"""
         try:
-            subprocess.run(["conda", "--version"], 
-                           capture_output=True, 
-                           check=True)
+            returncode, stdout, stderr = self.run_command(["conda", "--version"])
             return True
         except (subprocess.SubprocessError, FileNotFoundError):
             print("错误: Conda未安装或不在PATH中。")
@@ -90,15 +89,15 @@ class EnvManager:
     def get_env_path(self, env_name):
         """获取Conda环境的路径"""
         try:
-            result = subprocess.run(
-                ["conda", "info", "--envs", "--json"],
-                capture_output=True,
-                text=True,
-                check=True
+            returncode, stdout, stderr = self.run_command(
+                ["conda", "info", "--envs", "--json"], show_output=False
             )
-            env_data = json.loads(result.stdout)
+            env_data = json.loads(stdout)
             envs = env_data.get("envs", [])
-            
+            # ANSI 转义序列
+            GREEN = "\033[92m"  # 绿色
+            RESET = "\033[0m"  # 重置颜色
+            print(f"{GREEN}envs: {envs}{RESET}")
             # 寻找指定名称的环境
             for env_path in envs:
                 if os.path.basename(env_path) == env_name:
@@ -183,15 +182,12 @@ class EnvManager:
         conda_packages = env_config.get("conda_packages", [])
         if conda_packages:
             try:
-                result = subprocess.run(
-                    ["conda", "list", "--name", env_name], 
-                    capture_output=True, 
-                    text=True, 
-                    check=True
+                returncode, stdout, stderr = self.run_command(
+                    ["conda", "list", "--name", env_name]
                 )
                 
                 installed_packages = []
-                for line in result.stdout.splitlines():
+                for line in stdout.splitlines():
                     if line and not line.startswith('#'):
                         parts = line.split()
                         if len(parts) >= 2:
@@ -216,15 +212,12 @@ class EnvManager:
         pip_packages = env_config.get("pip_packages", [])
         if pip_packages:
             try:
-                result = subprocess.run(
-                    ["conda", "run", "-n", env_name, "pip", "list"], 
-                    capture_output=True, 
-                    text=True, 
-                    check=True
+                returncode, stdout, stderr = self.run_command(
+                    ["conda", "run", "-n", env_name, "uv", "pip", "list"]
                 )
                 
                 installed_pip_packages = []
-                for line in result.stdout.splitlines():
+                for line in stdout.splitlines():
                     if line and not line.startswith('Package') and not line.startswith('-'):
                         parts = line.split()
                         if len(parts) >= 1:
@@ -250,13 +243,10 @@ class EnvManager:
         required_python = env_config.get("python_version")
         if required_python:
             try:
-                result = subprocess.run(
-                    ["conda", "run", "-n", env_name, "python", "--version"],
-                    capture_output=True,
-                    text=True,
-                    check=True
+                returncode, stdout, stderr = self.run_command(
+                    ["conda", "run", "-n", env_name, "python", "--version"]
                 )
-                python_version = result.stdout.strip()
+                python_version = stdout.strip()
                 # Python版本输出通常是"Python X.Y.Z"格式
                 if required_python not in python_version:
                     return False, f"环境 '{env_name}' Python版本不匹配，需要 {required_python}，实际是 {python_version}"
@@ -344,20 +334,18 @@ class EnvManager:
 
         # 构建conda create命令
         cmd = ["conda", "create", "-y", "-n", env_name, f"python={python_version}"]
-        
+
+        # 添加指定的conda包
+        cmd.extend(conda_packages)
+
         # 添加指定的渠道
         for channel in channels:
             cmd.extend(["-c", channel])
         
-        # 添加指定的conda包
-        cmd.extend(conda_packages)
-        
         print(f"创建环境'{env_name}'...")
         try:
             # 执行conda create命令
-            subprocess.run(cmd, check=True,
-                    capture_output=True,
-                    text=True,)
+            returncode, stdout, stderr = self.run_command(cmd)
             
             # 安装pip包
             if pip_packages:
@@ -366,16 +354,12 @@ class EnvManager:
                 
                 for package in pip_packages:
                     print(f"正在安装pip包: {package}...")
-                    pip_cmd = ["conda", "run", "-n", env_name, "pip", "install", package]
+                    pip_cmd = ["conda", "run", "-n", env_name, "uv", "pip", "install", package]
                     
                     try:
                         # 使用直接输出到终端的方式运行命令
-                        subprocess.run(
-                            pip_cmd, 
-                            check=True,
-                            capture_output=True,
-                            # stdout=None,  # 直接输出到终端
-                            # stderr=None   # 直接输出到终端
+                        returncode, stdout, stderr = self.run_command(
+                            pip_cmd
                         )
                         print(f"pip包 {package} 安装完成。")
                     except subprocess.CalledProcessError as e:
@@ -411,12 +395,8 @@ class EnvManager:
                         print(f"完整命令: {' '.join(full_command)}")
                         
                         # 执行命令，直接将输出显示到终端
-                        subprocess.run(
-                            full_command,
-                            check=True,
-                            capture_output=True,
-                            # stdout=None,  # 直接输出到终端
-                            # stderr=None   # 直接输出到终端
+                        returncode, stdout, stderr = self.run_command(
+                            full_command
                         )
                         
                         print(f"==== 后处理命令执行成功 ====")
@@ -450,7 +430,7 @@ class EnvManager:
         
         print(f"删除环境'{env_name}'...")
         try:
-            subprocess.run(["conda", "env", "remove", "-y", "-n", env_name], check=True)
+            returncode, stdout, stderr = self.run_command(["conda", "env", "remove", "-y", "-n", env_name])
             print(f"环境'{env_name}'删除成功!")
             
             # 尝试删除标记文件（如果环境已被删除，此操作可能会失败，但这没关系）
@@ -467,14 +447,58 @@ class EnvManager:
     
     def get_existing_environments(self):
         """获取现有Conda环境列表"""
-        result = subprocess.run(["conda", "env", "list"], capture_output=True, text=True)
+        returncode, stdout, stderr = self.run_command(["conda", "env", "list"])
         existing_envs = []
-        for line in result.stdout.splitlines():
+        for line in stdout.splitlines():
             if line and not line.startswith('#'):
                 env_name = line.split()[0]
                 if env_name != "base":  # 排除base环境
                     existing_envs.append(env_name)
         return existing_envs
+    
+    def run_command(self, command, show_output=True):
+        # ANSI 转义序列
+        GRAY = "\033[90m"  # 亮灰色
+        RESET = "\033[0m"  # 重置颜色
+        RED = "\033[91m"  # 红色
+        LIGHT_GREEN = "\033[92m"  # 亮绿色
+        Green = "\033[32m"  # 绿色
+        YELLOW = "\033[93m"
+        BLUE = "\033[94m"  # 蓝色
+        MAGENTA = "\033[95m"
+        CYAN = "\033[96m"  # 青色
+        WHITE = "\033[97m"
+        # 启动子进程
+        process = subprocess.Popen(command,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE,
+                                text=True,# 将输出作为文本处理
+                                bufsize=0  # 关键参数：设置为0禁用缓冲
+                                )  
+
+        # 存储所有输出
+        stdout_all = []
+        stderr_all = []
+
+        if show_output:
+                
+            # 实时读取输出
+            for line in process.stdout:
+                stdout_all.append(line)  # 收集标准输出
+                print(f"{CYAN}{line}{RESET}", end='')  # 打印标准输出，颜色为灰色
+
+        # 等待进程结束
+        stdout, stderr = process.communicate()  # 捕获剩余输出
+        if stdout:
+            stdout_all.append(stdout)  # 收集最终的标准输出
+            if show_output:
+                print(f"{CYAN}{stdout}{RESET}", end='')
+        if stderr:
+            stderr_all.append(stderr)  # 收集标准错误
+            if show_output:
+                print(f"{BLUE}{stderr}{RESET}", end='')
+
+        return process.returncode, ''.join(stdout_all), ''.join(stderr_all)  # 返回返回码及所有输出
     
     def run_cli(self):
         """运行命令行界面"""

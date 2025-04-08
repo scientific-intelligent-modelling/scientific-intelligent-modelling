@@ -2,7 +2,6 @@
 
 ![Scientific Intelligent Modelling](https://raw.githubusercontent.com/scientific-intelligent-modelling/scientific-intelligent-modelling/refs/heads/main/cover.png)
 
-
 一个全面的科学建模框架，为各种符号回归算法和科学计算工具提供统一的访问接口。该框架使用conda环境管理系统来隔离不同工具的依赖，通过子进程机制确保稳定运行。
 
 ## 项目概述
@@ -12,6 +11,7 @@
 - PySR (Python符号回归)
 - GPlearn (用于符号回归的遗传编程)
 - Operon (高性能符号回归)
+- LLMSR (大语言模型进化符号回归)
 
 这种统一的接口使研究人员和数据科学家能够轻松尝试不同的建模方法，而无需学习每个底层库的具体细节。
 
@@ -33,18 +33,19 @@
 ### 安装步骤
 
 1. 克隆仓库：
+
    ```bash
    git clone https://github.com/yourusername/scientific-intelligent-modelling.git
    cd scientific-intelligent-modelling
    ```
-
 2. 创建并激活conda环境：
+
    ```bash
    conda env create -f environment.yml
-   conda activate sci-intel-modelling
+   conda activate sim
    ```
-
 3. 以开发模式安装包：
+
    ```bash
    pip install -e .
    ```
@@ -60,7 +61,7 @@ from scientific_intelligent_modelling.srkit.conda_env_manager import env_manager
 env_manager.check_all_environments()
 
 # 创建特定环境
-env_manager.create_environment("test")
+# env_manager.create_environment("test")
 
 # 运行环境管理的命令行界面
 env_manager.run_cli()
@@ -113,17 +114,19 @@ regressor = SymbolicRegressor(tool_name="pysr", maxsize=30, parsimony=0.001)
 
 ### 配置系统
 
-该框架使用位于`config`目录中的配置文件：
+该框架使用位于 `config`目录中的配置文件：
 
 - `envs_config.json`：定义不同工具所需的conda环境配置
+
   - 包含Python版本、依赖包和安装后命令
   - 可根据需要添加新环境
-
 - `toolbox_config.json`：定义算法映射和执行参数
+
   - 将工具名称映射到环境名称和具体的回归器类
   - 设置子进程超时和内存限制
 
 配置示例：
+
 ```json
 // toolbox_config.json
 {
@@ -171,15 +174,15 @@ scientific_intelligent_modelling/
 
 要向框架添加新算法：
 
-1. 在`scientific_intelligent_modelling/algorithms/`中创建一个名为`your_algorithm_wrapper/`的新目录
-2. 实现一个继承自`base_wrapper.py`中`BaseWrapper`类的`wrapper.py`文件
+1. 在 `scientific_intelligent_modelling/algorithms/`中创建一个名为 `your_algorithm_wrapper/`的新目录
+2. 实现一个继承自 `base_wrapper.py`中 `BaseWrapper`类的 `wrapper.py`文件
 3. 实现以下必需的方法：
    - `fit(X, y)`：训练模型
    - `predict(X)`：进行预测
    - `get_optimal_equation()`：返回最优符号表达式
    - `get_total_equations()`：返回所有获得的方程
-4. 更新`config/envs_config.json`添加工具所需的conda环境
-5. 更新`config/toolbox_config.json`添加工具映射配置
+4. 更新 `config/envs_config.json`添加工具所需的conda环境
+5. 更新 `config/toolbox_config.json`添加工具映射配置
 
 完整的包装器示例：
 
@@ -190,27 +193,27 @@ class YourAlgorithmWrapper(BaseWrapper):
     def __init__(self, **kwargs):
         self.params = kwargs
         self.model = None
-    
+  
     def fit(self, X, y):
         # 导入您的算法
         from your_package import YourModel
-        
+      
         # 创建并训练模型
         self.model = YourModel(**self.params)
         self.model.fit(X, y)
         return self
-    
+  
     def predict(self, X):
         if self.model is None:
             raise ValueError("模型尚未训练，请先调用fit方法")
         return self.model.predict(X)
-    
+  
     def get_optimal_equation(self):
         if self.model is None:
             raise ValueError("模型尚未训练，请先调用fit方法")
         # 返回最优方程
         return str(self.model.best_equation)
-    
+  
     def get_total_equations(self):
         if self.model is None:
             raise ValueError("模型尚未训练，请先调用fit方法")
@@ -218,7 +221,7 @@ class YourAlgorithmWrapper(BaseWrapper):
         return [str(eq) for eq in self.model.equations]
 ```
 
-然后在`toolbox_config.json`中添加配置：
+然后在 `toolbox_config.json`中添加配置：
 
 ```json
 "your_tool": {"env": "your_env", "regressor": "YourAlgorithmWrapper"}
@@ -257,6 +260,7 @@ BaseWrapper类提供了序列化和反序列化方法，确保模型状态可以
 
 ## 文档
 
-有关更详细的信息，请参阅`docs/`目录中的文档文件：
+有关更详细的信息，请参阅 `docs/`目录中的文档文件：
+
 - `pysr.md`：PySR包装器的特定文档
 - `readme.md`：附加说明和详细解释
