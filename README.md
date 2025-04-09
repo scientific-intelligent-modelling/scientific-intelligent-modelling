@@ -47,12 +47,15 @@
 3. 以开发模式安装包：
 
    ```bash
+   cd scientific-intelligent-modelling
    pip install -e .
    ```
 
 ### 配置环境
 
-项目首次运行时会自动创建所需的conda环境。您也可以手动管理环境：
+首次运行工具包时，需手动管理环境：
+
+方法一：
 
 ```python
 from scientific_intelligent_modelling.srkit.conda_env_manager import env_manager
@@ -66,6 +69,13 @@ env_manager.check_all_environments()
 # 运行环境管理的命令行界面
 env_manager.run_cli()
 ```
+
+方法二：
+```
+python -m scientific-intelligent-modelling.srkit.conda_env_manager.py
+```
+
+二者实现效果一致
 
 ## 使用指南
 
@@ -197,7 +207,7 @@ class YourAlgorithmWrapper(BaseWrapper):
     def fit(self, X, y):
         # 导入您的算法
         from your_package import YourModel
-      
+    
         # 创建并训练模型
         self.model = YourModel(**self.params)
         self.model.fit(X, y)
