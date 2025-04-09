@@ -481,7 +481,6 @@ class EnvManager:
         stderr_all = []
 
         if show_output:
-                
             # 实时读取输出
             for line in process.stdout:
                 stdout_all.append(line)  # 收集标准输出
@@ -493,12 +492,22 @@ class EnvManager:
             stdout_all.append(stdout)  # 收集最终的标准输出
             if show_output:
                 print(f"{CYAN}{stdout}{RESET}", end='')
-        if stderr:
-            stderr_all.append(stderr)  # 收集标准错误
-            if show_output:
-                print(f"{BLUE}{stderr}{RESET}", end='')
 
-        return process.returncode, ''.join(stdout_all), ''.join(stderr_all)  # 返回返回码及所有输出
+        # Define error keywords
+        error_keywords = ["error", "failed", "not found", "exception", "fatal"]  # Customize this list
+
+        if stderr:
+            for line in stderr.splitlines():  # Split stderr into lines
+                stderr_all.append(line)  # 收集标准错误
+                is_error = any(keyword in line.lower() for keyword in error_keywords)  # Check for error keywords
+                if show_output:
+                    if is_error:
+                        print(f"{RED}{line}{RESET}", end='')  # Print errors in red
+                    else:
+                        print(f"{BLUE}{line}{RESET}", end='')  # Print informational messages in blue
+
+
+                return process.returncode, ''.join(stdout_all), ''.join(stderr_all)  # 返回返回码及所有输出
     
     def run_cli(self):
         """运行命令行界面"""
