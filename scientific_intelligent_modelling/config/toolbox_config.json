@@ -5,6 +5,7 @@
   "tool_mapping": {
     "gplearn": {"env": "test", "regressor": "GPLearnRegressor"},
     "pysr": {"env": "test", "regressor": "PySRRegressor"},
-    "pyoperon": {"env": "test", "regressor": "OperonRegressor"}
+    "pyoperon": {"env": "test", "regressor": "OperonRegressor"},
+    "llmsr": {"env": "llmsr", "regressor": "LLMSRRegressor"}
   }
 }

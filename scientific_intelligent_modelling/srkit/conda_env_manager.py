@@ -212,8 +212,11 @@ class EnvManager:
         pip_packages = env_config.get("pip_packages", [])
         if pip_packages:
             try:
-                returncode, stdout, stderr = self.run_command(
-                    ["conda", "run", "-n", env_name, "uv", "pip", "list"]
+                # 使用 run_in_conda_env 替代 conda run
+                returncode, stdout, stderr = self.run_in_conda_env(
+                    env_name=env_name,
+                    command=["uv", "pip", "list"],
+                    show_output=False
                 )
                 
                 installed_pip_packages = []
@@ -243,8 +246,11 @@ class EnvManager:
         required_python = env_config.get("python_version")
         if required_python:
             try:
-                returncode, stdout, stderr = self.run_command(
-                    ["conda", "run", "-n", env_name, "python", "--version"]
+                # 使用 run_in_conda_env 替代 conda run
+                returncode, stdout, stderr = self.run_in_conda_env(
+                    env_name=env_name,
+                    command=["python", "--version"],
+                    show_output=False
                 )
                 python_version = stdout.strip()
                 # Python版本输出通常是"Python X.Y.Z"格式
@@ -354,13 +360,13 @@ class EnvManager:
                 
                 for package in pip_packages:
                     print(f"正在安装pip包: {package}...")
-                    pip_cmd = ["conda", "run", "-n", env_name, "uv", "pip", "install", package]
+                    # cmd = ["uv", "pip", "install", package]
+                    cmd = ["pip", "install", package]
+                    # pip_cmd = ["conda", "run", "-n", env_name, 
                     
                     try:
                         # 使用直接输出到终端的方式运行命令
-                        returncode, stdout, stderr = self.run_command(
-                            pip_cmd
-                        )
+                        returncode, stdout, stderr = self.run_in_conda_env(env_name=env_name, command=cmd,show_output=True)
                         print(f"pip包 {package} 安装完成。")
                     except subprocess.CalledProcessError as e:
                         print(f"安装pip包 {package} 时出错: {e}")
@@ -390,13 +396,14 @@ class EnvManager:
                         import shlex
                         command_parts = shlex.split(command)
                         
-                        # 使用conda run在新环境中执行命令，不捕获输出而是直接显示
-                        full_command = ["conda", "run", "-n", env_name] + command_parts
-                        print(f"完整命令: {' '.join(full_command)}")
+                        # 使用 run_in_conda_env 替代 conda run
+                        print(f"在环境 '{env_name}' 中执行命令: {' '.join(command_parts)}")
                         
                         # 执行命令，直接将输出显示到终端
-                        returncode, stdout, stderr = self.run_command(
-                            full_command
+                        returncode, stdout, stderr = self.run_in_conda_env(
+                            env_name=env_name,
+                            command=command_parts,
+                            show_output=True
                         )
                         
                         print(f"==== 后处理命令执行成功 ====")
@@ -456,25 +463,173 @@ class EnvManager:
                     existing_envs.append(env_name)
         return existing_envs
     
-    def run_command(self, command, show_output=True):
+    def run_in_conda_env(self, env_name, command, show_output=True):
+        """
+        在指定的conda环境中执行命令，实时捕获并显示输出
+        
+        参数:
+            env_name: conda环境名称
+            command: 要执行的命令（列表形式或字符串）
+            show_output: 是否实时显示输出
+            
+        返回:
+            (returncode, stdout, stderr) 元组
+        """
+        # if command[0] == "pip" or (command[0] == "uv" and command[1] == "pip"): 
+        #     command.insert(2, "--progress-bar=on")
+        # 确保command是列表形式
+        if isinstance(command, str):
+            import shlex
+            command = shlex.split(command)
+        
+        # 获取conda的路径
+        conda_path = self.conda_base_path
+        if not conda_path:
+            print("错误: 无法获取conda安装路径")
+            return 1, "", "无法获取conda安装路径"
+            
+        # 构建激活环境的命令
+        if os.name == 'nt':  # Windows
+            # Windows下使用不同的激活方式
+            activate_cmd = f"conda activate {env_name} && "
+            shell = True
+            full_command = activate_cmd + " ".join(command)
+        else:  # Linux/MacOS
+            # 使用source激活环境
+            activate_path = os.path.join(conda_path, "bin", "activate")
+            activate_cmd = f"source {activate_path} {env_name} && "
+            shell = True
+            full_command = activate_cmd + " ".join(command)
+            
         # ANSI 转义序列
-        GRAY = "\033[90m"  # 亮灰色
-        RESET = "\033[0m"  # 重置颜色
-        RED = "\033[91m"  # 红色
-        LIGHT_GREEN = "\033[92m"  # 亮绿色
-        Green = "\033[32m"  # 绿色
-        YELLOW = "\033[93m"
-        BLUE = "\033[94m"  # 蓝色
-        MAGENTA = "\033[95m"
         CYAN = "\033[96m"  # 青色
-        WHITE = "\033[97m"
+        RESET = "\033[0m"  # 重置颜色
+        
+        print(f"{CYAN}执行命令: {full_command}{RESET}")
+
+        # 启动子进程，使用shell模式执行组合命令
+        process = subprocess.Popen(
+            full_command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=shell,
+            text=True,
+            # bufsize=0,  # 移除：让 Popen 在 text=True 时处理缓冲
+            executable='/bin/bash' if os.name != 'nt' else None  # 在Linux/Mac上指定bash
+        )
+
+        # 存储所有输出
+        stdout_all = []
+        stderr_all = []
+
+        # 使用 select 读取输出
+        import select
+        import sys # 用于打印错误
+
+        # 实时读取和处理输出
+        GREEN = "\033[92m"  # 绿色
+        RED = "\033[91m"    # 红色
+        RESET = "\033[0m"  # 重置颜色
+        CYAN = "\033[96m"  # 青色
+
+        error_keywords = ["error", "failed", "not found", "exception", "fatal"]
+
+        while process.poll() is None:  # 进程仍在运行
+            # 确保管道存在
+            read_pipes = []
+            if process.stdout:
+                read_pipes.append(process.stdout)
+            if process.stderr:
+                read_pipes.append(process.stderr)
+
+            if not read_pipes: # 如果 Popen 成功，这不应该发生
+                break
+
+            # 等待管道可读
+            ready_pipes, _, _ = select.select(read_pipes, [], [], 0.1)
+
+            for pipe in ready_pipes:
+                try:
+                    line = pipe.readline()
+                    # readline() 在 EOF 时应返回空字符串 ''
+                    # 如果返回 None，则显式处理（尽管不常见）
+                    if line is None:
+                        continue
+                    if not line: # 处理 EOF (空字符串)
+                        continue
+
+                    if pipe == process.stdout:
+                        stdout_all.append(line)
+                        if show_output:
+                            print(f"{GREEN}{line}{RESET}", end='')
+                    else:  # pipe == process.stderr
+                        stderr_all.append(line)
+                        if show_output:
+                            is_error = any(keyword in line.lower() for keyword in error_keywords)
+                            color = RED if is_error else CYAN
+                            print(f"{color}{line}{RESET}", end='')
+                except (IOError, OSError) as e:
+                    # 记录或打印错误以进行调试
+                    print(f"读取管道时出错: {e}", file=sys.stderr)
+                    # 可以选择忽略、中断或以其他方式处理
+                    pass
+                except Exception as e: # 捕获其他潜在异常
+                    print(f"处理管道输出时发生意外错误: {e}", file=sys.stderr)
+                    pass
+
+
+        # 捕获剩余的输出
+        # 注意：在上面的循环之后，communicate() 可能会阻塞或返回空，
+        # 因为大部分或所有输出应该已经被 readline 读取了。
+        # 但为了确保捕获所有内容，仍然调用它。
+        stdout_rem, stderr_rem = process.communicate()
+        if stdout_rem:
+            stdout_all.append(stdout_rem)
+            if show_output:
+                print(f"{GREEN}{stdout_rem}{RESET}", end='')
+        if stderr_rem:
+            stderr_all.append(stderr_rem)
+            if show_output:
+                # 在这里也应用颜色逻辑
+                for line in stderr_rem.splitlines():
+                    is_error = any(keyword in line.lower() for keyword in error_keywords)
+                    color = RED if is_error else CYAN
+                    print(f"{color}{line}{RESET}")
+
+
+        return process.returncode, ''.join(stdout_all), ''.join(stderr_all)
+    
+    def run_command(self, command, show_output=True):
+        """
+        运行shell命令并实时捕获输出
+        
+        参数:
+            command: 要执行的命令（列表形式）
+            show_output: 是否实时显示输出
+            
+        返回:
+            (returncode, stdout, stderr) 元组
+        """
+        # ANSI 转义序列
+        GRAY = "\033[90m"   # 亮灰色
+        RESET = "\033[0m"   # 重置颜色
+        RED = "\033[91m"    # 红色
+        LIGHT_GREEN = "\033[92m"  # 亮绿色
+        GREEN = "\033[32m"  # 绿色
+        YELLOW = "\033[93m" # 黄色
+        BLUE = "\033[94m"   # 蓝色
+        MAGENTA = "\033[95m" # 洋红色
+        CYAN = "\033[96m"   # 青色
+        WHITE = "\033[97m"  # 白色
+        
         # 启动子进程
-        process = subprocess.Popen(command,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE,
-                                text=True,# 将输出作为文本处理
-                                bufsize=0  # 关键参数：设置为0禁用缓冲
-                                )  
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,      # 将输出作为文本处理
+            bufsize=0       # 关键参数：设置为0禁用缓冲
+        )  
 
         # 存储所有输出
         stdout_all = []
@@ -484,7 +639,7 @@ class EnvManager:
             # 实时读取输出
             for line in process.stdout:
                 stdout_all.append(line)  # 收集标准输出
-                print(f"{CYAN}{line}{RESET}", end='')  # 打印标准输出，颜色为灰色
+                print(f"{CYAN}{line}{RESET}", end='')  # 打印标准输出，颜色为青色
 
         # 等待进程结束
         stdout, stderr = process.communicate()  # 捕获剩余输出
@@ -493,21 +648,20 @@ class EnvManager:
             if show_output:
                 print(f"{CYAN}{stdout}{RESET}", end='')
 
-        # Define error keywords
-        error_keywords = ["error", "failed", "not found", "exception", "fatal"]  # Customize this list
+        # 定义错误关键词
+        error_keywords = ["error", "failed", "not found", "exception", "fatal"]  # 可自定义此列表
 
         if stderr:
-            for line in stderr.splitlines():  # Split stderr into lines
-                stderr_all.append(line)  # 收集标准错误
-                is_error = any(keyword in line.lower() for keyword in error_keywords)  # Check for error keywords
-                if show_output:
+            stderr_all.append(stderr)  # 收集标准错误
+            if show_output:
+                for line in stderr.splitlines():  # 将stderr拆分为行
+                    is_error = any(keyword in line.lower() for keyword in error_keywords)  # 检查错误关键词
                     if is_error:
-                        print(f"{RED}{line}{RESET}", end='')  # Print errors in red
+                        print(f"{RED}{line}{RESET}")  # 用红色打印错误
                     else:
-                        print(f"{BLUE}{line}{RESET}", end='')  # Print informational messages in blue
+                        print(f"{BLUE}{line}{RESET}")  # 用蓝色打印信息性消息
 
-
-                return process.returncode, ''.join(stdout_all), ''.join(stderr_all)  # 返回返回码及所有输出
+        return process.returncode, ''.join(stdout_all), ''.join(stderr_all)  # 返回返回码及所有输出
     
     def run_cli(self):
         """运行命令行界面"""

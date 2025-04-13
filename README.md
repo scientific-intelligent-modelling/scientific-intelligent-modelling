@@ -71,8 +71,9 @@ env_manager.run_cli()
 ```
 
 方法二：
+
 ```
-python -m scientific-intelligent-modelling.srkit.conda_env_manager.py
+python -m scientific_intelligent_modelling.srkit.conda_env_manager
 ```
 
 二者实现效果一致
@@ -207,7 +208,7 @@ class YourAlgorithmWrapper(BaseWrapper):
     def fit(self, X, y):
         # 导入您的算法
         from your_package import YourModel
-    
+  
         # 创建并训练模型
         self.model = YourModel(**self.params)
         self.model.fit(X, y)
