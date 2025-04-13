@@ -60,5 +60,10 @@ python main.py --use_api True --api_model "gpt-3.5-turbo" --problem_name stresss
 Ⅱ、然后是适配工具包的框架.fit .predict
 
 7、适应第一个问题，大模型的统一API
-调研发现，github上有一个库litellm，专门实现了这个。
+调研发现，github上有一个库litellm，专门实现了这个，然后使用copilot进行集成。具体的修改是，修改main.py这个入口文件
 
+8、适配完llmsr之后，就需要去修改wrapper了，建议使用copilot的agent模式，使用claude 3.7 sonnet模型
+使用以下的prompt:
+> 我现在描述一下我的项目所需要的需求：首先我这个是一个工具箱性质的，我有一个叫做sim的基础环境，我在里面调用各个regressor，每个regressor类都有.fit .predict 等等方法。帮我仿照别的wrapper，写一下专属于llmsr的wrapper.py，着重关注于子仓库里面的main.py来实现。
+
+9、至此，一个及格水平的llmsr工具就集成成功了，达到及格远比达到优秀要重要。之后就需要各种打磨细节，比如参数的调用，参数的暴露等等，这些交给时间，用到才来打磨。
