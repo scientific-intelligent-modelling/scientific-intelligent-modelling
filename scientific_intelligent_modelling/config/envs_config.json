@@ -64,6 +64,24 @@
         "uv pip install -e .",
         "uv pip install -r ./scientific_intelligent_modelling/algorithms/llmsr_wrapper/llmsr/requirements.txt --index-strategy unsafe-best-match"
       ]
+    },
+    "dso": {
+      "python_version": "3.7",
+      "conda_packages": [
+        "pip",
+        "uv"
+      ],
+      "channels": [
+        "conda-forge"
+      ],
+      "pip_packages": [
+        "requests",
+        "numpy"
+      ],
+      "post_install_commands": [
+        "uv pip install -e .",
+        "uv pip install -e ./scientific_intelligent_modelling/algorithms/dso_wrapper/dso/dso --index-strategy unsafe-best-match"
+      ]
     }
   }
 }

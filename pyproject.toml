@@ -8,20 +8,16 @@ version = "1.0.0"
 description = "A unified toolkit that integrates many external libraries"
 readme = "README.md"
 authors = [{ name = "kai li", email = "kai.li@ia.ac.cn" }]
-license = {text = "MIT"}
+license = { text = "MIT" }
 keywords = ["modeling", "gplearn", "integration", "pytorch"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
 ]
-requires-python = ">=3.8" # 基解释器版本无所谓
+requires-python = ">=3.6" # 基解释器版本无所谓
 
-dependencies = [
-    "numpy>=1.18.0",
-    "networkx>=2.5",
-    "pyyaml>=5.1",
-]
+dependencies = ["numpy>=1.18.0", "networkx>=2.5", "pyyaml>=5.1"]
 
 
 [tool.setuptools]
@@ -36,5 +32,5 @@ disallow_untyped_defs = true    #要求所有函数都有类型注解
 disallow_incomplete_defs = true #要求函数的所有参数和返回值都有类型注解
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]           #指定测试文件所在的目录
-python_files = "test_*.py"      #指定哪些文件被视为测试文件（以"test_"开头的.py文件）
+testpaths = ["tests"]      #指定测试文件所在的目录
+python_files = "test_*.py" #指定哪些文件被视为测试文件（以"test_"开头的.py文件）
