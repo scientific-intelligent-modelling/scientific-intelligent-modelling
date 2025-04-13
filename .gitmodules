@@ -1,3 +1,6 @@
 [submodule "scientific_intelligent_modelling/algorithms/llmsr_wrapper/llmsr"]
 	path = scientific_intelligent_modelling/algorithms/llmsr_wrapper/llmsr
 	url = https://github.com/deep-symbolic-mathematics/LLM-SR.git
+[submodule "scientific_intelligent_modelling/algorithms/dso_wrapper/dso"]
+	path = scientific_intelligent_modelling/algorithms/dso_wrapper/dso
+	url = https://github.com/scientific-intelligent-modelling/deep-symbolic-optimization.git
