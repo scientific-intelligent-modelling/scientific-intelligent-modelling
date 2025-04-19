@@ -7,3 +7,6 @@
 [submodule "scientific_intelligent_modelling/algorithms/tpsr_wrapper/tpsr"]
 	path = scientific_intelligent_modelling/algorithms/tpsr_wrapper/tpsr
 	url = https://github.com/scientific-intelligent-modelling/TPSR.git
+[submodule "scientific_intelligent_modelling/algorithms/e2esr_wrapper/e2esr"]
+	path = scientific_intelligent_modelling/algorithms/e2esr_wrapper/e2esr
+	url = https://github.com/scientific-intelligent-modelling/e2e-symbolic-regression.git
