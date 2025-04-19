@@ -4,3 +4,6 @@
 [submodule "scientific_intelligent_modelling/algorithms/dso_wrapper/dso"]
 	path = scientific_intelligent_modelling/algorithms/dso_wrapper/dso
 	url = https://github.com/scientific-intelligent-modelling/deep-symbolic-optimization.git
+[submodule "scientific_intelligent_modelling/algorithms/tpsr_wrapper/tpsr"]
+	path = scientific_intelligent_modelling/algorithms/tpsr_wrapper/tpsr
+	url = https://github.com/scientific-intelligent-modelling/TPSR.git
