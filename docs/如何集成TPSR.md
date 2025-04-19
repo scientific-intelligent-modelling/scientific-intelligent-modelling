@@ -25,8 +25,8 @@ cd scientific-intelligent-modelling
 ![](./image/fork_dso.png)
 
 ```bash
-mkdir scientific_intelligent_modelling/algorithms/dso_wrapper
-git submodule add https://github.com/scientific-intelligent-modelling/deep-symbolic-optimization.git scientific_intelligent_modelling/algorithms/dso_wrapper/dso
+mkdir scientific_intelligent_modelling/algorithms/tpsr_wrapper
+git submodule add https://github.com/scientific-intelligent-modelling/TPSR.git scientific_intelligent_modelling/algorithms/tpsr_wrapper/tpsr
 ```
 
 3、创建conda子环境：dso
