@@ -56,7 +56,6 @@
         "conda-forge"
       ],
       "pip_packages": [
-        "requests",
         "numpy",
         "litellm"
       ],
@@ -75,7 +74,6 @@
         "conda-forge"
       ],
       "pip_packages": [
-        "requests",
         "numpy"
       ],
       "post_install_commands": [

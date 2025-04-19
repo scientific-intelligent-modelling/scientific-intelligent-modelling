@@ -13,24 +13,24 @@ y = X[:, 0]**2 + np.sin(X[:, 1]) + 0.1*np.random.randn(100)
 with open('./key.txt', 'r') as f:
     api_key = f.read().strip()
 
-
+print(api_key)
 # 使用不同工具进行对比
 models = {
     # 'gplearn': SymbolicRegressor('gplearn', population_size=1000, generations=20),
     # 'pysr': SymbolicRegressor('pysr', niterations=5),
-    #'srbench': SymbolicRegressor('srbench', method='operon')
-    # 'llmsr': SymbolicRegressor(
-    #     'llmsr',
-    #     use_api=True,
-    #     api_model="deepseek/deepseek-chat",
-    #     api_key=api_key,
-    #     spec_path="./specs/specification_oscillator1_numpy.txt",  # 使用实际存在的规范文件
-    #     log_path="./logs/example_deepseek",
-    #     problem_name="oscillator1",  # 使用实际存在的问题名称
-    #     samples_per_prompt=5,
-    #     max_samples=10000
-    # ),
-    'dso': SymbolicRegressor('dso'),
+    # 'operon': SymbolicRegressor('operon'),
+    'llmsr': SymbolicRegressor(
+        'llmsr',
+        use_api=True,
+        api_model="deepseek/deepseek-chat",
+        api_key=api_key,
+        spec_path="./specs/specification_oscillator1_numpy.txt",  # 使用实际存在的规范文件
+        log_path="./logs/example_deepseek",
+        problem_name="oscillator1",  # 使用实际存在的问题名称
+        samples_per_prompt=5,
+        max_samples=10000
+    ),
+    # 'dso': SymbolicRegressor('dso'),
 }
 
 results = {}
