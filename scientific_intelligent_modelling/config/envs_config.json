@@ -29,6 +29,35 @@
       "pip_packages": [],
       "comments": "这是工具箱的基环境，里面不装任何的依赖包"
     },
+    "e2esr": {
+      "python_version": "3.7",
+      "conda_packages": [
+        "pip",
+        "uv"
+      ],
+      "channels": [
+        "conda-forge",
+        "defaults"
+      ],
+      "pip_packages": [
+        "numpy==1.21.5",
+        "scipy==1.7.3",
+        "scikit-learn==1.0.2",
+        "pandas==1.3.5",
+        "sympy==1.10.1",
+        "torch==1.11.0",
+        "torchaudio==0.11.0",
+        "torchvision==0.12.0",
+        "tqdm==4.64.0",
+        "pyyaml==6.0",
+        "requests==2.27.1"
+      ],
+      "post_install_commands": [
+        "uv pip install -e .",
+        "wget https://dl.fbaipublicfiles.com/symbolicregression/model1.pt -O ./scientific_intelligent_modelling/algorithms/e2esr_wrapper/e2esr/model1.pt"
+      ],
+      "comments": "e2e-symbolic-regression环境"
+    },
     "pip_env": {
       "python_version": "3.10",
       "conda_packages": [

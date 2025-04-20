@@ -8,6 +8,7 @@
     "pyoperon": {"env": "test", "regressor": "OperonRegressor"},
     "llmsr": {"env": "llmsr", "regressor": "LLMSRRegressor"},
     "dso": {"env": "dso", "regressor": "DSORegressor"},
-    "tpsr": {"env": "tpsr", "regressor": "TPSRRegressor"}
+    "tpsr": {"env": "tpsr", "regressor": "TPSRRegressor"},
+    "e2esr": {"env": "e2esr", "regressor": "E2ESRRegressor"}
   }
 }
