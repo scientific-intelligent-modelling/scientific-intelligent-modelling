@@ -1,6 +1,6 @@
 # Scientific Intelligent Modelling (科学智能建模)
 
-![Scientific Intelligent Modelling](https://raw.githubusercontent.com/scientific-intelligent-modelling/scientific-intelligent-modelling/refs/heads/main/cover.png)
+![Scientific Intelligent Modelling](./images/cover.png)
 
 一个全面的科学建模框架，为各种符号回归算法和科学计算工具提供统一的访问接口。该框架使用conda环境管理系统来隔离不同工具的依赖，通过子进程机制确保稳定运行。
 
