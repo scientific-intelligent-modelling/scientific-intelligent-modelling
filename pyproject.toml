@@ -7,8 +7,11 @@ name = "scientific_intelligent_modelling"
 version = "1.0.0"
 description = "A unified toolkit that integrates many external libraries"
 readme = "README.md"
-authors = [{ name = "kai li", email = "kai.li@ia.ac.cn" }]
-license = { text = "MIT" }
+authors = [
+    {name = "Ziwen Zhang", email = "244824379@qq.com"},
+    {name = "Kai Li", email = "kai.li@ia.ac.cn"}
+]
+license = {text = "GPL-3.0"}
 keywords = ["modeling", "gplearn", "integration", "pytorch"]
 classifiers = [
     "Programming Language :: Python :: 3",

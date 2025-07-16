@@ -3,12 +3,12 @@
   "subprocess_timeout": 3600,
   "memory_limit": 16000,
   "tool_mapping": {
-    "gplearn": {"env": "test", "regressor": "GPLearnRegressor"},
-    "pysr": {"env": "test", "regressor": "PySRRegressor"},
-    "pyoperon": {"env": "test", "regressor": "OperonRegressor"},
-    "llmsr": {"env": "llmsr", "regressor": "LLMSRRegressor"},
-    "dso": {"env": "dso", "regressor": "DSORegressor"},
-    "tpsr": {"env": "tpsr", "regressor": "TPSRRegressor"},
-    "e2esr": {"env": "e2esr", "regressor": "E2ESRRegressor"}
+    "gplearn": {"env": "sim_base", "regressor": "GPLearnRegressor"},
+    "pysr": {"env": "sim_base", "regressor": "PySRRegressor"},
+    "pyoperon": {"env": "sim_base", "regressor": "OperonRegressor"},
+    "llmsr": {"env": "sim_llmsr", "regressor": "LLMSRRegressor"},
+    "dso": {"env": "sim_dso", "regressor": "DSORegressor"},
+    "tpsr": {"env": "sim_tpsr", "regressor": "TPSRRegressor"},
+    "e2esr": {"env": "sim_e2esr", "regressor": "E2ESRRegressor"}
   }
 }

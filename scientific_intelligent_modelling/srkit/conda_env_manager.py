@@ -213,20 +213,23 @@ class EnvManager:
         if pip_packages:
             try:
                 # 使用 run_in_conda_env 替代 conda run
+                # 使用 freeze 格式简化输出，pip freeze 不支持 --no-cache
                 returncode, stdout, stderr = self.run_in_conda_env(
                     env_name=env_name,
-                    command=["uv", "pip", "list"],
+                    command=["pip", "freeze"],
                     show_output=False
                 )
+
+                # 合并 stdout 和 stderr 以处理 pip 可能将警告等信息发送到 stderr 的情况
+                full_output = stdout + stderr
                 
                 installed_pip_packages = []
-                for line in stdout.splitlines():
-                    if line and not line.startswith('Package') and not line.startswith('-'):
-                        parts = line.split()
-                        if len(parts) >= 1:
-                            pkg_name = parts[0].lower()  # pip包名通常是小写的
-                            installed_pip_packages.append(pkg_name)
-                
+                # 解析 'package==version' 格式的输出
+                for line in full_output.splitlines():
+                    if '==' in line:
+                        pkg_name = line.split('==')[0].lower()
+                        installed_pip_packages.append(pkg_name)
+
                 # 检查所需的pip包是否都已安装
                 missing_pip_packages = []
                 for package in pip_packages:
@@ -360,7 +363,7 @@ class EnvManager:
                 
                 for package in pip_packages:
                     print(f"正在安装pip包: {package}...")
-                    # cmd = ["uv", "pip", "install", package]
+
                     cmd = ["pip", "install", package]
                     # pip_cmd = ["conda", "run", "-n", env_name, 
                     
@@ -475,7 +478,7 @@ class EnvManager:
         返回:
             (returncode, stdout, stderr) 元组
         """
-        # if command[0] == "pip" or (command[0] == "uv" and command[1] == "pip"): 
+        # if command[0] == "pip": 
         #     command.insert(2, "--progress-bar=on")
         # 确保command是列表形式
         if isinstance(command, str):
@@ -512,12 +515,18 @@ class EnvManager:
             full_command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            shell=shell,
+            shell=True,
             text=True,
             # bufsize=0,  # 移除：让 Popen 在 text=True 时处理缓冲
             executable='/bin/bash' if os.name != 'nt' else None  # 在Linux/Mac上指定bash
         )
 
+        # 如果不需要实时显示，使用 communicate() 来可靠地获取所有输出
+        if not show_output:
+            stdout, stderr = process.communicate()
+            return process.returncode, stdout, stderr
+
+        # 以下是需要实时显示输出的情况
         # 存储所有输出
         stdout_all = []
         stderr_all = []

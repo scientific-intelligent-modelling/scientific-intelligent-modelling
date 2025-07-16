@@ -1,5 +1,5 @@
 from scientific_intelligent_modelling.config_manager import config_manager
-from scientific_intelligent_modelling.environment_manager import environment_manager
+from sim.scientific_intelligent_modelling import environment_manager
 
 print(f"sim_cuda_11_8的配置: {config_manager.get_env_config('sim_cuda_11_8')}")
 
