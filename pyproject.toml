@@ -3,19 +3,18 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "scientific_intelligent_modelling"
+name = "sim"
 version = "1.0.0"
-description = "A unified toolkit that integrates many external libraries"
+description = "A comprehensive scientific modeling framework that provides a unified access interface for various symbolic regression algorithms and scientific computing tools. This framework utilizes the conda environment management system to isolate dependencies of different tools, ensuring stable operation through a subprocess mechanism."
 readme = "README.md"
 authors = [
     {name = "Ziwen Zhang", email = "244824379@qq.com"},
     {name = "Kai Li", email = "kai.li@ia.ac.cn"}
 ]
-license = {text = "GPL-3.0"}
+license = "gpl-3.0"
 keywords = ["modeling", "gplearn", "integration", "pytorch"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
 ]
 requires-python = ">=3.6" # 基解释器版本无所谓

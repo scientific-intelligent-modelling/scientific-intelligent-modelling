@@ -80,7 +80,6 @@ python main.py --use_api True --api_model "gpt-3.5-turbo" --problem_name stresss
       "python_version": "3.11.7",
       "conda_packages": [
         "pip",
-        "uv"
       ],
       "channels": [
         "conda-forge"
@@ -91,8 +90,8 @@ python main.py --use_api True --api_model "gpt-3.5-turbo" --problem_name stresss
         "litellm"
       ],
       "post_install_commands": [
-        "uv pip install -e .",
-        "uv pip install -r ./scientific_intelligent_modelling/algorithms/llmsr_wrapper/llmsr/requirements.txt --index-strategy unsafe-best-match"
+        "pip install -e .",
+        "pip install -r ./scientific_intelligent_modelling/algorithms/llmsr_wrapper/llmsr/requirements.txt"
       ]
     }
 ```
@@ -107,11 +106,10 @@ python main.py --use_api True --api_model "gpt-3.5-turbo" --problem_name stresss
 
 ### conda_packages
 
-`"conda_packages": ["pip", "uv"]`
+`"conda_packages": ["pip"]`
 列出需要通过conda包管理器安装的包。这里指定安装:
 
 * `pip`: Python的包管理工具
-* `uv`: 一个高性能的Python包管理器，是pip的替代品，通常安装速度更快
 
 ### channels
 
@@ -132,10 +130,9 @@ python main.py --use_api True --api_model "gpt-3.5-turbo" --problem_name stresss
 `"post_install_commands": [...] `
 环境创建后需要执行的命令:
 
-1. `"uv pip install -e ."`
-   使用uv包管理器以可编辑模式(`-e`)安装当前目录下的Python包，这使得对源代码的修改立即生效，无需重新安装
-2. `"uv pip install -r [requirements.txt](http://_vscodecontentref_/0) --index-strategy unsafe-best-match"`
-   使用uv安装llmsr子模块的所有依赖包，`--index-strategy unsafe-best-match`参数用于解决依赖冲突问题，选择最匹配的版本而非严格安全的版本
+1. `"pip install -e ."`
+   以可编辑模式(`-e`)安装当前目录下的Python包，这使得对源代码的修改立即生效，无需重新安装
+2. `"pip install -r [requirements.txt](http://_vscodecontentref_/0)"`
 
 这整个配置用于自动创建和设置运行LLMSR(Large Language Model Symbolic Regression)算法所需的全部环境依赖。
 

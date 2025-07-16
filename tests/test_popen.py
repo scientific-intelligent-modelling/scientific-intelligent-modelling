@@ -5,7 +5,7 @@ import sys
 # 这里我们使用 `source activate` 来激活环境并执行命令
 command = """
 source activate llmsr && \
-uv pip install -r ./scientific_intelligent_modelling/algorithms/llmsr_wrapper/llmsr/requirements.txt --index-strategy unsafe-best-match
+pip install -r ./scientific_intelligent_modelling/algorithms/llmsr_wrapper/llmsr/requirements.txt --index-strategy unsafe-best-match
 """
 
 # 使用 /bin/bash 来执行命令，因为我们需要使用 shell 的特性
