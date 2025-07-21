@@ -17,14 +17,14 @@ class LLMSRRegressor(BaseWrapper):
         参数:
         use_api (bool): 是否使用API模型 (默认: False)
         api_model (str): API模型名称 (默认: "gpt-3.5-turbo")
-        spec_path (str): 提示规范文件路径
+        # spec_path (str): 提示规范文件路径
         log_path (str): 日志目录 (默认: "./logs/llmsr_output")
-        problem_name (str): 问题名称 (默认: "example_problem")
+        # problem_name (str): 问题名称 (默认: "example_problem")
         temperature (float): 采样温度 (默认: 0.7)
         api_key (str): API密钥 (默认: None)
-        api_params (dict): 额外的API参数 (默认: None)
+        # api_params (dict): 额外的API参数 (默认: None)
         api_base (str): 自定义API基地址 (默认: None)
-        debug (bool): 是否启用调试输出 (默认: False)
+        # debug (bool): 是否启用调试输出 (默认: False)
         samples_per_prompt (int): 每个提示生成的样本数 (默认: 5)
         max_samples (int): 生成的最大样本数 (默认: 10000)
         """

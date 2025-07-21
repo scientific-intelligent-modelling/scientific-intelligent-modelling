@@ -1,0 +1,46 @@
+dataset:
+  name: llm-srbench__chem_react__CRK0
+  description: null
+  splits:
+    train:
+      file: train.csv
+      samples: 3500
+      ratio: 7
+    valid:
+      file: valid.csv
+      samples: 500
+      ratio: 1
+    id_test:
+      file: id_test.csv
+      samples: 500
+      ratio: 1
+    ood_test:
+      file: ood_test.csv
+      samples: 500
+      ratio: 1
+  ground_truth_formula:
+    file: formula.py
+  features:
+    - name: t
+      type: continuous
+      train_range: [0.0, 53.974796295166016]
+      ood_range: [54.01080322265625, 60.0]
+      description: Time
+    - name: A
+      type: continuous
+      train_range: [1.0, 1.1740511655807495]
+      ood_range: [1.1720833778381348, 1.1730549335479736]
+      description: Concentration at time t
+  target:
+    name: dA_dt
+    type: continuous
+    train_range: [-0.00042313997983, 0.0728384181857109]
+    ood_range: [9.84279831754975e-05, 0.0006061122985556]
+    description: Rate of change of concentration in chemistry reaction kinetics
+  license: MIT
+  citation:
+    arXiv: 2504.10415
+    title: 'LLM-SRBench: A New Benchmark for Scientific Equation Discovery with Large Language Models'
+  resources:
+    - https://github.com/deep-symbolic-mathematics/llm-srbench
+    - https://huggingface.co/datasets/nnheui/llm-srbench

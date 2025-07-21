@@ -21,29 +21,31 @@ y = X[:, 0]**2 + np.sin(X[:, 1]) + 0.1*np.random.randn(100)
 # # 使用不同工具进行对比
 api_key = os.getenv("DEEPSEEK_API_KEY")
 models = {
-    'gplearn': SymbolicRegressor('gplearn', population_size=1000, generations=20),
-    'pysr': SymbolicRegressor('pysr', niterations=5),
-    'operon': SymbolicRegressor('operon'),
+    # 'gplearn': SymbolicRegressor('gplearn', population_size=1000, generations=20),
+    # 'pysr': SymbolicRegressor('pysr', niterations=5),
+    # 'operon': SymbolicRegressor('operon'),
     'llmsr': SymbolicRegressor(
-        tool_name='llmsr',
+        'llmsr',
         use_api=True,
         api_model="deepseek/deepseek-chat",
+        # api_model="deepseek/deepseek-reasoner",
         api_key=api_key,
-        api_url="https://api.deepseek.com",
-        samples_per_prompt=2,  # 减少采样数量以加快测试
-        max_sample_nums=4,      # 减少最大采样数以加快测试
-        metadata_path="./metadata.json"
+        spec_path="./specs/specification_crk0_numpy.txt",  # 使用实际存在的规范文件
+        log_path="./logs/example_deepseek1",
+        problem_name="crk0",  # 使用实际存在的问题名称
+        samples_per_prompt=5,
+        max_samples=5
     ),
-    'dso': SymbolicRegressor('dso'),
-    "e2esr": SymbolicRegressor(
-        'e2esr',
-        # 指定预训练模型路径，如果模型文件不存在会自动创建新模型
-        model_path="./scientific_intelligent_modelling/algorithms/e2esr_wrapper/e2esr/model1",
-        # 添加其他E2ESR参数
-        max_input_points=200,
-        n_trees_to_refine=100,
-        rescale=True
-    )
+    # 'dso': SymbolicRegressor('dso'),
+    # "e2esr": SymbolicRegressor(
+    #     'e2esr',
+    #     # 指定预训练模型路径，如果模型文件不存在会自动创建新模型
+    #     model_path="./scientific_intelligent_modelling/algorithms/e2esr_wrapper/e2esr/model1",
+    #     # 添加其他E2ESR参数
+    #     max_input_points=200,
+    #     n_trees_to_refine=100,
+    #     rescale=True
+    # )
 }
 
 
