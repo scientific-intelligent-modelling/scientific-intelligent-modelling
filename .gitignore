@@ -8,3 +8,5 @@ key.txt
 model.pt
 *.pt
 dist/
+.env/*.env
+.env

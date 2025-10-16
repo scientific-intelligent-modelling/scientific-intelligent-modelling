@@ -1,13 +1,14 @@
 # algorithms/llmsr_wrapper/wrapper.py
 import os
 import json
-import pickle
-import base64
 import numpy as np
 import pandas as pd
 import tempfile
 import sys
 from ..base_wrapper import BaseWrapper
+
+# 引入自定义 LLM Client 工厂
+from scientific_intelligent_modelling.srkit.llm import ClientFactory, parse_provider_model
 
 class LLMSRRegressor(BaseWrapper):
     def __init__(self, **kwargs):
@@ -80,6 +81,77 @@ class LLMSRRegressor(BaseWrapper):
             
             # 现在导入模块
             from llmsr import pipeline, config, sampler, evaluator
+
+            # 捕获外层参数用于 APILLM 闭包
+            outer_params = dict(self.params)
+
+            # 定义仅使用 API 的自定义 LLM（不依赖 litellm，不走本地推理）
+            class APILLM(sampler.LLM):
+                def __init__(self, samples_per_prompt: int) -> None:
+                    super().__init__(samples_per_prompt)
+                    self._instruction_prompt = (
+                        "You are a helpful assistant tasked with discovering mathematical function structures for scientific systems. "
+                        "Complete the 'equation' function below, considering the physical meaning and relationships of inputs.\n\n"
+                    )
+                    # 从外层参数构建 API 上下文（避免修改冻结的 Config）
+                    self._api_ctx = {
+                        'api_model': outer_params.get('api_model'),
+                        'api_key': outer_params.get('api_key'),
+                        'api_base': outer_params.get('api_base'),
+                        'temperature': outer_params.get('temperature'),
+                        'api_params': outer_params.get('api_params') if isinstance(outer_params.get('api_params'), dict) else api_params,
+                    }
+
+                def draw_samples(self, prompt: str, cfg: config.Config):
+                    # 强制 API 路径
+                    full_prompt = '\n'.join([self._instruction_prompt, prompt])
+                    # 解析 provider/model，确定默认环境变量
+                    api_model = self._api_ctx.get('api_model') or cfg.api_model
+                    provider, _model = parse_provider_model(api_model)
+
+                    # 构造 ClientFactory 配置
+                    api_key = getattr(cfg, 'api_key', None)
+                    if not api_key:
+                        if provider == 'deepseek':
+                            api_key = os.getenv('DEEPSEEK_API_KEY', '')
+                        elif provider in ('siliconflow', 'silicon-flow', 'sflow'):
+                            api_key = os.getenv('SILICONFLOW_API_KEY', '')
+                        elif provider == 'ollama':
+                            api_key = ''
+
+                    client = ClientFactory.from_config({
+                        'model': api_model,
+                        'api_key': api_key,
+                        'base_url': self._api_ctx.get('api_base')
+                    })
+
+                    # 透传温度等生成参数
+                    api_temperature = self._api_ctx.get('temperature')
+                    extra_params = self._api_ctx.get('api_params')
+                    if api_temperature is not None:
+                        client.kwargs['temperature'] = api_temperature
+                    if isinstance(extra_params, dict):
+                        client.kwargs.update(extra_params)
+
+                    messages = [{"role": "user", "content": full_prompt}]
+
+                    all_samples = []
+                    for _ in range(self._samples_per_prompt):
+                        while True:
+                            try:
+                                resp = client.chat(messages)
+                                content = resp.get('content', '') or ''
+                                # 提取函数体（去除 def ... 行）
+                                content = sampler._extract_body(content, cfg)
+                                all_samples.append(content)
+                                break
+                            except Exception as e:
+                                print(f"API 采样出错，重试中: {e}")
+                                import time as _t
+                                _t.sleep(1)
+                                continue
+
+                    return all_samples
             
             # 构建命令行参数
             # 如果spec_path不是绝对路径，转换为绝对路径
@@ -87,46 +159,15 @@ class LLMSRRegressor(BaseWrapper):
             if spec_path and not os.path.isabs(spec_path):
                 spec_path = os.path.abspath(spec_path)
                 
-            # 设置API密钥（如果提供）
-            if 'api_key' in self.params and self.params['api_key']:
-                api_key = self.params['api_key']
-                api_model = self.params['api_model']
-                
-                if api_model.startswith('gpt-') or 'openai' in api_model:
-                    os.environ["OPENAI_API_KEY"] = api_key
-                elif 'anthropic' in api_model or 'claude' in api_model:
-                    os.environ["ANTHROPIC_API_KEY"] = api_key
-                elif 'google' in api_model or 'gemini' in api_model:
-                    os.environ["GOOGLE_API_KEY"] = api_key
-                elif 'mistral' in api_model:
-                    os.environ["MISTRAL_API_KEY"] = api_key
-                elif 'deepseek' in api_model:
-                    os.environ["DEEPSEEK_API_KEY"] = api_key
-                else:
-                    os.environ["OPENAI_API_KEY"] = api_key
+            # 不再设置 litellm 的环境变量，这里仅记录 API Key/Base 以便下游使用
             
-            # 设置API基地址（如果提供）
-            if 'api_base' in self.params and self.params['api_base']:
-                api_base = self.params['api_base']
-                api_model = self.params['api_model']
-                
-                if 'deepseek' in api_model:
-                    os.environ["DEEPSEEK_API_BASE"] = api_base
-                else:
-                    os.environ["OPENAI_API_BASE"] = api_base
-            
-            # 解析API参数
+            # 解析API参数（传递到 cfg 上，由 APILLM 使用）
             api_params = {}
             if 'api_params' in self.params and self.params['api_params']:
                 if isinstance(self.params['api_params'], str):
                     api_params = json.loads(self.params['api_params'])
                 else:
                     api_params = self.params['api_params']
-            
-            # 设置调试模式
-            if self.params.get('debug', False):
-                import litellm
-                litellm.verbose = True
             
             # 加载提示规范
             with open(spec_path, encoding="utf-8") as f:
@@ -138,15 +179,19 @@ class LLMSRRegressor(BaseWrapper):
             
             # 配置类
             class_config = config.ClassConfig(
-                llm_class=sampler.UnifiedLLM,
+                llm_class=APILLM,
                 sandbox_class=evaluator.LocalSandbox
             )
             
             # 创建配置对象
+            # 强制使用 API 方式，并透传 samples_per_prompt
             config_obj = config.Config(
-                use_api=self.params.get('use_api', False),
-                api_model=self.params.get('api_model', 'gpt-3.5-turbo')
+                use_api=True,
+                api_model=self.params.get('api_model', 'deepseek/deepseek-chat'),
+                samples_per_prompt=self.params.get('samples_per_prompt', 4)
             )
+
+            # 额外参数交由 APILLM._api_ctx 管理（Config 为冻结类，禁止动态赋值）
             
             # 运行主流程
             results = pipeline.main(
@@ -254,37 +299,4 @@ class LLMSRRegressor(BaseWrapper):
         return []
 
 if __name__ == "__main__":
-    # 测试代码
-    import numpy as np
-    
-    # 生成示例数据
-    X = np.random.rand(100, 2)
-    y = X[:, 0]**2 + np.sin(X[:, 1]) + 0.1*np.random.randn(100)
-    
-    # 创建并训练模型
-    model = LLMSRRegressor(
-        use_api=True,
-        api_model="deepseek/deepseek-chat",
-        api_key="sk-3cef2f9d83a44fcda7d932bc2384112c",
-        spec_path="./specs/specification_oscillator1_numpy.txt",  # 使用实际存在的规范文件
-        log_path="./logs/example_deepseek",
-        problem_name="oscillator1",  # 使用实际存在的问题名称
-        samples_per_prompt=5,
-        max_samples=10000,
-        debug=True
-    )
-    
-    # 训练模型
-    model.fit(X, y)
-    
-    # 获取最优方程
-    equation = model.get_optimal_equation()
-    print(f"最优方程: {equation}")
-    
-    # 获取所有方程
-    total_equations = model.get_total_equations()
-    print(f"所有方程: {total_equations}")
-    
-    # 使用模型进行预测
-    predictions = model.predict(X[:5])
-    print(f"预测结果: {predictions}")
+    print("请使用 tests/test_new_arch.py 进行集成测试，并确保设置好对应的 API Key 环境变量。")

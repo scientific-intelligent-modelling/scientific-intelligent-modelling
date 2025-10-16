@@ -1,9 +1,11 @@
 import os
-import yaml
-import re
-import time
+"""统一的 LLM 客户端封装。
+
+提供商/模型命名规则：'provider/model'，provider 大小写不敏感，model 保留大小写与路径。
+当前支持：deepseek、siliconflow、ollama。
+"""
 import requests
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Tuple
 
 
 class LLMClient:
@@ -57,12 +59,13 @@ class LLMClient:
         }
         payload.update(self.kwargs)
 
-        start_time = time.time()
+        # 计时（可按需启用）
+        # start_time = time.time()
         try:
             response = requests.post(request_url, headers=headers, json=payload, timeout=120)
             response.raise_for_status()
             response_data = response.json()
-            end_time = time.time()
+            # end_time = time.time()
 
             message = response_data['choices'][0]['message']
             content = message.get('content', '')
@@ -103,29 +106,64 @@ class LLMClient:
             raise
 
 class DeepSeekClient(LLMClient):
-    def __init__(self, api_key: str, model: str, base_url = "https://api.deepseek.com"):
+    def __init__(self, api_key: str, model: str, base_url: str = "https://api.deepseek.com"):
         super().__init__(api_key=api_key, model=model, base_url=base_url)
 
-class SliconflowClient(LLMClient):
-    def __init__(self, api_key: str, model: str, base_url = "https://api.siliconflow.cn/v1"):
+class SiliconflowClient(LLMClient):
+    def __init__(self, api_key: str, model: str, base_url: str = "https://api.siliconflow.cn/v1"):
         super().__init__(api_key=api_key, model=model, base_url=base_url)
+
+# 兼容旧拼写，避免历史引用报错
+SliconflowClient = SiliconflowClient
 
 class OllamaClient(LLMClient):
-    def __init__(self, api_key: str, model: str, base_url = "http://localhost:11111/v1/"):
+    def __init__(self, api_key: str, model: str, base_url: str = "http://localhost:11111/v1"):
         super().__init__(api_key=api_key, model=model, base_url=base_url)
+
+
+def parse_provider_model(model_str: str) -> Tuple[str, str]:
+    """
+    解析模型字符串为 (provider, model)。
+
+    规则：第一个 '/' 之前为提供商（大小写不敏感），之后的全部为模型名（大小写敏感，允许包含 '/').
+    示例：
+    - "deepseek/deepseek-chat" -> ("deepseek", "deepseek-chat")
+    - "SiliconFlow/Qwen/Qwen3-8B" -> ("siliconflow", "Qwen/Qwen3-8B")
+    - "ollama/llama3.1:8b" -> ("ollama", "llama3.1:8b")
+    """
+    if not isinstance(model_str, str) or '/' not in model_str:
+        raise ValueError("模型名格式无效，需为 'provider/model'，如 'deepseek/deepseek-chat'")
+    provider, model = model_str.split('/', 1)
+    return provider.lower(), model
 
 class ClientFactory:
     @staticmethod
     def from_config(config: dict):
-        model = config['model']
-        api_key = config['api_key']
-        base_url = config['base_url']
-        if 'qwen3' in model.lower():
-            return SliconflowClient(api_key=api_key, model=model, base_url=base_url)
-        elif 'deepseek' in model.lower():
-            return DeepSeekClient(api_key=api_key, model=model, base_url=base_url)
+        """
+        基于 'provider/model' 创建具体客户端。
+
+        必填：config['model']（形如 'provider/model'）。
+        选填：config['api_key']、config['base_url']。
+        """
+        if 'model' not in config:
+            raise ValueError("缺少必要字段: model")
+
+        provider, model = parse_provider_model(config['model'])
+        api_key = config.get('api_key')
+        base_url = config.get('base_url')
+
+        # 设置默认 base_url
+        if provider == 'deepseek':
+            base_url = base_url or "https://api.deepseek.com"
+            return DeepSeekClient(api_key=api_key or os.getenv('DEEPSEEK_API_KEY', ''), model=model, base_url=base_url)
+        elif provider in ('siliconflow', 'silicon-flow', 'sflow'):
+            base_url = base_url or "https://api.siliconflow.cn/v1"
+            return SiliconflowClient(api_key=api_key or os.getenv('SILICONFLOW_API_KEY', ''), model=model, base_url=base_url)
+        elif provider == 'ollama':
+            base_url = base_url or "http://localhost:11111/v1"
+            return OllamaClient(api_key=api_key or '', model=model, base_url=base_url)
         else:
-            raise ValueError(f"不支持的模型: {model}")
+            raise ValueError(f"不支持的提供商: {provider}，请使用 'deepseek'、'siliconflow' 或 'ollama'")
         
 
 
