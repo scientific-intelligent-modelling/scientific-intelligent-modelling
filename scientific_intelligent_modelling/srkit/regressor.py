@@ -4,7 +4,6 @@ import json
 import tempfile
 import subprocess
 import numpy as np
-from pathlib import Path
 
 from .config_manager import config_manager
 from .conda_env_manager import env_manager
@@ -215,20 +214,56 @@ class SymbolicRegressor:
         runner_script = os.path.join(os.path.dirname(__file__), 'subprocess_runner.py')
         
         try:
-            # 执行子进程
-            subprocess.run(
-                [python_path, runner_script, '--input', cmd_path, '--output', result_path],
-                check=True
+            # 执行子进程（无缓冲），并实时转发其 stdout/stderr 到当前进程
+            env = os.environ.copy()
+            env.setdefault('PYTHONUNBUFFERED', '1')
+            proc = subprocess.Popen(
+                [python_path, '-u', runner_script, '--input', cmd_path, '--output', result_path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+                env=env
             )
-            
+            # 实时并发读取 stdout/stderr，避免管道阻塞
+            assert proc.stdout is not None and proc.stderr is not None
+            try:
+                import selectors
+                sel = selectors.DefaultSelector()
+                sel.register(proc.stdout, selectors.EVENT_READ)
+                sel.register(proc.stderr, selectors.EVENT_READ)
+                while True:
+                    if proc.poll() is not None and not sel.get_map():
+                        break
+                    events = sel.select(timeout=0.1)
+                    if not events and proc.poll() is not None:
+                        break
+                    for key, _ in events:
+                        line = key.fileobj.readline()
+                        if line:
+                            print(line, end='')
+                        else:
+                            # EOF: 取消注册
+                            sel.unregister(key.fileobj)
+                ret = proc.wait()
+            except Exception:
+                # 兜底：逐流读取
+                for line in proc.stdout:
+                    print(line, end='')
+                for line in proc.stderr:
+                    print(line, end='')
+                ret = proc.wait()
+            if ret != 0:
+                raise subprocess.CalledProcessError(ret, proc.args)
+
             # 读取结果
             with open(result_path, 'r') as f:
                 result = json.load(f)
-            
+
             # 清理临时文件
             os.unlink(cmd_path)
             os.unlink(result_path)
-            
+
             return result
         except subprocess.CalledProcessError as e:
             # 读取结果

@@ -33,8 +33,8 @@ models = {
         spec_path="./specs/specification_crk0_numpy.txt",  # 使用实际存在的规范文件
         log_path="./logs/example_deepseek1",
         problem_name="crk0",  # 使用实际存在的问题名称
-        samples_per_prompt=5,
-        max_samples=5
+        samples_per_prompt=2,
+        max_samples=4
     ),
     # 'dso': SymbolicRegressor('dso'),
     # "e2esr": SymbolicRegressor(
@@ -47,22 +47,6 @@ models = {
     #     rescale=True
     # )
 }
-
-
-for name, model in models.items():
-    model.fit(X, y)
-    result = model.get_optimal_equation()
-
-    predictions = model.predict(X)
-    mse = mean_squared_error(y, predictions)
-
-    print(f"{name} MSE: {mse}")
-
-
-
-
-print("\n最佳模型:", min(results, key=results.get))
-
 
 
 results = {}

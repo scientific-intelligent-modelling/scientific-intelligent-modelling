@@ -1,6 +1,9 @@
 # algorithms/llmsr_wrapper/wrapper.py
 import os
 import json
+import re
+import glob
+import inspect
 import numpy as np
 import pandas as pd
 import tempfile
@@ -34,6 +37,37 @@ class LLMSRRegressor(BaseWrapper):
         self.model = None
         self.best_equation = None
         self.all_equations = []
+        # 拟合后缓存：方程函数与最优参数
+        self._equation_func = None
+        self._equation_argcount = None  # 不含 params 的输入位参数个数
+        self._best_params = None
+
+    def serialize(self):
+        """仅序列化必要状态，避免pickle函数对象。"""
+        state = {
+            'params': self.params,
+            'best_equation': self.best_equation,
+            'all_equations': self.all_equations,
+            '_equation_argcount': self._equation_argcount,
+            '_best_params': self._best_params.tolist() if isinstance(self._best_params, np.ndarray) else self._best_params,
+        }
+        return json.dumps(state)
+
+    @classmethod
+    def deserialize(cls, payload: str):
+        """从JSON状态重建实例，并恢复可调用方程（不重复拟合）。"""
+        obj = json.loads(payload)
+        inst = cls(**obj.get('params', {}))
+        inst.model = True
+        inst.best_equation = obj.get('best_equation')
+        inst.all_equations = obj.get('all_equations', [])
+        inst._equation_argcount = obj.get('_equation_argcount')
+        best_params = obj.get('_best_params')
+        inst._best_params = np.array(best_params) if best_params is not None else None
+        # 仅编译函数，不进行再次拟合
+        if inst.best_equation:
+            inst._equation_func = inst._compile_equation(inst.best_equation)
+        return inst
         
         # 设置默认值
         # self.params.setdefault('use_api', False)
@@ -134,19 +168,28 @@ class LLMSRRegressor(BaseWrapper):
                         client.kwargs.update(extra_params)
 
                     messages = [{"role": "user", "content": full_prompt}]
+                    verbose = outer_params.get('debug', True)
+                    if verbose:
+                        print(f"[LLMSR][Sampler] provider={provider}, model={api_model} | samples_per_prompt={self._samples_per_prompt}", flush=True)
 
                     all_samples = []
-                    for _ in range(self._samples_per_prompt):
+                    for i in range(self._samples_per_prompt):
                         while True:
                             try:
+                                if verbose:
+                                    print(f"[LLMSR][Sampler] requesting sample {i+1}/{self._samples_per_prompt} ...", flush=True)
                                 resp = client.chat(messages)
                                 content = resp.get('content', '') or ''
                                 # 提取函数体（去除 def ... 行）
                                 content = sampler._extract_body(content, cfg)
                                 all_samples.append(content)
+                                if verbose:
+                                    tk = resp.get('tokens', {})
+                                    print(f"[LLMSR][Sampler] got sample {i+1}/{self._samples_per_prompt} | tokens={tk}", flush=True)
                                 break
                             except Exception as e:
-                                print(f"API 采样出错，重试中: {e}")
+                                if verbose:
+                                    print(f"[LLMSR][Sampler] API 采样出错，重试中: {e}", flush=True)
                                 import time as _t
                                 _t.sleep(1)
                                 continue
@@ -194,7 +237,7 @@ class LLMSRRegressor(BaseWrapper):
             # 额外参数交由 APILLM._api_ctx 管理（Config 为冻结类，禁止动态赋值）
             
             # 运行主流程
-            results = pipeline.main(
+            _ = pipeline.main(
                 specification=specification,
                 inputs=dataset,
                 config=config_obj,
@@ -204,15 +247,21 @@ class LLMSRRegressor(BaseWrapper):
                 samples_per_prompt=self.params.get('samples_per_prompt', 5),
             )
             
-            # 保存结果
-            self.model = results
-            
-            # 提取最优方程和所有方程
-            if results and hasattr(results, 'best_formula'):
-                self.best_equation = results.best_formula
-                
-            if results and hasattr(results, 'formulas'):
-                self.all_equations = results.formulas
+            # 保存结果（pipeline.main 无返回值）
+            self.model = True
+
+            # 从日志中提取最优方程字符串与所有候选
+            log_dir = self.params.get('log_path', './logs/llmsr_output')
+            samples_dir = os.path.join(log_dir, 'samples')
+            best_func_str, all_func_strs = self._load_equations_from_logs(samples_dir)
+            if best_func_str is None:
+                raise RuntimeError(f"未在日志目录中找到任何候选方程: {samples_dir}")
+
+            self.best_equation = best_func_str
+            self.all_equations = all_func_strs
+
+            # 基于训练数据对最优方程进行参数再拟合，并缓存可调用函数与最优参数
+            self._prepare_predictor(best_func_str, X, y)
                 
         except Exception as e:
             print(f"LLMSR训练过程中出现错误: {str(e)}")
@@ -236,35 +285,20 @@ class LLMSRRegressor(BaseWrapper):
         if self.model is None:
             raise ValueError("模型尚未训练，请先调用fit方法")
         
-        try:
-            # 如果模型有predict方法，使用它
-            if hasattr(self.model, 'predict'):
-                return self.model.predict(X)
-            # 否则，尝试使用最佳方程进行预测
-            elif self.best_equation:
-                # 根据方程进行预测
-                # 注: 这部分可能需要根据LLMSR的具体实现进行调整
-                import sympy as sp
-                from sympy.parsing.sympy_parser import parse_expr
-                
-                # 解析最佳方程字符串为sympy表达式
-                expr = parse_expr(self.best_equation.replace("^", "**"))
-                
-                # 创建lambda函数用于评估
-                var_names = [f"x{i}" for i in range(X.shape[1])]
-                symbols = sp.symbols(var_names)
-                f = sp.lambdify(symbols, expr, "numpy")
-                
-                # 将X传给lambda函数
-                if X.shape[1] == 1:  # 如果只有一个特征
-                    return f(X[:, 0])
-                else:
-                    return f(*[X[:, i] for i in range(X.shape[1])])
-            else:
-                raise ValueError("模型没有可用的预测功能或最佳方程")
-        except Exception as e:
-            print(f"预测过程中出现错误: {str(e)}")
-            raise
+        if self._equation_func is None or self._best_params is None:
+            raise ValueError("未找到可调用的方程或最优参数，请先调用fit完成训练与参数拟合")
+
+        X = np.asarray(X)
+        if X.ndim == 1:
+            X = X.reshape(-1, 1)
+        if self._equation_argcount is None:
+            raise ValueError("内部方程元数据缺失")
+        if X.shape[1] < self._equation_argcount:
+            raise ValueError(f"特征维度不足：需要 {self._equation_argcount} 列，实际 {X.shape[1]}")
+
+        cols = [X[:, i] for i in range(self._equation_argcount)]
+        y_pred = self._equation_func(*cols, self._best_params)
+        return np.asarray(y_pred)
     
     def get_optimal_equation(self):
         """获得最优方程"""
@@ -297,6 +331,107 @@ class LLMSRRegressor(BaseWrapper):
         
         # 如果没有可用的方程列表
         return []
+
+    # ===================== 内部工具方法 =====================
+    def _load_equations_from_logs(self, samples_dir: str):
+        """读取日志目录，返回(最佳函数字符串, 全部函数字符串列表)。"""
+        if not os.path.isdir(samples_dir):
+            return None, []
+        files = sorted(glob.glob(os.path.join(samples_dir, 'samples_*.json')))
+        best = None
+        best_score = -float('inf')
+        all_funcs = []
+        for fp in files:
+            try:
+                with open(fp, 'r') as f:
+                    obj = json.load(f)
+                func = obj.get('function')
+                score = obj.get('score')
+                if func:
+                    all_funcs.append(func)
+                if isinstance(score, (int, float)) and func:
+                    if score > best_score:
+                        best_score = score
+                        best = func
+            except Exception:
+                continue
+        return best, all_funcs
+
+    def _compile_equation(self, function_str: str):
+        """将函数字符串编译为可调用的 equation 函数。"""
+        safe_globals = {"np": np}
+        local_ns = {}
+        try:
+            exec(function_str, safe_globals, local_ns)
+        except Exception as e:
+            raise RuntimeError(f"编译方程函数失败: {e}\n{function_str}")
+        equation = local_ns.get('equation') or safe_globals.get('equation')
+        if equation is None:
+            raise RuntimeError("未在函数字符串中找到 'equation' 定义")
+        return equation
+
+    def _prepare_predictor(self, function_str: str, X: np.ndarray, y: np.ndarray):
+        """编译函数字符串并在训练集上再次拟合最优参数。"""
+        equation = self._compile_equation(function_str)
+
+        # 推断位参：除最后一个 params 外，其余均为输入特征
+        sig = inspect.signature(equation)
+        param_names = [p.name for p in sig.parameters.values()]
+        if len(param_names) < 1:
+            raise RuntimeError("equation 函数参数异常")
+        # 认为最后一个是 params
+        input_argcount = len(param_names) - 1
+        self._equation_argcount = input_argcount
+
+        X = np.asarray(X)
+        y = np.asarray(y).reshape(-1)
+        if X.ndim == 1:
+            X = X.reshape(-1, 1)
+        if X.shape[1] < input_argcount:
+            raise ValueError(f"特征维度不足：需要 {input_argcount} 列，实际 {X.shape[1]}")
+
+        cols = [X[:, i] for i in range(input_argcount)]
+
+        # 估计参数维度：扫描 params[k]
+        max_idx = -1
+        for m in re.finditer(r"params\s*\[\s*(\d+)\s*\]", function_str):
+            try:
+                idx = int(m.group(1))
+                if idx > max_idx:
+                    max_idx = idx
+            except Exception:
+                pass
+        param_dim = max(1, max_idx + 1) if max_idx >= 0 else 10  # 默认10
+
+        # 使用 SciPy 最小化 MSE 进行拟合
+        try:
+            from scipy.optimize import minimize
+
+            def loss(p):
+                try:
+                    pred = equation(*cols, p)
+                    pred = np.asarray(pred).reshape(-1)
+                    if pred.shape[0] != y.shape[0]:
+                        return 1e12
+                    return float(np.mean((pred - y) ** 2))
+                except Exception:
+                    return 1e12
+
+            p0 = np.ones(param_dim, dtype=float)
+            # 与 spec 中保持一致的 BFGS 方法，提升可重复性
+            res = minimize(loss, p0, method='BFGS')
+            best_params = res.x if res.success else p0
+        except Exception:
+            # 回退：简单最小二乘（仅适用于线性组合情形），否则退回全1
+            try:
+                # 线性假设：pred = A @ p 近似
+                # 无法通用解析，保持回退为全1
+                best_params = np.ones(param_dim, dtype=float)
+            except Exception:
+                best_params = np.ones(param_dim, dtype=float)
+
+        self._equation_func = equation
+        self._best_params = best_params
 
 if __name__ == "__main__":
     print("请使用 tests/test_new_arch.py 进行集成测试，并确保设置好对应的 API Key 环境变量。")

@@ -12,6 +12,12 @@ from config_manager import config_manager
 
 def main():
     """子进程执行入口点"""
+    # 强制标准输出/错误按行刷新，避免缓冲堆积
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+        sys.stderr.reconfigure(line_buffering=True)
+    except Exception:
+        pass
     parser = argparse.ArgumentParser(description='符号回归子进程执行器')
     parser.add_argument('--input', required=True, help='输入命令文件路径')
     parser.add_argument('--output', required=True, help='输出结果文件路径')
