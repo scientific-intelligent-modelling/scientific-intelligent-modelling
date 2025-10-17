@@ -58,9 +58,8 @@ for name, model in models.items():
     print(f"{name} 方程: {model.get_optimal_equation()}")
 
     # 获取所有方程
-    equations = model.get_total_equations()
-    print(f"{name} 所有方程: {equations}")
-    print(f"{name} 方程: {model.get_total_equations()}")
+    # equations = model.get_total_equations()
+    # print(f"{name} 所有方程: {equations}")
     predictions = model.predict(X)
     mse = mean_squared_error(y, predictions)
     results[name] = mse
