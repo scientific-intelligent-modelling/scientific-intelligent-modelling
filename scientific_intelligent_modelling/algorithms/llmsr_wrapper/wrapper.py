@@ -104,6 +104,10 @@ class LLMSRRegressor(BaseWrapper):
         返回:
         self: 训练后的模型实例
         """
+        # 自动推导 problem_name（如未提供）
+        if not self.params.get('problem_name'):
+            self.params['problem_name'] = self._derive_problem_name(self.params.get('background'))
+
         # 确保存在临时目录来存储数据
         temp_dir = tempfile.mkdtemp(prefix='llmsr_')
         data_path = os.path.join(temp_dir, 'data', self.params['problem_name'])
@@ -210,12 +214,24 @@ class LLMSRRegressor(BaseWrapper):
 
                     return all_samples
             
-            # 构建命令行参数
-            # 如果spec_path不是绝对路径，转换为绝对路径
+            # 规范来源：有 spec_path 用文件，否则自动生成
             spec_path = self.params.get('spec_path')
-            if spec_path and not os.path.isabs(spec_path):
-                spec_path = os.path.abspath(spec_path)
-                
+            specification = None
+            if spec_path:
+                if not os.path.isabs(spec_path):
+                    spec_path = os.path.abspath(spec_path)
+                with open(spec_path, encoding="utf-8") as f:
+                    specification = f.read()
+            else:
+                specification = self._build_dynamic_spec_from_background(X, y, self.params.get('background'))
+                # 写到临时目录便于复现
+                auto_spec_dir = os.path.join(temp_dir, 'auto_spec')
+                os.makedirs(auto_spec_dir, exist_ok=True)
+                spec_path = os.path.join(auto_spec_dir, 'generated_spec.txt')
+                with open(spec_path, 'w', encoding='utf-8') as f:
+                    f.write(specification)
+            self._specification_str = specification
+
             # 不再设置 litellm 的环境变量，这里仅记录 API Key/Base 以便下游使用
             
             # 解析API参数（传递到 cfg 上，由 APILLM 使用）
@@ -226,9 +242,7 @@ class LLMSRRegressor(BaseWrapper):
                 else:
                     api_params = self.params['api_params']
             
-            # 加载提示规范
-            with open(spec_path, encoding="utf-8") as f:
-                specification = f.read()
+            # 此时 specification 已就绪
                 self._specification_str = specification
             
             # 准备数据
@@ -731,6 +745,125 @@ class LLMSRRegressor(BaseWrapper):
         except Exception:
             pass
         return None
+
+    # ============== 背景驱动的动态规范生成 ==============
+    def _derive_problem_name(self, background):
+        base = 'auto_problem'
+        if isinstance(background, dict):
+            title = background.get('title') or background.get('name')
+            if title:
+                base = str(title)
+        elif isinstance(background, str) and background.strip():
+            base = background.strip().split('\n')[0][:32]
+        slug = re.sub(r'[^\w\-]+', '_', base.strip())
+        slug = re.sub(r'_+', '_', slug).strip('_').lower()
+        return slug or 'auto_problem'
+
+    def _build_dynamic_spec_from_background(self, X, y, background):
+        n_features = int(X.shape[1]) if hasattr(X, 'shape') else int(len(X[0]))
+        var_names, var_descs = self._extract_variable_info(background, n_features)
+        max_params = None
+        param_init = None
+        notes_text = ''
+        if isinstance(background, dict):
+            max_params = background.get('max_params')
+            param_init = background.get('param_init')
+            notes_text = background.get('notes') or background.get('domain') or ''
+        elif isinstance(background, str):
+            notes_text = background
+        max_params = int(max_params) if isinstance(max_params, int) and max_params > 0 else 10
+        if not (isinstance(param_init, list) and len(param_init) == max_params):
+            param_init = [1.0] * max_params
+
+        # Header docstring
+        header_lines = [
+            '"""',
+            'Auto-generated spec for LLMSR.',
+            f"Problem: {self.params.get('problem_name', 'auto')}",
+            'Background:',
+        ]
+        if notes_text:
+            header_lines += [str(notes_text)]
+        header_lines += ['Variables:']
+        for name, desc in zip(var_names, var_descs):
+            header_lines += [f'  - {name}: {desc}']
+        header_lines += ['"""']
+        header = '\n'.join(header_lines)
+
+        # Inputs extraction code
+        extract_lines = []
+        for idx, nm in enumerate(var_names):
+            extract_lines.append(f"    {nm} = inputs[:, {idx}]")
+        extract_block = '\n'.join(extract_lines)
+
+        # Baseline equation terms
+        term_count = min(n_features, max_params - 1) if max_params > 1 else 0
+        terms = [f"params[{i}] * {var_names[i]}" for i in range(term_count)]
+        bias_idx = term_count if max_params > term_count else max(0, max_params - 1)
+        if max_params > 0:
+            terms.append(f"params[{bias_idx}]")
+        body_return = ' + '.join(terms) if terms else '0.0'
+
+        spec = (
+            f"{header}\n\n"
+            "import numpy as np\n\n"
+            f"MAX_NPARAMS = {max_params}\n"
+            f"PRAMS_INIT = {param_init}\n\n"
+            "@evaluate.run\n"
+            "def evaluate(data: dict) -> float:\n"
+            "    \"\"\" Evaluate the equation on data observations. \"\"\"\n"
+            "    inputs, outputs = data['inputs'], data['outputs']\n"
+            f"{extract_block}\n"
+            "    from scipy.optimize import minimize\n"
+            "    def loss(params):\n"
+            f"        y_pred = equation({', '.join(var_names)}, params)\n"
+            "        return np.mean((y_pred - outputs) ** 2)\n"
+            "    result = minimize(lambda p: loss(p), PRAMS_INIT, method='BFGS')\n"
+            "    val = float(result.fun)\n"
+            "    if np.isnan(val) or np.isinf(val):\n"
+            "        return None\n"
+            "    return -val\n\n"
+            "@equation.evolve\n"
+            f"def equation({', '.join(var_names)}, params: np.ndarray) -> np.ndarray:\n"
+            "    \"\"\" Mathematical function to be discovered.\n\n"
+            "    Hints:\n"
+            "      - Use physically meaningful combinations if applicable.\n"
+            "      - Keep it simple and smooth to avoid overfitting.\n"
+            "    \"\"\"\n"
+            f"    return {body_return}\n"
+        )
+        return spec
+
+    def _extract_variable_info(self, background, n_features):
+        names = []
+        descs = []
+        if isinstance(background, dict) and isinstance(background.get('variables'), list):
+            for item in background['variables']:
+                if isinstance(item, dict):
+                    nm = item.get('name'); ds = item.get('desc') or ''
+                elif isinstance(item, str):
+                    if ':' in item or '：' in item:
+                        nm, ds = re.split(r'[:：]', item, maxsplit=1)
+                    else:
+                        nm, ds = item, ''
+                else:
+                    continue
+                nm = re.sub(r'[^A-Za-z0-9_]', '_', str(nm).strip())
+                if nm:
+                    names.append(nm)
+                    descs.append(str(ds).strip())
+            if len(names) >= n_features:
+                return names[:n_features], descs[:n_features]
+        if isinstance(background, str):
+            for line in background.splitlines():
+                m = re.match(r'\s*([A-Za-z_][A-Za-z0-9_]*)\s*[:：]\s*(.+)$', line.strip())
+                if m:
+                    names.append(m.group(1)); descs.append(m.group(2))
+            if len(names) >= n_features:
+                return names[:n_features], descs[:n_features]
+        names = [f'x{i}' for i in range(n_features)]
+        descs = ['feature'] * n_features
+        return names, descs
 
     # ============== 公共接口：返回表达式与参数细节 ==============
     def get_equation_details(self):
