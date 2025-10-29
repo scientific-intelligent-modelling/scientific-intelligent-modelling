@@ -9,7 +9,7 @@
 	url = https://github.com/scientific-intelligent-modelling/e2e-symbolic-regression.git
 [submodule "scientific_intelligent_modelling/algorithms/drsr_wrapper/drsr"]
 	path = scientific_intelligent_modelling/algorithms/drsr_wrapper/drsr
-	url = https://github.com/scientific-intelligent-modelling/drsr
+	url = git@github.com:scientific-intelligent-modelling/drsr.git
 [submodule "scientific_intelligent_modelling/algorithms/lasr_wrapper/lasr"]
 	path = scientific_intelligent_modelling/algorithms/lasr_wrapper/lasr
 	url = https://github.com/scientific-intelligent-modelling/lasr-concise
