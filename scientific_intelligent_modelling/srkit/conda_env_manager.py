@@ -769,7 +769,21 @@ class EnvManager:
                 print("无效选择。请输入1到4之间的数字。")
 
 
-env_manager = EnvManager()
+class _LazyEnvManager:
+    """惰性创建的 EnvManager，避免导入时做昂贵的 Conda 探测"""
+    def __init__(self):
+        self._instance = None
+
+    def _get(self):
+        if self._instance is None:
+            self._instance = EnvManager()
+        return self._instance
+
+    def __getattr__(self, name):
+        return getattr(self._get(), name)
+
+# 导出一个与原名兼容的惰性代理，保持外部引用不变
+env_manager = _LazyEnvManager()
 
 def main():
     """主函数"""

@@ -26,12 +26,17 @@ class SymbolicRegressor:
         if not self.env_name:
             raise ValueError(f"未找到工具 '{tool_name}' 的环境配置")
         
-        # 检查环境是否存在
-        if not env_manager.check_environment(self.env_name):
-            print(f"环境 '{self.env_name}' 不存在，正在创建...")
-            success = env_manager.create_environment(self.env_name)
-            if not success:
-                raise RuntimeError(f"无法创建环境 '{self.env_name}'")
+        # 快速路径：仅在无法定位 Python 可执行文件时，才进行较重的环境检查/创建
+        # 这样可以避免每次实例化都调用昂贵的 conda 检查（如 pip freeze、python --version 等）
+        python_path = env_manager.get_env_python(self.env_name)
+        if not python_path:
+            # 无法直接定位到 python，退回到完整检查/创建逻辑
+            exists, reason = env_manager.check_environment(self.env_name)
+            if not exists:
+                print(f"环境 '{self.env_name}' 不存在或未就绪，正在创建...")
+                success = env_manager.create_environment(self.env_name)
+                if not success:
+                    raise RuntimeError(f"无法创建环境 '{self.env_name}'：{reason}")
     
     def fit(self, X, y):
         """
