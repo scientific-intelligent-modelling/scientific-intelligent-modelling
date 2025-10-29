@@ -3,12 +3,41 @@
   "subprocess_timeout": 3600,
   "memory_limit": 16000,
   "tool_mapping": {
-    "gplearn": {"env": "sim_base", "regressor": "GPLearnRegressor"},
-    "pysr": {"env": "sim_base", "regressor": "PySRRegressor"},
-    "pyoperon": {"env": "sim_base", "regressor": "OperonRegressor"},
-    "llmsr": {"env": "sim_llmsr", "regressor": "LLMSRRegressor"},
-    "dso": {"env": "sim_dso", "regressor": "DSORegressor"},
-    "tpsr": {"env": "sim_tpsr", "regressor": "TPSRRegressor"},
-    "e2esr": {"env": "sim_e2esr", "regressor": "E2ESRRegressor"}
+    "gplearn": {
+      "env": "sim_base",
+      "regressor": "GPLearnRegressor"
+    },
+    "pysr": {
+      "env": "sim_base",
+      "regressor": "PySRRegressor"
+    },
+    "pyoperon": {
+      "env": "sim_base",
+      "regressor": "OperonRegressor"
+    },
+    "llmsr": {
+      "env": "sim_llmsr",
+      "regressor": "LLMSRRegressor"
+    },
+    "dso": {
+      "env": "sim_dso",
+      "regressor": "DSORegressor"
+    },
+    "tpsr": {
+      "env": "sim_tpsr",
+      "regressor": "TPSRRegressor"
+    },
+    "e2esr": {
+      "env": "sim_e2esr",
+      "regressor": "E2ESRRegressor"
+    },
+    "feyn": {
+      "env": "sim_feyn",
+      "regressor": "FeynRegressor"
+    },
+    "QLattice": {
+      "env": "sim_feyn",
+      "regressor": "QLatticeRegressor"
+    }
   }
 }

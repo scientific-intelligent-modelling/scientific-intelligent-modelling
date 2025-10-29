@@ -113,6 +113,26 @@
         "pip install -e .",
         "pip install -r ./scientific_intelligent_modelling/algorithms/tpsr_wrapper/tpsr/requirements.txt"
       ]
+    },
+    "sim_feyn": {
+      "python_version": "3.10",
+      "conda_packages": [
+        "pip"
+      ],
+      "channels": [
+        "conda-forge"
+      ],
+      "pip_packages": [
+        "numpy",
+        "pandas",
+        "scikit-learn",
+        "sympy",
+        "feyn"
+      ],
+      "post_install_commands": [
+        "pip install -e ."
+      ],
+      "comments": "Feyn/Qlattice 符号建模环境"
     }
   }
 }

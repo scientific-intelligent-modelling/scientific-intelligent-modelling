@@ -110,7 +110,7 @@ def handle_get_optimal_equation(regressor_class, command):
     }
 
 def handle_get_total_equations(regressor_class, command):
-    """处理get_total_equations操作，获取所有方程"""
+    """处理get_total_equations操作，获取所有方程，支持 n 限制数量"""
     # 提取模型状态
     serialized_model = command['serialized_model']
     
@@ -124,9 +124,15 @@ def handle_get_total_equations(regressor_class, command):
     # 获取所有方程
     equations = None
     
+    # 从命令中读取可选参数 n
+    n = command.get('n', None)
+
     # 尝试不同的方法获取所有方程
     if hasattr(regressor, 'get_total_equations'):
-        equations = regressor.get_total_equations()
+        try:
+            equations = regressor.get_total_equations(n) if n is not None else regressor.get_total_equations()
+        except TypeError:
+            equations = regressor.get_total_equations()
     elif hasattr(regressor, 'get_all_equations'):
         equations = regressor.get_all_equations()
     elif hasattr(regressor, 'hall_of_fame_'):

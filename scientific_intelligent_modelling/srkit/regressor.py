@@ -135,7 +135,7 @@ class SymbolicRegressor:
         return result.get('equation', '')
     
 
-    def get_total_equations(self):
+    def get_total_equations(self, n=None):
         """
         获取模型学习到的所有符号方程
         

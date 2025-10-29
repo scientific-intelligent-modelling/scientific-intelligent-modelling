@@ -1,0 +1,13 @@
+LICENSE
+README.md
+pyproject.toml
+scientific_intelligent_modelling/__init__.py
+sim_toolkit.egg-info/PKG-INFO
+sim_toolkit.egg-info/SOURCES.txt
+sim_toolkit.egg-info/dependency_links.txt
+sim_toolkit.egg-info/requires.txt
+sim_toolkit.egg-info/top_level.txt
+tests/test_llm_sr.py
+tests/test_new_arch.py
+tests/test_q.py
+tests/testpy.py

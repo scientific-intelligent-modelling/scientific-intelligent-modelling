@@ -517,25 +517,6 @@ class LLMSRRegressor(BaseWrapper):
         self._equation_func = equation
         self._best_params = best_params
 
-        # 将拟合产物持久化到本次 run 目录，便于复现
-        try:
-            if run_log_dir:
-                details = self.get_equation_details()
-                artifacts = {
-                    'equation_function': function_str,
-                    'expression_symbolic': details.get('expression_symbolic'),
-                    'expression_fitted': details.get('expression_fitted'),
-                    'latex_symbolic': details.get('latex_symbolic'),
-                    'latex_fitted': details.get('latex_fitted'),
-                    'input_vars': details.get('input_vars'),
-                    'param_symbols': details.get('param_symbols'),
-                    'params': details.get('params'),
-                }
-                with open(os.path.join(run_log_dir, 'best_model.json'), 'w') as f:
-                    json.dump(artifacts, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
-
     def _parse_spec_param_init(self, spec_text: str):
         """从规范文本中解析 MAX_NPARAMS 和 PRAMS_INIT/PARAMS_INIT（若存在）。"""
         # MAX_NPARAMS = 10

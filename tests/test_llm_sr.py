@@ -42,17 +42,14 @@ A: 浓度（mol/L）
     print("训练 llmsr 模型...")
     model.fit(X, y)
 
-    # 4) 输出结果（最优表达式/参数/MSE）
-    expr = model.get_optimal_equation()
-    print("llmsr 方程:", expr)
-
-    details = model.get_equation_details()
-    print("参数映射:", details.get('params'))
+    # 4) 输出结果（最优函数定义或表达式 + MSE）
+    best = model.get_optimal_equation()
+    print("llmsr 方程(骨架或表达式):", best)
 
     pred = model.predict(X)
     mse = mean_squared_error(y, pred)
     print("llmsr MSE:", mse)
-
+    
 
 if __name__ == '__main__':
     main()
