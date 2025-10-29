@@ -1,8 +1,8 @@
-"""feyn/Qlattice 一键运行脚本（对齐 test11 逻辑，使用包装器）
+"""QLattice 一键运行脚本（对齐 test11 逻辑，使用包装器）
 
 逻辑：
 - 使用 feyn.datasets.make_regression 生成 (train_df, test_df)
-- 通过 SymbolicRegressor('feyn') 训练
+- 通过 SymbolicRegressor('QLattice') 训练
 - 打印所有候选方程（最多前 10 个），以及最优方程与 MSE
 """
 

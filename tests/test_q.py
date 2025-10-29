@@ -12,9 +12,8 @@ from feyn.datasets import make_regression
 train_data, test_data = make_regression(n_samples=1000, n_features=5)
 target = "y" # 目标变量的列名
 
-# 2. 连接到 Qlattice (社区版需要联网)
-# 这会自动连接到 Abzu 的云端免费服务器
-ql = feyn.connect_qlattice()
+# 2. 创建 QLattice 实例 (社区版需要联网)
+ql = feyn.QLattice()
 
 # 3. 运行自动搜索
 # auto_run 会自动处理训练、模型选择和排序

@@ -31,12 +31,8 @@
       "env": "sim_e2esr",
       "regressor": "E2ESRRegressor"
     },
-    "feyn": {
-      "env": "sim_feyn",
-      "regressor": "FeynRegressor"
-    },
     "QLattice": {
-      "env": "sim_feyn",
+      "env": "sim_qLattice",
       "regressor": "QLatticeRegressor"
     }
   }
