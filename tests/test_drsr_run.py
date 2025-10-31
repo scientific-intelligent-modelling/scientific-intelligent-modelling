@@ -18,13 +18,16 @@ def main():
     X = rng.random((100, 2))
     y = X[:, 0] ** 2 + np.sin(X[:, 1] * np.pi) + 0.1 * rng.standard_normal(100)
 
-    # 使用 DRSR（封装默认 fast_mode=True，无需联网与重优化）
+    # 使用 DRSR（启用真实 API 调用）
     model = SymbolicRegressor(
         'drsr',
         # 可按需覆盖参数：
         # spec_path='./scientific_intelligent_modelling/algorithms/drsr_wrapper/drsr/specs/specification_oscillator1_numpy.txt',
+        fast_mode=False,
+        use_api=True,
+        api_model='blt/gpt-3.5-turbo',
         samples_per_prompt=1,
-        max_samples=2,
+        max_samples=10,
         evaluate_timeout_seconds=10,
         # 可指定日志/工作目录，便于复现输出：
         # log_dir='./outputs/drsr_logs',
@@ -45,4 +48,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

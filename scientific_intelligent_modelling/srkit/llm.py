@@ -7,6 +7,23 @@ import os
 import requests
 from typing import List, Dict, Tuple
 
+# 单次实验级别的全局 token 统计（需由调用方在实验开始前手动 reset）
+GLOBAL_TOKENS = {
+    'thinking': 0,  # 推理/思维链部分 token（reasoning_tokens）
+    'content': 0,   # 可见输出部分 token（completion_tokens - reasoning_tokens）
+    'total': 0,     # provider 返回的总 token（通常含 prompt + completion）
+}
+
+def reset_global_tokens():
+    """重置本次实验的全局 token 统计。"""
+    GLOBAL_TOKENS['thinking'] = 0
+    GLOBAL_TOKENS['content'] = 0
+    GLOBAL_TOKENS['total'] = 0
+
+def get_global_tokens() -> Dict[str, int]:
+    """获取本次实验的全局 token 统计（thinking/content/total）。"""
+    return dict(GLOBAL_TOKENS)
+
 
 class LLMClient:
     tokens = {
@@ -27,8 +44,15 @@ class LLMClient:
         self.api_key = api_key
         self.model = model
         self.base_url = base_url
+        # 实例级别的累计统计（无需显式 reset；通常每个实验构造一个 client）
+        self._call_index = 0
+        self._cum_tokens = {
+            'thinking': 0,
+            'content': 0,
+            'total': 0,
+        }
         self.kwargs = {
-            'max_tokens': 5000,
+            'max_tokens': 1024,  # 更安全的默认值，避免超过部分模型上限
             'temperature': 0.7,
             'top_p': 0.7,
             'top_k': 50,
@@ -36,6 +60,21 @@ class LLMClient:
             'n': 1,
             'stream': False,
         }
+
+    def _provider_name(self) -> str:
+        try:
+            url = (self.base_url or '').lower()
+            if 'deepseek' in url:
+                return 'deepseek'
+            if 'siliconflow' in url or 'siliconflow.cn' in url:
+                return 'siliconflow'
+            if 'bltcy' in url or 'blt' in url:
+                return 'blt'
+            if 'ollama' in url or 'localhost' in url:
+                return 'ollama'
+        except Exception:
+            pass
+        return 'llm'
 
     def chat(self, messages: List[Dict[str, str]]) -> dict:
         headers = {
@@ -57,19 +96,54 @@ class LLMClient:
             "model": model_name,
             "messages": messages,
         }
-        payload.update(self.kwargs)
+        # 仅透传 OpenAI Chat Completions 兼容字段，避免提供商拒绝未知参数
+        allowed_keys = {
+            'max_tokens', 'temperature', 'top_p', 'n', 'stream',
+            'presence_penalty', 'frequency_penalty', 'stop', 'logprobs',
+        }
+        if isinstance(self.kwargs, dict):
+            for k, v in self.kwargs.items():
+                if k in allowed_keys:
+                    payload[k] = v
+        # 对输出 token 上限做保护（部分模型 4k 上限，统一取不超过 4096）
+        try:
+            if isinstance(payload.get('max_tokens'), int) and payload['max_tokens'] > 4096:
+                payload['max_tokens'] = 4096
+        except Exception:
+            pass
 
         # 计时（可按需启用）
         # start_time = time.time()
         try:
             response = requests.post(request_url, headers=headers, json=payload, timeout=120)
+            # 状态码错误先抛出异常（下方 except 会打印详情）
             response.raise_for_status()
-            response_data = response.json()
+            # 尝试解析 JSON；失败时打印前 500 字符文本
+            try:
+                response_data = response.json()
+            except ValueError:
+                print("API 响应无法解析为 JSON，原始文本预览:", response.text[:500])
+                raise
+
+            # OpenAI 兼容接口错误格式：{"error": {...}}
+            if isinstance(response_data, dict) and 'error' in response_data:
+                err = response_data.get('error') or {}
+                print("API 返回错误:", {
+                    'type': err.get('type'),
+                    'code': err.get('code'),
+                    'message': err.get('message') or err,
+                })
+                raise requests.exceptions.HTTPError(f"API error: {err}")
             # end_time = time.time()
 
-            message = response_data['choices'][0]['message']
-            content = message.get('content', '')
-            reasoning_content = message.get('reasoning_content', '')
+            # 保护性判断：缺少 choices 时打印提示
+            if 'choices' not in response_data or not response_data['choices']:
+                print("API 响应不包含 choices 字段或为空：", str(response_data)[:500])
+                raise requests.exceptions.HTTPError("API response missing choices")
+
+            message = response_data['choices'][0].get('message', {})
+            content = message.get('content', '') or ''
+            reasoning_content = message.get('reasoning_content', '') or ''
 
             # token统计
             usage = response_data.get('usage', {})
@@ -85,6 +159,35 @@ class LLMClient:
             self.tokens['reasoning'] += reasoning_tokens
             self.tokens['total'] += total_tokens
 
+            # 更新单次实验全局统计
+            try:
+                GLOBAL_TOKENS['thinking'] += int(reasoning_tokens)
+                GLOBAL_TOKENS['content'] += int(completion_tokens - reasoning_tokens)
+                GLOBAL_TOKENS['total'] += int(total_tokens)
+            except Exception:
+                pass
+
+            # 实例级累计与打印
+            try:
+                self._call_index += 1
+                self._cum_tokens['thinking'] += int(reasoning_tokens)
+                self._cum_tokens['content'] += int(completion_tokens - reasoning_tokens)
+                self._cum_tokens['total'] += int(total_tokens)
+
+                provider = self._provider_name()
+                header = f"[{provider}][{self.model}] 第{self._call_index}次"
+                line_cur = (
+                    f"本次 tokens：thinking={int(reasoning_tokens)}, "
+                    f"content={int(completion_tokens - reasoning_tokens)}, total={int(total_tokens)}"
+                )
+                line_cum = (
+                    f"累计 tokens：thinking={self._cum_tokens['thinking']}, "
+                    f"content={self._cum_tokens['content']}, total={self._cum_tokens['total']}"
+                )
+                print(header + "\n" + line_cur + "\n" + line_cum)
+            except Exception:
+                pass
+
             return {
                 "content": content,
                 "reasoning_content": reasoning_content,
@@ -98,11 +201,14 @@ class LLMClient:
 
         except requests.exceptions.RequestException as e:
             print(f"通过 requests 调用 API 时出错: {e}")
-            if e.response:
+            if e.response is not None:
                 try:
-                    print("错误详情:", e.response.json())
+                    print("错误详情(JSON):", e.response.json())
                 except ValueError:
-                    print("无法解析错误响应。")
+                    try:
+                        print("错误详情(TEXT):", e.response.text[:500])
+                    except Exception:
+                        pass
             raise
 
 class DeepSeekClient(LLMClient):
@@ -118,6 +224,15 @@ SliconflowClient = SiliconflowClient
 
 class OllamaClient(LLMClient):
     def __init__(self, api_key: str, model: str, base_url: str = "http://localhost:11111/v1"):
+        super().__init__(api_key=api_key, model=model, base_url=base_url)
+
+class BltClient(LLMClient):
+    """BLT（柏拉图）网关，OpenAI Chat Completions 兼容接口。
+
+    默认基址含 /v1，路径将拼接为 /chat/completions。
+    """
+    def __init__(self, api_key: str, model: str, base_url: str = None):
+        base_url = base_url or os.getenv('BLT_API_BASE', 'https://api.bltcy.ai/v1')
         super().__init__(api_key=api_key, model=model, base_url=base_url)
 
 
@@ -162,8 +277,11 @@ class ClientFactory:
         elif provider == 'ollama':
             base_url = base_url or "http://localhost:11111/v1"
             return OllamaClient(api_key=api_key or '', model=model, base_url=base_url)
+        elif provider in ('blt', 'bltcy', 'plato'):
+            # 优先使用传入 api_key，否则读环境变量 BLT_API_KEY
+            return BltClient(api_key=api_key or os.getenv('BLT_API_KEY', ''), model=model, base_url=base_url or os.getenv('BLT_API_BASE', 'https://api.bltcy.ai/v1'))
         else:
-            raise ValueError(f"不支持的提供商: {provider}，请使用 'deepseek'、'siliconflow' 或 'ollama'")
+            raise ValueError(f"不支持的提供商: {provider}，请使用 'deepseek'、'siliconflow'、'blt' 或 'ollama'")
         
 
 

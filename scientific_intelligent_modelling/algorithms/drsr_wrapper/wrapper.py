@@ -58,7 +58,7 @@ class DRSRRegressor(BaseWrapper):
         # 数据（直接传给 pipeline，避免文件依赖）
         dataset = {"data": {"inputs": X, "outputs": y}}
 
-        # 轻量补丁（默认开启）
+        # 轻量补丁（默认开启）。若希望调用真实 LLM，请传入 fast_mode=False。
         if self.params.get("fast_mode", True):
             def _fake_draw_samples(self_llm, prompt: str, cfg: config_lib.Config):
                 body = (
@@ -100,7 +100,8 @@ class DRSRRegressor(BaseWrapper):
         # 组装配置并运行
         cls_cfg = config_lib.ClassConfig(llm_class=sampler.LocalLLM, sandbox_class=evaluator.LocalSandbox)
         cfg = config_lib.Config(
-            use_api=False,
+            use_api=bool(self.params.get("use_api", False)),
+            api_model=str(self.params.get("api_model", "gpt-3.5-turbo")),
             num_samplers=1,
             num_evaluators=1,
             samples_per_prompt=int(self.params.get("samples_per_prompt", 1)),
@@ -163,6 +164,32 @@ class DRSRRegressor(BaseWrapper):
         self._equation_func = self._compile_equation(best_body)
         self.model_ready = True
         return self
+
+    # -------------------------------
+    # 序列化/反序列化：仅保存必要可序列化字段
+    # -------------------------------
+    def serialize(self):
+        state = {
+            'params': self.params,
+            'equation_body': self._equation_body,
+            'all_bodies': self._all_bodies,
+        }
+        return json.dumps(state)
+
+    @classmethod
+    def deserialize(cls, payload: str):
+        obj = json.loads(payload)
+        inst = cls(**obj.get('params', {}))
+        inst._equation_body = obj.get('equation_body')
+        inst._all_bodies = obj.get('all_bodies', [])
+        if inst._equation_body:
+            try:
+                inst._equation_func = inst._compile_equation(inst._equation_body)
+                inst.model_ready = True
+            except Exception:
+                inst._equation_func = None
+                inst.model_ready = False
+        return inst
 
     # -------------------------------
     # 预测：使用已编译方程 + 默认参数
