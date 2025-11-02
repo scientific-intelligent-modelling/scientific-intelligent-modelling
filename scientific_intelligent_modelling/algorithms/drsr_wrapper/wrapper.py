@@ -183,6 +183,20 @@ class DRSRRegressor(BaseWrapper):
                 scored.sort(key=lambda x: (x[0] is not None, x[0]), reverse=True)
                 return scored[0][1]
             best_body = _pick_best("Good") or (bodies[0] if bodies else None)
+
+            # 若经验中包含训练期拟合参数，优先取出
+            best_params = None
+            if best_body:
+                for key in ("Good", "None", "Bad"):
+                    for item in data.get(key, []):
+                        if item.get("equation") == best_body and item.get("fitted_params") is not None:
+                            try:
+                                best_params = np.asarray(item.get("fitted_params"), dtype=float)
+                                break
+                            except Exception:
+                                best_params = None
+                    if best_params is not None:
+                        break
         except Exception:
             pass
 
@@ -195,15 +209,12 @@ class DRSRRegressor(BaseWrapper):
         self._equation_body = best_body
         self._all_bodies = bodies or [best_body]
         self._equation_func = self._compile_equation(best_body)
-        self.model_ready = True
-
-        # 额外：使用训练数据拟合最优参数，提升 predict 一致性
-        try:
-            if _SCIPY_OK and X.shape[1] >= 2 and callable(self._equation_func):
-                self._best_params = self._fit_params(X, y, n_params=10)
-        except Exception:
-            # 拟合失败时忽略，保持默认参数
+        # 注入训练期参数（若存在），否则置为空等待调用侧显式处理
+        if 'best_params' in locals() and best_params is not None:
+            self._best_params = best_params
+        else:
             self._best_params = None
+        self.model_ready = True
         return self
 
     def serialize(self):
@@ -238,11 +249,10 @@ class DRSRRegressor(BaseWrapper):
         X = np.asarray(X)
         if X.ndim != 2 or X.shape[1] < 2:
             raise ValueError("DRSR 预测需要至少两列输入：x 与 v")
-        params = self._best_params if isinstance(self._best_params, np.ndarray) else np.ones(10)
-        try:
-            return self._equation_func(X[:, 0], X[:, 1], params)
-        except Exception:
-            return np.zeros(X.shape[0])
+        if not isinstance(self._best_params, np.ndarray):
+            raise RuntimeError("DRSRRegressor: 未找到训练期最优参数（fitted_params）。请检查 experiences.json 是否包含 fitted_params，或训练流程是否按期望运行。")
+        params = self._best_params
+        return self._equation_func(X[:, 0], X[:, 1], params)
 
     def get_optimal_equation(self):
         if not self._equation_body:
@@ -268,6 +278,12 @@ class DRSRRegressor(BaseWrapper):
     def _compile_equation(body: str):
         code = DRSRRegressor._wrap_equation(body)
         ns = {}
+        # 提供 numpy 命名以支持方程体中的 np.sin/np.cos 等写法
+        try:
+            import numpy as _np
+            ns["np"] = _np
+        except Exception:
+            pass
         exec(code, ns)
         return ns["equation"]
 
