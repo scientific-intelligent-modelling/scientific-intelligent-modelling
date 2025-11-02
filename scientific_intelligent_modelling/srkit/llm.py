@@ -47,6 +47,7 @@ class LLMClient:
         # 实例级别的累计统计（无需显式 reset；通常每个实验构造一个 client）
         self._call_index = 0
         self._cum_tokens = {
+            'prompt': 0,
             'thinking': 0,
             'content': 0,
             'total': 0,
@@ -170,6 +171,7 @@ class LLMClient:
             # 实例级累计与打印
             try:
                 self._call_index += 1
+                self._cum_tokens['prompt'] += int(prompt_tokens)
                 self._cum_tokens['thinking'] += int(reasoning_tokens)
                 self._cum_tokens['content'] += int(completion_tokens - reasoning_tokens)
                 self._cum_tokens['total'] += int(total_tokens)
@@ -177,11 +179,11 @@ class LLMClient:
                 provider = self._provider_name()
                 header = f"[{provider}][{self.model}] 第{self._call_index}次"
                 line_cur = (
-                    f"本次 tokens：thinking={int(reasoning_tokens)}, "
+                    f"本次 tokens：prompt={int(prompt_tokens)}, thinking={int(reasoning_tokens)}, "
                     f"content={int(completion_tokens - reasoning_tokens)}, total={int(total_tokens)}"
                 )
                 line_cum = (
-                    f"累计 tokens：thinking={self._cum_tokens['thinking']}, "
+                    f"累计 tokens：prompt={self._cum_tokens['prompt']}, thinking={self._cum_tokens['thinking']}, "
                     f"content={self._cum_tokens['content']}, total={self._cum_tokens['total']}"
                 )
                 print(header + "\n" + line_cur + "\n" + line_cum)

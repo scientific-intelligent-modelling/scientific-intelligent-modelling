@@ -65,7 +65,8 @@
       ],
       "pip_packages": [
         "numpy",
-        "litellm"
+        "litellm",
+        "scipy"
       ],
       "post_install_commands": [
         "pip install -e .",

@@ -7,22 +7,31 @@ from typing import List, Optional
 import numpy as np
 
 from ..base_wrapper import BaseWrapper
+from scientific_intelligent_modelling.srkit.llm import ClientFactory, parse_provider_model
+from typing import Tuple
+try:
+    # 可选：用于参数拟合（与评估一致的 BFGS）
+    from scipy.optimize import minimize
+    _SCIPY_OK = True
+except Exception:
+    _SCIPY_OK = False
 
 
 class DRSRRegressor(BaseWrapper):
     """
-    DRSR 最小可用封装：
-    - 默认 fast_mode=True：使用轻量猴子补丁避免联网/重优化，跑通管线并采集候选方程。
-    - 不修改 drsr 源码，直接按 tests/test_drsr_smoke.py 的思路调用 drsr_420.pipeline。
+    DRSR 封装改造：
+    - 优先改造“采样用的 LLM API”到统一的 llm.ClientFactory，其他执行逻辑尽量保持不变。
+    - 提供 fast_mode（默认 True）快速跑通；关闭后走真实 API 采样 + 原生 BFGS 评估。
 
-    参数（可选）：
-    - spec_path: 提示规范文件路径，默认使用 drsr/specs/specification_oscillator1_numpy.txt
-    - fast_mode: 是否启用轻量补丁（默认 True）
-    - samples_per_prompt: 每轮采样数（默认 1，fast_mode 下仅用于形式）
-    - max_samples: 采样总轮数上限（默认 2）
+    关键参数（与 llmsr 封装对齐）：
+    - spec_path: 规范文件（默认 drsr/specs/specification_oscillator1_numpy.txt）
+    - fast_mode: 是否轻量模式（默认 True）
+    - samples_per_prompt: 每提示采样数（默认 1）
+    - max_samples: 采样上限（默认 2）
     - evaluate_timeout_seconds: 评估超时（默认 10）
-    - log_dir: 日志目录（等价于 api.sh 的 --log_path；默认写入工作目录 logs/ 下）
-    - workdir: 作为 drsr 相对输出的工作目录（默认创建临时目录）
+    - log_dir: 日志目录（默认写入 workdir/logs）
+    - workdir: DRSR 相对输出目录（默认临时创建）
+    - use_api, api_model, api_key, api_base, temperature, api_params: API 相关设置
     """
 
     def __init__(self, **kwargs):
@@ -32,10 +41,8 @@ class DRSRRegressor(BaseWrapper):
         self._equation_body: Optional[str] = None
         self._equation_func = None
         self._all_bodies: List[str] = []
+        self._best_params: Optional[np.ndarray] = None
 
-    # -------------------------------
-    # 训练：运行 DRSR 管线（默认轻量模式）并记录方程
-    # -------------------------------
     def fit(self, X, y):
         X = np.asarray(X)
         y = np.asarray(y).reshape(-1)
@@ -88,6 +95,36 @@ class DRSRRegressor(BaseWrapper):
             sampler.Sampler.analyze_equations_with_residual = _fake_analyze_residual
             evaluate_on_problems.evaluate = _fast_evaluate
             data_analyse_real.DataAnalyzer.analyze = lambda *a, **k: "ok"
+            llm_class = sampler.LocalLLM
+        else:
+            # 由 Wrapper 构建并注入单例 LLM 客户端；LocalLLM 仅负责 prompt 组织
+            api_model = str(self.params.get('api_model'))
+            provider, _model = parse_provider_model(api_model)
+            api_key = self.params.get('api_key')
+            if not api_key:
+                if provider == 'deepseek':
+                    api_key = os.getenv('DEEPSEEK_API_KEY', '')
+                elif provider in ('siliconflow', 'silicon-flow', 'sflow'):
+                    api_key = os.getenv('SILICONFLOW_API_KEY', '')
+                elif provider in ('blt', 'bltcy', 'plato'):
+                    api_key = os.getenv('BLT_API_KEY', '')
+                elif provider == 'ollama':
+                    api_key = ''
+            client = ClientFactory.from_config({
+                'model': api_model,
+                'api_key': api_key,
+                'base_url': self.params.get('api_base')
+            })
+            # 透传生成参数
+            if self.params.get('temperature') is not None:
+                client.kwargs['temperature'] = self.params['temperature']
+            if isinstance(self.params.get('api_params'), dict):
+                client.kwargs.update(self.params['api_params'])
+
+            # 注入到 drsr 的 sampler 模块（共享使用）
+            sampler.set_shared_llm_client(client)
+            data_analyse_real.set_shared_llm_client(client)
+            llm_class = sampler.LocalLLM
 
         # 经验文件预创建（相对 self._workdir）
         exp_dir = os.path.join(self._workdir, "equation_experiences")
@@ -98,14 +135,15 @@ class DRSRRegressor(BaseWrapper):
                 json.dump({"None": [], "Good": [], "Bad": []}, f)
 
         # 组装配置并运行
-        cls_cfg = config_lib.ClassConfig(llm_class=sampler.LocalLLM, sandbox_class=evaluator.LocalSandbox)
+        cls_cfg = config_lib.ClassConfig(llm_class=llm_class, sandbox_class=evaluator.LocalSandbox)
         cfg = config_lib.Config(
             use_api=bool(self.params.get("use_api", False)),
-            api_model=str(self.params.get("api_model", "gpt-3.5-turbo")),
+            api_model=str(self.params.get("api_model", "deepseek/deepseek-chat")),
             num_samplers=1,
             num_evaluators=1,
             samples_per_prompt=int(self.params.get("samples_per_prompt", 1)),
             evaluate_timeout_seconds=int(self.params.get("evaluate_timeout_seconds", 10)),
+            results_root=self._workdir,
         )
 
         # 切换 cwd 到工作目录，确保 drsr 相对路径输出写入其中
@@ -129,30 +167,25 @@ class DRSRRegressor(BaseWrapper):
         try:
             with open(exp_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            # 收集 Good/None/Bad 顺序的方程体
             for key in ("Good", "None", "Bad"):
                 for item in data.get(key, []):
                     eq = item.get("equation")
                     if isinstance(eq, str) and eq.strip():
                         bodies.append(eq)
-            # 选择最佳（优先 Good 中分数最高）
             def _pick_best(group_name: str):
                 group = data.get(group_name, [])
                 if not group:
                     return None
-                # score 越大越好
                 scored = [(it.get("score"), it.get("equation")) for it in group if isinstance(it.get("equation"), str)]
                 scored = [s for s in scored if s[1]]
                 if not scored:
                     return None
                 scored.sort(key=lambda x: (x[0] is not None, x[0]), reverse=True)
                 return scored[0][1]
-
             best_body = _pick_best("Good") or (bodies[0] if bodies else None)
         except Exception:
             pass
 
-        # 回退：若无产出，给一个默认骨架
         if not best_body:
             best_body = (
                 "    dv = params[0] * x + params[1] * v + params[2]\n"
@@ -163,16 +196,22 @@ class DRSRRegressor(BaseWrapper):
         self._all_bodies = bodies or [best_body]
         self._equation_func = self._compile_equation(best_body)
         self.model_ready = True
+
+        # 额外：使用训练数据拟合最优参数，提升 predict 一致性
+        try:
+            if _SCIPY_OK and X.shape[1] >= 2 and callable(self._equation_func):
+                self._best_params = self._fit_params(X, y, n_params=10)
+        except Exception:
+            # 拟合失败时忽略，保持默认参数
+            self._best_params = None
         return self
 
-    # -------------------------------
-    # 序列化/反序列化：仅保存必要可序列化字段
-    # -------------------------------
     def serialize(self):
         state = {
             'params': self.params,
             'equation_body': self._equation_body,
             'all_bodies': self._all_bodies,
+            'best_params': self._best_params.tolist() if isinstance(self._best_params, np.ndarray) else None,
         }
         return json.dumps(state)
 
@@ -182,6 +221,8 @@ class DRSRRegressor(BaseWrapper):
         inst = cls(**obj.get('params', {}))
         inst._equation_body = obj.get('equation_body')
         inst._all_bodies = obj.get('all_bodies', [])
+        best_params = obj.get('best_params')
+        inst._best_params = np.array(best_params) if best_params is not None else None
         if inst._equation_body:
             try:
                 inst._equation_func = inst._compile_equation(inst._equation_body)
@@ -191,25 +232,18 @@ class DRSRRegressor(BaseWrapper):
                 inst.model_ready = False
         return inst
 
-    # -------------------------------
-    # 预测：使用已编译方程 + 默认参数
-    # -------------------------------
     def predict(self, X):
         if not self.model_ready or self._equation_func is None:
             raise ValueError("模型尚未训练或方程不可用")
         X = np.asarray(X)
         if X.ndim != 2 or X.shape[1] < 2:
             raise ValueError("DRSR 预测需要至少两列输入：x 与 v")
-        params = np.ones(10)
+        params = self._best_params if isinstance(self._best_params, np.ndarray) else np.ones(10)
         try:
             return self._equation_func(X[:, 0], X[:, 1], params)
         except Exception:
-            # 回退为零向量，保证子进程不崩
             return np.zeros(X.shape[0])
 
-    # -------------------------------
-    # 获取最优/全部方程
-    # -------------------------------
     def get_optimal_equation(self):
         if not self._equation_body:
             return ""
@@ -225,9 +259,6 @@ class DRSRRegressor(BaseWrapper):
                 pass
         return eqs
 
-    # -------------------------------
-    # 工具方法
-    # -------------------------------
     @staticmethod
     def _wrap_equation(body: str) -> str:
         body = body.rstrip("\n") + "\n"
@@ -239,3 +270,34 @@ class DRSRRegressor(BaseWrapper):
         ns = {}
         exec(code, ns)
         return ns["equation"]
+
+    def _fit_params(self, X: np.ndarray, y: np.ndarray, n_params: int = 10, n_starts: int = 5) -> np.ndarray:
+        """
+        使用与评估相同思想的 BFGS 在训练集上拟合参数，并返回最优参数。
+        """
+        eq = self._equation_func
+        if not callable(eq):
+            return np.ones(n_params)
+
+        def loss_fn(p: np.ndarray) -> float:
+            try:
+                y_pred = eq(X[:, 0], X[:, 1], p)
+                return float(np.mean((y_pred - y) ** 2))
+            except Exception:
+                # 不可导的坏点，返回大损失
+                return 1e6
+
+        best_p = None
+        best_loss = None
+        rng = np.random.default_rng(0)
+        for _ in range(max(1, n_starts)):
+            x0 = rng.uniform(low=-1.0, high=1.0, size=n_params)
+            try:
+                res = minimize(loss_fn, x0, method='BFGS', options={'maxiter': 200, 'gtol': 1e-10, 'eps': 1e-12, 'disp': False})
+                cur_loss = float(res.fun)
+                if best_loss is None or cur_loss < best_loss:
+                    best_loss = cur_loss
+                    best_p = np.array(res.x)
+            except Exception:
+                continue
+        return best_p if isinstance(best_p, np.ndarray) else np.ones(n_params)

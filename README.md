@@ -275,3 +275,10 @@ BaseWrapper类提供了序列化和反序列化方法，确保模型状态可以
 
 - `pysr.md`：PySR包装器的特定文档
 - `readme.md`：附加说明和详细解释
+
+## LLMSR/DRSR 接口与依赖说明
+
+- 统一 LLM 接口：本仓库通过 `scientific_intelligent_modelling/srkit/llm.py` 的 `ClientFactory` 统一调用各提供商（如 DeepSeek、SiliconFlow、BLT、Ollama）。配置模型名时采用 `provider/model` 形式，例如：`deepseek/deepseek-chat`、`blt/gpt-3.5-turbo`。
+- 环境变量：请设置相应提供商的密钥（如 `DEEPSEEK_API_KEY`、`SILICONFLOW_API_KEY`、`BLT_API_KEY`），自定义网关可通过 `api_base` 或相应环境变量传入。
+- DRSR 评估依赖 SciPy：真实评估使用 BFGS 优化，需要 `scipy`。已在 `sim_llmsr` 环境中补充 `scipy` 依赖，请在该环境下运行 DRSR。
+- DRSR 内的数据分析与残差分析、采样等调用已切换为使用统一的 `ClientFactory.chat` 接口，避免直接使用底层 `http.client`。
