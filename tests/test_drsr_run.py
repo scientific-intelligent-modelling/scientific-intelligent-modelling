@@ -19,8 +19,8 @@ model = SymbolicRegressor(
     fast_mode=False,
     use_api=True,
     api_model='blt/gpt-3.5-turbo',  # 或 deepseek/siliconflow/ollama 等
-    samples_per_prompt=4,
-    max_samples=40,
+    samples_per_prompt=2,
+    max_samples=4,
     evaluate_timeout_seconds=10,
     # 可显式指定 spec_path（默认就是 oscillator1）
     # spec_path='scientific_intelligent_modelling/algorithms/drsr_wrapper/drsr/specs/specification_oscillator1_numpy.txt',
@@ -32,6 +32,8 @@ model.fit(X, y)
 eq = model.get_optimal_equation()
 print('最优方程:')
 print(eq)
+
+print(model.get_total_equations(5))
 
 preds = model.predict(X)
 print('DRSR 训练集 MSE:', mean_squared_error(y, preds))
