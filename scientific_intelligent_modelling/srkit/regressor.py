@@ -178,26 +178,59 @@ class SymbolicRegressor:
         """
         # 基础信息
         model_str = f"SymbolicRegressor(tool='{self.tool_name}'"
-        
-        # 添加主要参数
         for key, value in self.params.items():
             if key in ['population_size', 'generations', 'n_components', 'binary_operators', 
                     'unary_operators', 'parsimony_coefficient', 'max_samples', 'random_state']:
                 model_str += f", {key}={value}"
-        
         model_str += ")"
-        
-        # 如果模型已训练，添加方程
+
+        # 若已训练，尝试通过子进程获取最佳方程与参数
         if self.serialized_model is not None:
             try:
-                equation = self.get_equation()
-                model_str += f"\n最佳方程: {equation}"
+                equation = self.get_optimal_equation()
+                if equation:
+                    model_str += f"\n最佳方程:\n{equation}"
             except Exception as e:
                 model_str += f"\n模型已训练，但无法获取方程: {str(e)}"
+            try:
+                params = self.get_fitted_params()
+                if params is not None:
+                    model_str += f"\n最佳参数: {params}"
+            except Exception:
+                pass
         else:
             model_str += "\n模型尚未训练"
-        
         return model_str
+
+    def get_fitted_params(self):
+        """获取最佳方程的训练期拟合参数（若算法支持）。"""
+        if self.serialized_model is None:
+            raise ValueError("模型尚未训练，请先调用fit方法")
+        command = {
+            'action': 'get_fitted_params',
+            'serialized_model': self.serialized_model,
+            'tool_name': self.tool_name
+        }
+        result = self._execute_subprocess(command)
+        if 'error' in result:
+            raise RuntimeError(f"获取参数失败: {result['message']}\n{result.get('traceback', '')}")
+        return result.get('params')
+
+    def get_total_equations_with_params(self, n=None):
+        """获取所有（或Top-N）候选的方程与参数（若算法支持）。"""
+        if self.serialized_model is None:
+            raise ValueError("模型尚未训练，请先调用fit方法")
+        command = {
+            'action': 'get_total_equations_with_params',
+            'serialized_model': self.serialized_model,
+            'tool_name': self.tool_name,
+        }
+        if n is not None:
+            command['n'] = int(n)
+        result = self._execute_subprocess(command)
+        if 'error' in result:
+            raise RuntimeError(f"获取方程与参数失败: {result['message']}\n{result.get('traceback', '')}")
+        return result.get('items', [])
 
 
     def _execute_subprocess(self, command):

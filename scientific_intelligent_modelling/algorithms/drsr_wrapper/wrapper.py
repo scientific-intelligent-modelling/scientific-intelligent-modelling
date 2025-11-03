@@ -2,6 +2,8 @@ import os
 import sys
 import json
 import tempfile
+import time
+import ast
 from typing import List, Optional
 
 import numpy as np
@@ -20,12 +22,10 @@ except Exception:
 class DRSRRegressor(BaseWrapper):
     """
     DRSR 封装改造：
-    - 优先改造“采样用的 LLM API”到统一的 llm.ClientFactory，其他执行逻辑尽量保持不变。
-    - 提供 fast_mode（默认 True）快速跑通；关闭后走真实 API 采样 + 原生 BFGS 评估。
+    - 优先改造"采样用的 LLM API"到统一的 llm.ClientFactory，其他执行逻辑尽量保持不变。
 
     关键参数（与 llmsr 封装对齐）：
     - spec_path: 规范文件（默认 drsr/specs/specification_oscillator1_numpy.txt）
-    - fast_mode: 是否轻量模式（默认 True）
     - samples_per_prompt: 每提示采样数（默认 1）
     - max_samples: 采样上限（默认 2）
     - evaluate_timeout_seconds: 评估超时（默认 10）
@@ -48,7 +48,22 @@ class DRSRRegressor(BaseWrapper):
         y = np.asarray(y).reshape(-1)
 
         # 工作目录（承载 equation_experiences/residual_analyze 等相对输出）
-        self._workdir = self.params.get("workdir") or tempfile.mkdtemp(prefix="drsr_run_")
+        # 默认：使用当前工作目录下的 `drsr_<problem>_<timestamp>`，可通过参数覆盖
+        user_workdir = self.params.get("workdir")
+        if user_workdir and str(user_workdir).strip():
+            self._workdir = user_workdir
+        else:
+            default_base = os.getcwd()
+            problem = str(self.params.get("problem_name") or "problem").strip()
+            ts = time.strftime('%Y%m%d-%H%M%S')
+            dir_name = f"drsr_{problem}_{ts}"
+            # 默认前缀 outputs/
+            self._workdir = os.path.join(default_base, "outputs", dir_name)
+        os.makedirs(self._workdir, exist_ok=True)
+        try:
+            print(f"[DRSR] 使用工作目录: {os.path.abspath(self._workdir)}")
+        except Exception:
+            pass
 
         # 导入 drsr_420 模块
         drsr_dir = os.path.join(os.path.dirname(__file__), "drsr")
@@ -65,66 +80,34 @@ class DRSRRegressor(BaseWrapper):
         # 数据（直接传给 pipeline，避免文件依赖）
         dataset = {"data": {"inputs": X, "outputs": y}}
 
-        # 轻量补丁（默认开启）。若希望调用真实 LLM，请传入 fast_mode=False。
-        if self.params.get("fast_mode", True):
-            def _fake_draw_samples(self_llm, prompt: str, cfg: config_lib.Config):
-                body = (
-                    "    # 简单线性骨架\n"
-                    "    dv = params[0] * x + params[1] * v + params[2]\n"
-                    "    return dv\n"
-                )
-                return [body]
+        # 由 Wrapper 构建并注入单例 LLM 客户端；LocalLLM 仅负责 prompt 组织
+        api_model = str(self.params.get('api_model'))
+        provider, _model = parse_provider_model(api_model)
+        api_key = self.params.get('api_key')
+        if not api_key:
+            if provider == 'deepseek':
+                api_key = os.getenv('DEEPSEEK_API_KEY', '')
+            elif provider in ('siliconflow', 'silicon-flow', 'sflow'):
+                api_key = os.getenv('SILICONFLOW_API_KEY', '')
+            elif provider in ('blt', 'bltcy', 'plato'):
+                api_key = os.getenv('BLT_API_KEY', '')
+            elif provider == 'ollama':
+                api_key = ''
+        client = ClientFactory.from_config({
+            'model': api_model,
+            'api_key': api_key,
+            'base_url': self.params.get('api_base')
+        })
+        # 透传生成参数
+        if self.params.get('temperature') is not None:
+            client.kwargs['temperature'] = self.params['temperature']
+        if isinstance(self.params.get('api_params'), dict):
+            client.kwargs.update(self.params['api_params'])
 
-            def _fake_analyze_scores(self_sampler, samples, quality_for_sample, error_for_sample, prompt):
-                return ["ok"] * len(samples)
-
-            def _fake_analyze_residual(self_sampler, sample, residual):
-                return "ok"
-
-            def _fast_evaluate(data_dict, equation):
-                inputs, outputs = data_dict["inputs"], data_dict["outputs"]
-                params = np.ones(10)
-                pred = equation(*inputs.T, params)
-                mse = float(np.mean((pred - outputs) ** 2))
-                residual = outputs - pred
-                full_res = np.column_stack((inputs, outputs, residual))
-                return -mse, full_res
-
-            sampler.LocalLLM.draw_samples = _fake_draw_samples
-            sampler.Sampler.analyze_equations_with_scores = _fake_analyze_scores
-            sampler.Sampler.analyze_equations_with_residual = _fake_analyze_residual
-            evaluate_on_problems.evaluate = _fast_evaluate
-            data_analyse_real.DataAnalyzer.analyze = lambda *a, **k: "ok"
-            llm_class = sampler.LocalLLM
-        else:
-            # 由 Wrapper 构建并注入单例 LLM 客户端；LocalLLM 仅负责 prompt 组织
-            api_model = str(self.params.get('api_model'))
-            provider, _model = parse_provider_model(api_model)
-            api_key = self.params.get('api_key')
-            if not api_key:
-                if provider == 'deepseek':
-                    api_key = os.getenv('DEEPSEEK_API_KEY', '')
-                elif provider in ('siliconflow', 'silicon-flow', 'sflow'):
-                    api_key = os.getenv('SILICONFLOW_API_KEY', '')
-                elif provider in ('blt', 'bltcy', 'plato'):
-                    api_key = os.getenv('BLT_API_KEY', '')
-                elif provider == 'ollama':
-                    api_key = ''
-            client = ClientFactory.from_config({
-                'model': api_model,
-                'api_key': api_key,
-                'base_url': self.params.get('api_base')
-            })
-            # 透传生成参数
-            if self.params.get('temperature') is not None:
-                client.kwargs['temperature'] = self.params['temperature']
-            if isinstance(self.params.get('api_params'), dict):
-                client.kwargs.update(self.params['api_params'])
-
-            # 注入到 drsr 的 sampler 模块（共享使用）
-            sampler.set_shared_llm_client(client)
-            data_analyse_real.set_shared_llm_client(client)
-            llm_class = sampler.LocalLLM
+        # 注入到 drsr 的 sampler 模块（共享使用）
+        sampler.set_shared_llm_client(client)
+        data_analyse_real.set_shared_llm_client(client)
+        llm_class = sampler.LocalLLM
 
         # 经验文件预创建（相对 self._workdir）
         exp_dir = os.path.join(self._workdir, "equation_experiences")
@@ -172,6 +155,29 @@ class DRSRRegressor(BaseWrapper):
                     eq = item.get("equation")
                     if isinstance(eq, str) and eq.strip():
                         bodies.append(eq)
+            # 构建 entries（方程+训练期拟合参数+分数）并排序
+            entries: List[dict] = []
+            for key in ("Good", "Bad", "None"):
+                for item in data.get(key, []):
+                    eq = item.get("equation")
+                    if not isinstance(eq, str) or not eq.strip():
+                        continue
+                    params = item.get("fitted_params")
+                    try:
+                        params = np.asarray(params).tolist() if params is not None else None
+                    except Exception:
+                        params = None
+                    score = item.get("score")
+                    entries.append({
+                        'equation': eq,
+                        'params': params,
+                        'score': score,
+                        'category': key,
+                        'sample_order': item.get('sample_order')
+                    })
+            # 分数为 None 的排最后；分数越大越靠前
+            entries.sort(key=lambda e: ((e['score'] is not None), e['score'] if e['score'] is not None else -1e18), reverse=True)
+            self._equation_entries = entries
             def _pick_best(group_name: str):
                 group = data.get(group_name, [])
                 if not group:
@@ -268,6 +274,69 @@ class DRSRRegressor(BaseWrapper):
             except Exception:
                 pass
         return eqs
+
+    def get_total_equations_with_params(self, n: Optional[int] = None) -> List[dict]:
+        """
+        返回包含方程、训练期拟合参数、分数等的列表（按分数降序）。
+        每个元素包含：{'equation': def字符串, 'params': List[float]|None, 'score': float|None, 'category': str, 'sample_order': int|None}
+        """
+        items = self._equation_entries or []
+        if n is not None:
+            try:
+                n = int(n)
+                items = items[:max(0, n)]
+            except Exception:
+                pass
+        out: List[dict] = []
+        for e in items:
+            out.append({
+                'equation': self._wrap_equation(e.get('equation', '')),
+                'params': e.get('params'),
+                'score': e.get('score'),
+                'category': e.get('category'),
+                'sample_order': e.get('sample_order')
+            })
+        return out
+
+    def get_fitted_params(self):
+        """返回最佳方程的训练期拟合参数（列表形式），若不存在则返回 None。"""
+        try:
+            if isinstance(self._best_params, np.ndarray):
+                return self._best_params.tolist()
+        except Exception:
+            pass
+        # 尝试从 entries 的首项获取
+        if getattr(self, '_equation_entries', None):
+            p = self._equation_entries[0].get('params')
+            return p
+        return None
+
+    def __str__(self) -> str:
+        lines = [f"DRSRRegressor(tool='drsr')"]
+        try:
+            eq_str = self.get_optimal_equation()
+            if eq_str:
+                lines.append("最佳方程:")
+                lines.append(eq_str.rstrip())
+        except Exception:
+            pass
+        try:
+            if isinstance(self._best_params, np.ndarray):
+                np.set_printoptions(precision=8, suppress=False)
+                lines.append(f"最佳参数: {np.array2string(self._best_params, precision=8, suppress_small=False)}")
+        except Exception:
+            pass
+        if self._equation_entries:
+            k = min(3, len(self._equation_entries))
+            lines.append(f"Top-{k} 候选（方程+分数简要）:")
+            for i, e in enumerate(self._equation_entries[:k], 1):
+                score = e.get('score')
+                eq = e.get('equation') or ''
+                eq_one_line = " ".join(eq.strip().split())
+                if len(eq_one_line) > 120:
+                    eq_one_line = eq_one_line[:120] + '...'
+                lines.append(f"  {i}. score={score}, eq={eq_one_line}")
+        return "\n".join(lines)
 
     @staticmethod
     def _wrap_equation(body: str) -> str:

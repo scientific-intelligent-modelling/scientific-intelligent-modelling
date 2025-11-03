@@ -70,6 +70,10 @@ def execute_command(module, command):
         return handle_get_optimal_equation(regressor_class, command)
     elif action == 'get_total_equations':
         return handle_get_total_equations(regressor_class, command)
+    elif action == 'get_fitted_params':
+        return handle_get_fitted_params(regressor_class, command)
+    elif action == 'get_total_equations_with_params':
+        return handle_get_total_equations_with_params(regressor_class, command)
     else:
         raise ValueError(f"未知操作: {action}")
 
@@ -145,6 +149,48 @@ def handle_get_total_equations(regressor_class, command):
     return {
         'success': True,
         'equations': equations
+    }
+
+def handle_get_fitted_params(regressor_class, command):
+    """获取最佳方程的训练期拟合参数（若包装器实现）。"""
+    serialized_model = command['serialized_model']
+    regressor = regressor_class()
+    if hasattr(regressor, 'deserialize'):
+        regressor = regressor.deserialize(serialized_model)
+    params = None
+    if hasattr(regressor, 'get_fitted_params'):
+        params = regressor.get_fitted_params()
+    elif hasattr(regressor, '_best_params'):
+        p = getattr(regressor, '_best_params')
+        try:
+            import numpy as _np
+            params = _np.asarray(p).tolist() if p is not None else None
+        except Exception:
+            params = None
+    else:
+        raise ValueError("包装器未实现 get_fitted_params")
+    return {
+        'success': True,
+        'params': params
+    }
+
+def handle_get_total_equations_with_params(regressor_class, command):
+    """获取（或Top-N）候选方程与参数（若包装器实现）。"""
+    serialized_model = command['serialized_model']
+    n = command.get('n')
+    regressor = regressor_class()
+    if hasattr(regressor, 'deserialize'):
+        regressor = regressor.deserialize(serialized_model)
+    if hasattr(regressor, 'get_total_equations_with_params'):
+        try:
+            items = regressor.get_total_equations_with_params(n) if n is not None else regressor.get_total_equations_with_params()
+        except TypeError:
+            items = regressor.get_total_equations_with_params()
+    else:
+        raise ValueError("包装器未实现 get_total_equations_with_params")
+    return {
+        'success': True,
+        'items': items
     }
 
 # 从配置管理器获取工具映射
