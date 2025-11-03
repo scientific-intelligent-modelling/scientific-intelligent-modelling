@@ -54,8 +54,8 @@ class LLMClient:
         }
         self.kwargs = {
             'max_tokens': 1024,  # 更安全的默认值，避免超过部分模型上限
-            'temperature': 0.7,
-            'top_p': 0.7,
+            'temperature': 0.6,
+            'top_p': 0.3,
             'top_k': 50,
             'frequency_penalty': 0.5,
             'n': 1,
