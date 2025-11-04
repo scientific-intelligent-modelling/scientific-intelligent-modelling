@@ -42,10 +42,14 @@ class DRSRRegressor(BaseWrapper):
         self._equation_func = None
         self._all_bodies: List[str] = []
         self._best_params: Optional[np.ndarray] = None
+        self._n_features: Optional[int] = None  # 记录特征数量
 
     def fit(self, X, y):
         X = np.asarray(X)
         y = np.asarray(y).reshape(-1)
+        
+        # 记录特征数量
+        self._n_features = X.shape[1] if X.ndim == 2 else 1
 
         # 工作目录（承载 equation_experiences/residual_analyze 等相对输出）
         # 默认：使用当前工作目录下的 `drsr_<problem>_<timestamp>`，可通过参数覆盖
@@ -70,12 +74,27 @@ class DRSRRegressor(BaseWrapper):
         sys.path.insert(0, drsr_dir)
         from drsr_420 import pipeline, config as config_lib, sampler, evaluator, evaluate_on_problems, data_analyse_real
 
-        # 规范文本
-        spec_path = self.params.get("spec_path")
-        if not spec_path:
-            spec_path = os.path.join(drsr_dir, "specs", "specification_oscillator1_numpy.txt")
-        with open(spec_path, "r", encoding="utf-8") as f:
-            specification = f.read()
+        # 规范文本：
+        # 优先使用用户提供的背景描述自动生成通用 spec；否则回退到默认/显式 spec_path
+        specification = None
+        background = self.params.get("background")
+        if isinstance(background, str) and background.strip():
+            specification = self._build_spec_from_background(X, y, background)
+            # 将生成的 spec 保存到工作目录，便于复现
+            try:
+                gen_spec_dir = os.path.join(self._workdir, "specs")
+                os.makedirs(gen_spec_dir, exist_ok=True)
+                gen_spec_path = os.path.join(gen_spec_dir, "generated_spec.txt")
+                with open(gen_spec_path, "w", encoding="utf-8") as fp:
+                    fp.write(specification)
+            except Exception:
+                pass
+        else:
+            spec_path = self.params.get("spec_path")
+            if not spec_path:
+                spec_path = os.path.join(drsr_dir, "specs", "specification_oscillator1_numpy.txt")
+            with open(spec_path, "r", encoding="utf-8") as f:
+                specification = f.read()
 
         # 数据（直接传给 pipeline，避免文件依赖）
         dataset = {"data": {"inputs": X, "outputs": y}}
@@ -214,12 +233,26 @@ class DRSRRegressor(BaseWrapper):
 
         self._equation_body = best_body
         self._all_bodies = bodies or [best_body]
-        self._equation_func = self._compile_equation(best_body)
+        
+        # 清理方程体再编译
+        cleaned_body = self._clean_equation_body(best_body)
+        self._equation_func = self._compile_equation(cleaned_body, self._n_features)
+        
         # 注入训练期参数（若存在），否则置为空等待调用侧显式处理
         if 'best_params' in locals() and best_params is not None:
             self._best_params = best_params
         else:
+            # 如果没有训练期参数，尝试重新拟合
             self._best_params = None
+            if self._equation_func is not None and _SCIPY_OK:
+                try:
+                    print("[DRSR Wrapper] 未找到训练期参数，正在重新拟合...")
+                    self._best_params = self._fit_params(X, y, n_params=10, n_starts=3)
+                    print(f"[DRSR Wrapper] 参数拟合完成")
+                except Exception as e:
+                    print(f"[DRSR Wrapper] 参数拟合失败: {e}")
+                    self._best_params = None
+        
         self.model_ready = True
         return self
 
@@ -229,6 +262,7 @@ class DRSRRegressor(BaseWrapper):
             'equation_body': self._equation_body,
             'all_bodies': self._all_bodies,
             'best_params': self._best_params.tolist() if isinstance(self._best_params, np.ndarray) else None,
+            'n_features': self._n_features,
         }
         return json.dumps(state)
 
@@ -238,11 +272,12 @@ class DRSRRegressor(BaseWrapper):
         inst = cls(**obj.get('params', {}))
         inst._equation_body = obj.get('equation_body')
         inst._all_bodies = obj.get('all_bodies', [])
+        inst._n_features = obj.get('n_features')
         best_params = obj.get('best_params')
         inst._best_params = np.array(best_params) if best_params is not None else None
         if inst._equation_body:
             try:
-                inst._equation_func = inst._compile_equation(inst._equation_body)
+                inst._equation_func = inst._compile_equation(inst._equation_body, inst._n_features)
                 inst.model_ready = True
             except Exception:
                 inst._equation_func = None
@@ -253,20 +288,27 @@ class DRSRRegressor(BaseWrapper):
         if not self.model_ready or self._equation_func is None:
             raise ValueError("模型尚未训练或方程不可用")
         X = np.asarray(X)
-        if X.ndim != 2 or X.shape[1] < 2:
-            raise ValueError("DRSR 预测需要至少两列输入：x 与 v")
+        if X.ndim != 2:
+            raise ValueError("DRSR 预测需要二维输入数组")
         if not isinstance(self._best_params, np.ndarray):
             raise RuntimeError("DRSRRegressor: 未找到训练期最优参数（fitted_params）。请检查 experiences.json 是否包含 fitted_params，或训练流程是否按期望运行。")
         params = self._best_params
-        return self._equation_func(X[:, 0], X[:, 1], params)
+        # 动态传递所有列
+        return self._equation_func(*X.T, params)
 
     def get_optimal_equation(self):
         if not self._equation_body:
             return ""
-        return self._wrap_equation(self._equation_body)
+        # 清理方程体再包装显示
+        cleaned_body = self._clean_equation_body(self._equation_body)
+        return self._wrap_equation(cleaned_body, self._n_features)
 
     def get_total_equations(self, n=None):
-        eqs = [self._wrap_equation(b) for b in (self._all_bodies or []) if isinstance(b, str) and b.strip()]
+        eqs = []
+        for b in (self._all_bodies or []):
+            if isinstance(b, str) and b.strip():
+                cleaned_b = self._clean_equation_body(b)
+                eqs.append(self._wrap_equation(cleaned_b, self._n_features))
         if n is not None:
             try:
                 n = int(n)
@@ -339,13 +381,98 @@ class DRSRRegressor(BaseWrapper):
         return "\n".join(lines)
 
     @staticmethod
-    def _wrap_equation(body: str) -> str:
-        body = body.rstrip("\n") + "\n"
-        return "def equation(x, v, params):\n" + body
+    def _clean_equation_body(body: str) -> str:
+        """
+        清理方程体，移除 LLM 可能添加的测试代码或注释。
+        只保留函数定义部分（直到遇到第一个 return 语句之后）。
+        """
+        if not isinstance(body, str):
+            return body
+        
+        lines = body.split('\n')
+        cleaned_lines = []
+        found_return = False
+        
+        for line in lines:
+            stripped = line.strip()
+            
+            # 跳过空行（在找到 return 之前保留）
+            if not stripped and not found_return:
+                cleaned_lines.append(line)
+                continue
+            
+            # 检测到测试代码的特征，停止
+            if found_return and (
+                'equation_v' in stripped or
+                'predictions' in stripped or
+                'np.random' in stripped or
+                stripped.startswith('col0 =') or
+                stripped.startswith('col1 =') or
+                stripped.startswith('col2 =') or
+                stripped.startswith('col3 =') or
+                stripped.startswith('col4 =') or
+                stripped.startswith('print(')
+            ):
+                break
+            
+            cleaned_lines.append(line)
+            
+            # 标记找到 return
+            if 'return ' in stripped:
+                found_return = True
+                # 继续再包含这行之后的空行，然后停止
+        
+        return '\n'.join(cleaned_lines)
 
     @staticmethod
-    def _compile_equation(body: str):
-        code = DRSRRegressor._wrap_equation(body)
+    def _wrap_equation(body: str, n_features: Optional[int] = None) -> str:
+        """将方程体包装为完整的函数定义，动态适配特征数量。
+
+        重要：统一使用 (col0, col1, ..., params) 的签名，以与采样产生的变量名保持一致，
+        避免 body 中引用 col0/col1 而签名却是 (x, v) 导致的 NameError。
+        """
+        body = body.rstrip("\n") + "\n"
+        n = 2 if (n_features is None or n_features <= 0) else int(n_features)
+        feature_names = ', '.join([f'col{i}' for i in range(n)])
+        return f"def equation({feature_names}, params):\n" + body
+
+    @staticmethod
+    def _clean_equation_body(body: str) -> str:
+        """
+        清理方程体，移除 LLM 可能生成的测试代码或注释。
+        只保留函数主体部分（从开头到第一个 return 语句）。
+        """
+        lines = body.split('\n')
+        cleaned_lines = []
+        found_return = False
+        
+        for line in lines:
+            # 跳过空行和纯注释行（在函数体之外）
+            stripped = line.strip()
+            if not stripped or (stripped.startswith('#') and not cleaned_lines):
+                continue
+            
+            # 保留有效行
+            cleaned_lines.append(line)
+            
+            # 找到 return 语句后，停止收集（忽略后续的测试代码）
+            if stripped.startswith('return ') or stripped == 'return':
+                found_return = True
+                break
+        
+        if not found_return:
+            # 如果没有找到 return，可能是不完整的函数，尝试添加
+            # 但这通常表示有问题，先返回原始内容
+            return body
+        
+        return '\n'.join(cleaned_lines) + '\n'
+
+    @staticmethod
+    def _compile_equation(body: str, n_features: Optional[int] = None):
+        """编译方程，动态适配特征数量"""
+        # 清理方程体，移除测试代码
+        cleaned_body = DRSRRegressor._clean_equation_body(body)
+        code = DRSRRegressor._wrap_equation(cleaned_body, n_features)
         ns = {}
         # 提供 numpy 命名以支持方程体中的 np.sin/np.cos 等写法
         try:
@@ -356,9 +483,38 @@ class DRSRRegressor(BaseWrapper):
         exec(code, ns)
         return ns["equation"]
 
+    def _build_spec_from_background(self, X: np.ndarray, y: np.ndarray, background: str) -> str:
+        """
+        基于用户的背景知识动态生成通用 spec 文本（无需为每个数据集手写 spec 文件）。
+
+        约定：
+        - evaluate.run 不直接执行，在当前实现中 evaluator 使用统一的 `evaluate_on_problems.evaluate`，
+          但仍需提供以满足解析与流程约束。
+        - equation 接口为 `equation(*cols, params)`，pipeline/评估会以 `equation(*X.T, params)` 调用，
+          从而适配任意特征维度。
+        - 初始骨架为“少量线性项 + 偏置”的可运行实现，供 LLM 在此基础上演化。
+        """
+        try:
+            n_features = int(X.shape[1]) if isinstance(X, np.ndarray) and X.ndim == 2 else 2
+        except Exception:
+            n_features = 2
+        
+        # 生成特征变量名列表
+        feature_names = ', '.join([f'col{i}' for i in range(n_features)])
+        
+        header = f"\"\"\"\nAuto-generated specification for data-driven scientific regression.\n\nBackground:\n{background.strip()}\n\nNotes:\n- Inputs: {n_features} columns detected.\n- Equation signature: equation({feature_names}, params) - all positional arguments.\n- Param slots default to 10; the optimizer will fit usable subset automatically.\n\"\"\"\n\nimport numpy as np\n\n# Initialize parameters\nMAX_NPARAMS = 10\nparams = [1.0] * MAX_NPARAMS\n\n@evaluate.run\ndef evaluate(data: dict) -> float:\n    \"\"\" Evaluate the equation on data observations (placeholder).\n    In current runtime, an external evaluator is used; this function is a marker.\n    \"\"\"\n    inputs, outputs = data['inputs'], data['outputs']\n    # 按列解包输入\n    cols = [inputs[:, i] for i in range(inputs.shape[1])]\n    try:\n        y_pred = equation(*cols, params)\n        loss = np.mean((y_pred - outputs) ** 2)\n        if np.isnan(loss) or np.isinf(loss):\n            return None\n        return -loss\n    except Exception:\n        return None\n\n@equation.evolve\ndef equation({feature_names}, params):\n    \"\"\"Generic mathematical function to be evolved by LLM.\n\n    Args:\n        {feature_names}: numpy arrays, each is a column from inputs.\n        params: numeric parameters array to be optimized by the evaluator (BFGS).\n\n    Return:\n        A numpy array as predictions.\n    \"\"\"\n    # 初始线性骨架\n    total = params[{n_features}]  # bias term\n"
+        
+        # 添加线性项
+        for i in range(n_features):
+            header += f"    total = total + params[{i}] * col{i}\n"
+        
+        header += "    return total\n"
+        return header
+
     def _fit_params(self, X: np.ndarray, y: np.ndarray, n_params: int = 10, n_starts: int = 5) -> np.ndarray:
         """
         使用与评估相同思想的 BFGS 在训练集上拟合参数，并返回最优参数。
+        动态适配特征数量。
         """
         eq = self._equation_func
         if not callable(eq):
@@ -366,7 +522,8 @@ class DRSRRegressor(BaseWrapper):
 
         def loss_fn(p: np.ndarray) -> float:
             try:
-                y_pred = eq(X[:, 0], X[:, 1], p)
+                # 动态传递所有列
+                y_pred = eq(*X.T, p)
                 return float(np.mean((y_pred - y) ** 2))
             except Exception:
                 # 不可导的坏点，返回大损失
