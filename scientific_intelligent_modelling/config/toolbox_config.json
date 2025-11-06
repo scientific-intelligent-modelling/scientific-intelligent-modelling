@@ -16,7 +16,7 @@
       "regressor": "OperonRegressor"
     },
     "llmsr": {
-      "env": "sim_llmsr",
+      "env": "sim_llm",
       "regressor": "LLMSRRegressor"
     },
     "dso": {
@@ -36,7 +36,7 @@
       "regressor": "QLatticeRegressor"
     },
     "drsr": {
-      "env": "sim_llmsr",
+      "env": "sim_llm",
       "regressor": "DRSRRegressor"
     }
   }
