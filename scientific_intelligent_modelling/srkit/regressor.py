@@ -1,25 +1,63 @@
 # srkit/regressor.py
 import os
+import re
 import json
 import tempfile
 import subprocess
+import time
+from datetime import datetime, timezone
 import numpy as np
 
 from .config_manager import config_manager
 from .conda_env_manager import env_manager
 
 class SymbolicRegressor:
-    def __init__(self, tool_name, **kwargs):
+    def __init__(self, tool_name, problem_name: str | None = None, experiments_dir: str | None = None, seed: int = 1314, **kwargs):
         """
         初始化符号回归器
         
         参数:
             tool_name: 要使用的工具名称 (例如 'gplearn', 'pysr')
+            problem_name: 问题/数据集名称，用于实验命名与目录组织
+            experiments_dir: 实验目录根路径（默认在当前工作目录下的 './experiments'）
+            seed: 随机种子（默认 1314），也用于实验目录命名
             **kwargs: 传递给实际工具的参数
         """
         self.tool_name = tool_name
         self.params = kwargs
         self.serialized_model = None
+        
+        # 基本实验信息
+        self.problem_name = problem_name or "problem"
+        self.seed = int(seed) if seed is not None else 1314
+        # 默认 experiments 根目录：相对于调用者当前工作目录
+        self.experiments_root = experiments_dir or os.path.join(os.getcwd(), "experiments")
+
+        # 创建实验目录：{problem}_{tool}_seed{seed}_YYYYMMDD-HHMMSS
+        def _slugify(text: str) -> str:
+            try:
+                return re.sub(r"[^A-Za-z0-9_\-]+", "-", str(text)).strip("-") or "item"
+            except Exception:
+                return "item"
+
+        ts = time.strftime('%Y%m%d-%H%M%S')
+        exp_name = f"{_slugify(self.problem_name)}_{_slugify(self.tool_name)}_seed{self.seed}_{ts}"
+        try:
+            os.makedirs(self.experiments_root, exist_ok=True)
+            self.experiment_dir = os.path.join(self.experiments_root, exp_name)
+            os.makedirs(self.experiment_dir, exist_ok=True)
+        except Exception:
+            # 若目录创建失败，回退到临时目录，但不影响后续运行
+            tmp_root = tempfile.gettempdir()
+            self.experiment_dir = os.path.join(tmp_root, exp_name)
+            os.makedirs(self.experiment_dir, exist_ok=True)
+
+        # 写入最小元信息（manifest.json）：created 状态 + 基本配置
+        try:
+            self._write_initial_manifest()
+        except Exception:
+            # 元信息写入失败不影响主流程
+            pass
         
         # 使用config_manager获取环境名称
         self.env_name = config_manager.get_env_name_by_tool(tool_name)
@@ -63,15 +101,38 @@ class SymbolicRegressor:
             'tool_name': self.tool_name
         }
         
+        # 标记实验进入 running
+        try:
+            self._update_manifest(status="running")
+        except Exception:
+            pass
+
         # 执行命令并获取结果
-        result = self._execute_subprocess(command)
+        try:
+            result = self._execute_subprocess(command)
+        except Exception:
+            # 失败状态落盘后再抛出
+            try:
+                self._update_manifest(status="failed")
+            except Exception:
+                pass
+            raise
         
         # 检查结果
         if 'error' in result:
+            try:
+                self._update_manifest(status="failed")
+            except Exception:
+                pass
             raise RuntimeError(f"训练失败: {result['message']}\n{result.get('traceback', '')}")
         
         # 保存模型状态
         self.serialized_model = result.get('serialized_model', {})
+        # 成功状态
+        try:
+            self._update_manifest(status="success")
+        except Exception:
+            pass
         return self
     
     def predict(self, X):
@@ -178,10 +239,9 @@ class SymbolicRegressor:
         """
         # 基础信息
         model_str = f"SymbolicRegressor(tool='{self.tool_name}'"
+        
         for key, value in self.params.items():
-            if key in ['population_size', 'generations', 'n_components', 'binary_operators', 
-                    'unary_operators', 'parsimony_coefficient', 'max_samples', 'random_state']:
-                model_str += f", {key}={value}"
+            model_str += f", {key}={value}"
         model_str += ")"
 
         # 若已训练，尝试通过子进程获取最佳方程与参数
@@ -313,3 +373,62 @@ class SymbolicRegressor:
             with open(result_path, 'r') as f:
                 result = json.load(f)
             raise RuntimeError(f"执行命令时发生错误: {e}\n{result.get('traceback', '')}")
+
+    # ========= 实验清单（manifest）最小实现 =========
+    def _sanitize_config(self) -> dict:
+        """脱敏/规整后的配置，用于写入 manifest 的 config 字段。"""
+        hidden = {"api_key", "apikey", "token", "password", "secret"}
+        cfg = {k: v for k, v in (self.params or {}).items() if str(k).lower() not in hidden}
+        cfg.setdefault("tool_name", self.tool_name)
+        cfg.setdefault("problem_name", self.problem_name)
+        cfg.setdefault("seed", self.seed)
+        return cfg
+
+    def _manifest_path(self) -> str:
+        return os.path.join(self.experiment_dir, "manifest.json")
+
+    def _write_initial_manifest(self):
+        now_local = datetime.now().astimezone()
+        now_utc = datetime.utcnow().replace(tzinfo=timezone.utc)
+        manifest = {
+            "experiment_id": os.path.basename(self.experiment_dir),
+            "problem_name": self.problem_name,
+            "algorithm": self.tool_name,
+            "seed": self.seed,
+            "created_at_local": now_local.isoformat(),
+            "created_at_utc": now_utc.isoformat().replace("+00:00", "Z"),
+            "status": "created",
+            # 迭代次数占位，暂不写入具体数值
+            "iterations": None,
+            "config": self._sanitize_config(),
+        }
+        path = self._manifest_path()
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(manifest, f, ensure_ascii=False, indent=2)
+
+    def _update_manifest(self, **fields):
+        path = self._manifest_path()
+        data = {}
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception:
+                data = {}
+        data.update(fields or {})
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    def update_iterations(self, iterations):
+        """更新迭代次数占位接口（当前不主动调用）。"""
+        try:
+            it = int(iterations)
+        except Exception:
+            return
+        try:
+            self._update_manifest(iterations=it)
+        except Exception:
+            pass

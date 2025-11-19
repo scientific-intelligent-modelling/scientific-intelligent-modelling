@@ -126,6 +126,31 @@
         "pip install -e ."
       ],
       "comments": "Feyn/Qlattice 符号建模环境"
+    },
+    "sim_iMCTS": {
+      "python_version": "3.10",
+      "conda_packages": [
+        "pip"
+      ],
+      "channels": [
+        "conda-forge"
+      ],
+      "pip_packages": [
+        "numba==0.61.2",
+        "numpy==2.2.0",
+        "pandas==2.3.0",
+        "PyYAML==6.0.1",
+        "scikit_learn==1.2.2",
+        "nlopt==2.9.1",
+        "sortedcontainers==2.4.0",
+        "sympy==1.12",
+        "tqdm==4.65.0"
+      ],
+      "post_install_commands": [
+        "pip install -e .",
+        "pip install -e ./scientific_intelligent_modelling/algorithms/iMCTS_wrapper/MCTS-4-SR"
+      ],
+      "comments": "iMCTS (MCTS-4-SR) 符号回归环境"
     }
   }
 }

@@ -35,6 +35,10 @@
       "env": "sim_qLattice",
       "regressor": "QLatticeRegressor"
     },
+    "iMCTS": {
+      "env": "sim_iMCTS",
+      "regressor": "iMCTSRegressor"
+    },
     "drsr": {
       "env": "sim_llm",
       "regressor": "DRSRRegressor"
