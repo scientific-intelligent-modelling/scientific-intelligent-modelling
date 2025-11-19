@@ -1,0 +1,2 @@
+[console_scripts]
+sim-cli = scientific_intelligent_modelling.cli:main

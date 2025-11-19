@@ -52,6 +52,20 @@ class SymbolicRegressor:
             self.experiment_dir = os.path.join(tmp_root, exp_name)
             os.makedirs(self.experiment_dir, exist_ok=True)
 
+        # 将实验目录信息下传给具体算法包装器（若其选择使用）：
+        # - exp_path: 统一的实验根目录
+        # - exp_name: 当前实验子目录名
+        # - problem_name / seed: 便于算法内部复用
+        # 这里只在未显式指定时设置，避免覆盖用户传入的参数。
+        try:
+            self.params.setdefault("exp_path", self.experiments_root)
+            self.params.setdefault("exp_name", os.path.basename(self.experiment_dir))
+            self.params.setdefault("problem_name", self.problem_name)
+            self.params.setdefault("seed", self.seed)
+        except Exception:
+            # 下传失败不影响主流程
+            pass
+
         # 写入最小元信息（manifest.json）：created 状态 + 基本配置
         try:
             self._write_initial_manifest()

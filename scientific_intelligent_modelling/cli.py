@@ -1,5 +1,7 @@
 import argparse
 import os
+import json
+from collections import OrderedDict
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
@@ -7,26 +9,27 @@ import numpy as np
 from .srkit.regressor import SymbolicRegressor
 
 
+def _convert_scalar(value: str) -> Any:
+    """将字符串尝试转换为 bool/int/float，失败则原样返回。"""
+    v = value.strip()
+    if v.lower() in {"true", "false"}:
+        return v.lower() == "true"
+    try:
+        return int(v)
+    except ValueError:
+        pass
+    try:
+        return float(v)
+    except ValueError:
+        pass
+    return v
+
+
 def _parse_key_value_pairs(pairs: List[str]) -> Dict[str, Any]:
     """
     将命令行中的 key=value 形式参数解析为字典。
     尝试自动推断 int/float/bool 类型，失败则保留为字符串。
     """
-
-    def _convert(value: str) -> Any:
-        v = value.strip()
-        if v.lower() in {"true", "false"}:
-            return v.lower() == "true"
-        try:
-            return int(v)
-        except ValueError:
-            pass
-        try:
-            return float(v)
-        except ValueError:
-            pass
-        return v
-
     out: Dict[str, Any] = {}
     for item in pairs:
         if "=" not in item:
@@ -35,8 +38,50 @@ def _parse_key_value_pairs(pairs: List[str]) -> Dict[str, Any]:
         key = key.strip()
         if not key:
             raise argparse.ArgumentTypeError(f"无效参数键: '{item}'")
-        out[key] = _convert(value)
+        out[key] = _convert_scalar(value)
     return out
+
+
+def _parse_unknown_to_kwargs(unknown: List[str]) -> Dict[str, Any]:
+    """
+    将未知参数列表转换为 kwargs，规则：
+    - 支持: --key value
+    - 支持: --key=value
+    - 若只有 --flag 没有值，则视为 True
+    - key 会去掉前缀 '-' 并把 '-' 转成 '_'
+    短选项（-k）暂不透传，继续由 argparse 处理。
+    """
+    kwargs: Dict[str, Any] = {}
+    i = 0
+    while i < len(unknown):
+        token = unknown[i]
+        if not token.startswith("-"):
+            # 当前位置参数忽略
+            i += 1
+            continue
+
+        # 只处理长选项 --xxx
+        if token.startswith("--"):
+            # 处理 --key=value 形式
+            if "=" in token:
+                key, value = token[2:].split("=", 1)
+                key = key.replace("-", "_")
+                kwargs[key] = _convert_scalar(value)
+                i += 1
+                continue
+
+            # 处理 --key value 或 --flag
+            key = token[2:].replace("-", "_")
+            if i + 1 < len(unknown) and not unknown[i + 1].startswith("-"):
+                kwargs[key] = _convert_scalar(unknown[i + 1])
+                i += 2
+            else:
+                kwargs[key] = True
+                i += 1
+        else:
+            # 短选项跳过，由 argparse 解析
+            i += 1
+    return kwargs
 
 
 def _load_dataset(
@@ -115,7 +160,7 @@ def _load_dataset(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """构建命令行解析器。"""
+    """构建命令行解析器（极简版：只保留算法与训练数据路径）。"""
     parser = argparse.ArgumentParser(
         prog="sim-cli",
         description="Scientific Intelligent Modelling 统一命令行入口",
@@ -133,63 +178,6 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="训练数据文件路径，支持: CSV 文本、.npy、.npz",
     )
-    parser.add_argument(
-        "--target-column",
-        "-y",
-        default=None,
-        help="目标列名称（仅当 CSV 含表头时生效），未指定则默认最后一列为目标变量",
-    )
-    parser.add_argument(
-        "--delimiter",
-        default=",",
-        help="CSV 分隔符（默认 ','）",
-    )
-    parser.add_argument(
-        "--no-header",
-        action="store_true",
-        help="指示 CSV/文本数据不包含表头，按纯数值矩阵读取，最后一列作为目标变量",
-    )
-
-    parser.add_argument(
-        "--problem-name",
-        default=None,
-        help="问题名称，用于实验目录与元信息记录（可选）",
-    )
-    parser.add_argument(
-        "--experiments-dir",
-        default=None,
-        help="实验结果保存的根目录（可选，默认使用当前工作目录下的 ./experiments）",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=1314,
-        help="随机种子，用于实验复现与目录命名（默认 1314）",
-    )
-
-    parser.add_argument(
-        "--param",
-        "-p",
-        action="append",
-        default=[],
-        metavar="KEY=VALUE",
-        help=(
-            "传递给具体算法的额外参数，可多次使用，例如: "
-            "--param population_size=1000 --param generations=20 "
-            "或 --param api_model=deepseek/deepseek-chat"
-        ),
-    )
-
-    parser.add_argument(
-        "--print-equation",
-        action="store_true",
-        help="在训练完成后打印最优符号方程",
-    )
-    parser.add_argument(
-        "--save-predictions",
-        default=None,
-        help="若指定路径，则将训练集预测结果保存为 .npy 文件",
-    )
 
     return parser
 
@@ -197,12 +185,20 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: List[str] | None = None) -> None:
     """命令行入口函数。"""
     parser = build_parser()
-    args = parser.parse_args(argv)
+    # 使用 parse_known_args：只消费通用参数，其余透传给具体 wrapper 处理
+    args, unknown = parser.parse_known_args(argv)
 
     algorithm = args.algorithm
     train_path = args.train_path
 
-    extra_params = _parse_key_value_pairs(args.param or [])
+    # 极简 CLI：除算法与训练路径外，其余长选项全部透传给对应 wrapper
+    extra_params: Dict[str, Any] = {}
+    # 来自未知长选项的参数（例如 --llm_config_path xxx），全部交给对应 wrapper 自行解析
+    extra_kwargs = _parse_unknown_to_kwargs(unknown)
+    extra_params.update(extra_kwargs)
+    # 将 -a/-t 也作为显式参数传入，便于在 meta.json 中完整记录 CLI 调用
+    extra_params.setdefault("algorithm", algorithm)
+    extra_params.setdefault("train_path", train_path)
 
     print(f"[sim-cli] 使用算法: {algorithm}")
     print(f"[sim-cli] 训练数据: {os.path.abspath(train_path)}")
@@ -210,18 +206,15 @@ def main(argv: List[str] | None = None) -> None:
     # 加载数据
     X, y = _load_dataset(
         train_path,
-        target_column=args.target_column,
-        delimiter=args.delimiter,
-        has_header=not args.no_header,
+        target_column=None,   # 极简约定：若为 CSV，默认最后一列为目标
+        delimiter=",",
+        has_header=True,
     )
     print(f"[sim-cli] 加载数据完成: X 形状={X.shape}, y 形状={y.shape}")
 
-    # 构造并训练模型
+    # 构造并训练模型：problem_name/experiments_dir/seed 使用 SymbolicRegressor 默认值
     reg = SymbolicRegressor(
         tool_name=algorithm,
-        problem_name=args.problem_name,
-        experiments_dir=args.experiments_dir,
-        seed=args.seed,
         **extra_params,
     )
 
@@ -229,25 +222,5 @@ def main(argv: List[str] | None = None) -> None:
     reg.fit(X, y)
     print("[sim-cli] 训练完成。")
 
-    if args.print_equation:
-        try:
-            eq = reg.get_optimal_equation()
-            print("\n===== 最优符号方程 =====")
-            print(eq)
-            print("===== 结束 =====\n")
-        except Exception as e:
-            print(f"[sim-cli] 获取最优方程时出错: {e}")
-
-    if args.save_predictions:
-        try:
-            preds = reg.predict(X)
-            out_path = os.path.abspath(args.save_predictions)
-            np.save(out_path, preds)
-            print(f"[sim-cli] 已将训练集预测结果保存到: {out_path}")
-        except Exception as e:
-            print(f"[sim-cli] 预测或保存结果时出错: {e}")
-
-
 if __name__ == "__main__":
     main()
-

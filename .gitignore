@@ -10,3 +10,4 @@ model.pt
 dist/
 .env/*.env
 .env
+experiments/
