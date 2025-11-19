@@ -27,6 +27,9 @@ packages = ["scientific_intelligent_modelling"]
 package-dir = { scientific_intelligent_modelling = "scientific_intelligent_modelling" }
 include-package-data = true
 
+[project.scripts]
+sim-cli = "scientific_intelligent_modelling.cli:main"
+
 [tool.mypy]
 warn_return_any = true          #当函数返回Any类型时发出警告
 warn_unused_configs = true      #提醒未使用的配置选项
