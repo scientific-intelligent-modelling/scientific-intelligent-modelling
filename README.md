@@ -35,7 +35,7 @@
 1. 克隆仓库：
 
    ```bash
-   git clone https://github.com/yourusername/scientific-intelligent-modelling.git
+   git clone --recursive  https://github.com/scientific-intelligent-modelling/scientific-intelligent-modelling.git
    cd scientific-intelligent-modelling
    ```
 2. 创建并激活conda环境：
