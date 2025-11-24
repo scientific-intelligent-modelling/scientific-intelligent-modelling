@@ -179,6 +179,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="训练数据文件路径，支持: CSV 文本、.npy、.npz",
     )
 
+    # WandB 参数
+    parser.add_argument("--use_wandb", action="store_true", help="是否启用 WandB 实验记录")
+    parser.add_argument("--wandb_project", type=str, default="sim-experiments", help="WandB 项目名称")
+    parser.add_argument("--wandb_entity", type=str, default=None, help="WandB 实体/用户名")
+    parser.add_argument("--wandb_name", type=str, default=None, help="WandB 实验名称")
+    parser.add_argument("--wandb_group", type=str, default=None, help="WandB 分组")
+    parser.add_argument("--wandb_tags", type=str, default=None, help="WandB 标签，逗号分隔")
+
     return parser
 
 
@@ -221,6 +229,10 @@ def main(argv: List[str] | None = None) -> None:
     print("[sim-cli] 开始训练模型...")
     reg.fit(X, y)
     print("[sim-cli] 训练完成。")
+
+    # WandB 记录
+    if args.use_wandb:
+        pass
 
 if __name__ == "__main__":
     main()
