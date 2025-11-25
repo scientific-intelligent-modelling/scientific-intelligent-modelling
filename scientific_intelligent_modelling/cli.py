@@ -181,11 +181,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     # WandB 参数
     parser.add_argument("--use_wandb", action="store_true", help="是否启用 WandB 实验记录")
-    parser.add_argument("--wandb_project", type=str, default="sim-experiments", help="WandB 项目名称")
-    parser.add_argument("--wandb_entity", type=str, default=None, help="WandB 实体/用户名")
-    parser.add_argument("--wandb_name", type=str, default=None, help="WandB 实验名称")
-    parser.add_argument("--wandb_group", type=str, default=None, help="WandB 分组")
-    parser.add_argument("--wandb_tags", type=str, default=None, help="WandB 标签，逗号分隔")
+    parser.add_argument("--wandb_project", type=str, default="my-awesome-project", help="WandB 项目名称")
+    parser.add_argument("--wandb_entity", type=str, default="my-awesome-entity", help="WandB 实体/用户名")
+    parser.add_argument("--wandb_name", type=str, default="sim-run", help="WandB 实验名称")
+    parser.add_argument("--wandb_group", type=str, default="sim-group", help="WandB 分组")
+    parser.add_argument("--wandb_tags", type=str, default="sim,llmsr", help="WandB 标签，逗号分隔")
 
     return parser
 
@@ -207,6 +207,22 @@ def main(argv: List[str] | None = None) -> None:
     # 将 -a/-t 也作为显式参数传入，便于在 meta.json 中完整记录 CLI 调用
     extra_params.setdefault("algorithm", algorithm)
     extra_params.setdefault("train_path", train_path)
+
+    # WandB 相关参数仅在开启时透传，避免无谓污染参数空间
+    if args.use_wandb:
+        wandb_tags = None
+        if args.wandb_tags:
+            wandb_tags = [t.strip() for t in args.wandb_tags.split(",") if t.strip()]
+        extra_params.update(
+            {
+                "use_wandb": True,
+                "wandb_project": args.wandb_project,
+                "wandb_entity": args.wandb_entity,
+                "wandb_name": args.wandb_name,
+                "wandb_group": args.wandb_group,
+                "wandb_tags": wandb_tags,
+            }
+        )
 
     print(f"[sim-cli] 使用算法: {algorithm}")
     print(f"[sim-cli] 训练数据: {os.path.abspath(train_path)}")

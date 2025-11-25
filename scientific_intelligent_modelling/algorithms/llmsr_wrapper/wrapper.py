@@ -175,6 +175,16 @@ class LLMSRRegressor(BaseWrapper):
             samples_per_iter = int(self.params.get("samples_per_iteration", 4))
             seed = self.params.get("seed")
 
+            wandb_cfg = None
+            if self.params.get("use_wandb"):
+                wandb_cfg = {
+                    "project": self.params.get("wandb_project"),
+                    "entity": self.params.get("wandb_entity"),
+                    "name": self.params.get("wandb_name"),
+                    "group": self.params.get("wandb_group"),
+                    "tags": self.params.get("wandb_tags"),
+                }
+
             core = Core(
                 problem_name=problem_name,
                 data_csv=csv_path,
@@ -186,6 +196,7 @@ class LLMSRRegressor(BaseWrapper):
                 niterations=niterations,
                 samples_per_iteration=samples_per_iter,
                 seed=seed,
+                wandb_config=wandb_cfg,
             )
             core.fit()
 
