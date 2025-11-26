@@ -9,6 +9,24 @@ import numpy as np
 from .srkit.regressor import SymbolicRegressor
 
 
+def _resolve_dataset_path(path: str) -> str:
+    """
+    解析数据集路径：
+    - 若设置了环境变量 SIM_DATASETS_PATH，且传入路径为相对路径，
+      则将其视作数据根目录并进行拼接；
+    - 否则直接使用传入路径。
+    最终返回绝对路径，便于日志与后续处理。
+    """
+    env_var_name = "SIM_DATASETS_PATH"
+    base = os.environ.get(env_var_name)
+    if base:
+        base = os.path.expanduser(base)
+        # 仅对相对路径做拼接，避免覆盖用户显式指定的绝对路径
+        if not os.path.isabs(path):
+            path = os.path.join(base, path)
+    return os.path.abspath(path)
+
+
 def _convert_scalar(value: str) -> Any:
     """将字符串尝试转换为 bool/int/float，失败则原样返回。"""
     v = value.strip()
@@ -101,7 +119,8 @@ def _load_dataset(
     - 若提供 target_column，则从表头中按列名选择 y，其余列为 X
     - 否则默认最后一列为 y，其余列为 X
     """
-    path = os.path.abspath(path)
+    # 先结合环境变量解析数据路径
+    path = _resolve_dataset_path(path)
     if not os.path.exists(path):
         raise FileNotFoundError(f"训练数据文件不存在: {path}")
 
@@ -225,11 +244,12 @@ def main(argv: List[str] | None = None) -> None:
         )
 
     print(f"[sim-cli] 使用算法: {algorithm}")
-    print(f"[sim-cli] 训练数据: {os.path.abspath(train_path)}")
+    resolved_train_path = _resolve_dataset_path(train_path)
+    print(f"[sim-cli] 训练数据: {resolved_train_path}")
 
     # 加载数据
     X, y = _load_dataset(
-        train_path,
+        resolved_train_path,
         target_column=None,   # 极简约定：若为 CSV，默认最后一列为目标
         delimiter=",",
         has_header=True,
