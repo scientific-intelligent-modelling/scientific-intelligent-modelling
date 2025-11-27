@@ -180,6 +180,7 @@ class LLMSRRegressor(BaseWrapper):
                 # 从上游参数中获取数据集路径与名称（若有）
                 dataset_path = self.params.get("train_path")
                 dataset_name = self.params.get("dataset_name")
+                prompts_tag = self.params.get("prompts_tag")
                 wandb_cfg = {
                     "project": self.params.get("wandb_project"),
                     "entity": self.params.get("wandb_entity"),
@@ -187,6 +188,9 @@ class LLMSRRegressor(BaseWrapper):
                     "group": self.params.get("wandb_group"),
                     "tags": self.params.get("wandb_tags"),
                 }
+                # 可选：记录当前使用的 prompts 标签，便于在 WandB 中区分不同提示词版本
+                if prompts_tag is not None:
+                    wandb_cfg["prompts_tag"] = prompts_tag
                 if dataset_path is not None:
                     wandb_cfg["dataset_path"] = dataset_path
                 if dataset_name is not None:
