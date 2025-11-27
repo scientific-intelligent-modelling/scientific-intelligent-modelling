@@ -207,13 +207,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="数据集名称（将记录到 WandB 的 config.dataset.name 中）",
     )
 
-    # prompts 标签（用于区分当前使用的提示词版本）
+    # prompts 类型/版本标签（用于区分当前使用的提示词版本）
     parser.add_argument(
-        "--prompts-tag",
-        "--prompts_tag",
-        dest="prompts_tag",
+        "--prompts-type",
+        "--prompts_type",
+        dest="prompts_type",
         type=str,
-        help="当前使用的 prompts 标签（将记录到 WandB 的 config.prompts_tag 中）",
+        help="当前使用的 prompts 类型/版本标签（将记录到 WandB 的 config.prompts_type 中）",
     )
 
     # WandB 参数
@@ -254,9 +254,9 @@ def main(argv: List[str] | None = None) -> None:
     # 显式传入数据集名称，便于下游记录到 WandB
     if getattr(args, "dataset_name", None):
         extra_params.setdefault("dataset_name", args.dataset_name)
-    # 显式传入 prompts_tag，便于在 WandB 中记录当前 prompts 版本
-    if getattr(args, "prompts_tag", None):
-        extra_params.setdefault("prompts_tag", args.prompts_tag)
+    # 显式传入 prompts_type，便于在 WandB 中记录当前 prompts 类型/版本
+    if getattr(args, "prompts_type", None):
+        extra_params.setdefault("prompts_type", args.prompts_type)
 
     # WandB 相关参数仅在开启时透传，避免无谓污染参数空间
     if args.use_wandb:
