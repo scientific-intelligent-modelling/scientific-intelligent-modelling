@@ -3,6 +3,7 @@ import os
 import json
 from collections import OrderedDict
 from typing import Any, Dict, List, Tuple
+from contextlib import redirect_stdout, redirect_stderr
 
 import numpy as np
 
@@ -206,6 +207,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--wandb_group", type=str, default="sim-group", help="WandB 分组")
     parser.add_argument("--wandb_tags", type=str, default="sim,llmsr", help="WandB 标签，逗号分隔")
 
+    # 实验日志重定向开关
+    parser.add_argument(
+        "--redirect_io",
+        action="store_true",
+        help="若开启，则将 sim-cli 的标准输出和错误重定向到实验目录中的 std.out/std.err",
+    )
+
     return parser
 
 
@@ -247,24 +255,49 @@ def main(argv: List[str] | None = None) -> None:
     resolved_train_path = _resolve_dataset_path(train_path)
     print(f"[sim-cli] 训练数据: {resolved_train_path}")
 
-    # 加载数据
-    X, y = _load_dataset(
-        resolved_train_path,
-        target_column=None,   # 极简约定：若为 CSV，默认最后一列为目标
-        delimiter=",",
-        has_header=True,
-    )
-    print(f"[sim-cli] 加载数据完成: X 形状={X.shape}, y 形状={y.shape}")
-
-    # 构造并训练模型：problem_name/experiments_dir/seed 使用 SymbolicRegressor 默认值
+    # 先构造回归器以创建实验目录，便于重定向日志到实验目录
     reg = SymbolicRegressor(
         tool_name=algorithm,
         **extra_params,
     )
 
-    print("[sim-cli] 开始训练模型...")
-    reg.fit(X, y)
-    print("[sim-cli] 训练完成。")
+    if args.redirect_io:
+        # 将后续 stdout/stderr 重定向到实验目录中的 std.out / std.err
+        exp_dir = getattr(reg, "experiment_dir", os.getcwd())
+        os.makedirs(exp_dir, exist_ok=True)
+        stdout_path = os.path.join(exp_dir, "std.out")
+        stderr_path = os.path.join(exp_dir, "std.err")
+        with open(stdout_path, "a", encoding="utf-8") as f_out, open(
+            stderr_path, "a", encoding="utf-8"
+        ) as f_err, redirect_stdout(f_out), redirect_stderr(f_err):
+            print(f"[sim-cli] 使用算法: {algorithm}")
+            print(f"[sim-cli] 训练数据: {resolved_train_path}")
+
+            # 加载数据
+            X, y = _load_dataset(
+                resolved_train_path,
+                target_column=None,   # 极简约定：若为 CSV，默认最后一列为目标
+                delimiter=",",
+                has_header=True,
+            )
+            print(f"[sim-cli] 加载数据完成: X 形状={X.shape}, y 形状={y.shape}")
+
+            print("[sim-cli] 开始训练模型...")
+            reg.fit(X, y)
+            print("[sim-cli] 训练完成。")
+    else:
+        # 不开启重定向时保持原有行为
+        X, y = _load_dataset(
+            resolved_train_path,
+            target_column=None,   # 极简约定：若为 CSV，默认最后一列为目标
+            delimiter=",",
+            has_header=True,
+        )
+        print(f"[sim-cli] 加载数据完成: X 形状={X.shape}, y 形状={y.shape}")
+
+        print("[sim-cli] 开始训练模型...")
+        reg.fit(X, y)
+        print("[sim-cli] 训练完成。")
 
     # WandB 记录
     if args.use_wandb:
