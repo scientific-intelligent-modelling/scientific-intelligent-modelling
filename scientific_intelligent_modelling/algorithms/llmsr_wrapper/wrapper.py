@@ -177,6 +177,9 @@ class LLMSRRegressor(BaseWrapper):
 
             wandb_cfg = None
             if self.params.get("use_wandb"):
+                # 从上游参数中获取数据集路径与名称（若有）
+                dataset_path = self.params.get("train_path")
+                dataset_name = self.params.get("dataset_name")
                 wandb_cfg = {
                     "project": self.params.get("wandb_project"),
                     "entity": self.params.get("wandb_entity"),
@@ -184,6 +187,10 @@ class LLMSRRegressor(BaseWrapper):
                     "group": self.params.get("wandb_group"),
                     "tags": self.params.get("wandb_tags"),
                 }
+                if dataset_path is not None:
+                    wandb_cfg["dataset_path"] = dataset_path
+                if dataset_name is not None:
+                    wandb_cfg["dataset_name"] = dataset_name
 
             core = Core(
                 problem_name=problem_name,

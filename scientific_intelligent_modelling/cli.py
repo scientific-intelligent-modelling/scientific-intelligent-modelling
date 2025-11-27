@@ -199,6 +199,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="训练数据文件路径，支持: CSV 文本、.npy、.npz",
     )
 
+    # 数据集名称（用于 WandB 等记录）
+    parser.add_argument(
+        "--dataset-name",
+        "--dataset_name",
+        type=str,
+        help="数据集名称（将记录到 WandB 的 config.dataset.name 中）",
+    )
+
     # WandB 参数
     parser.add_argument("--use_wandb", action="store_true", help="是否启用 WandB 实验记录")
     parser.add_argument("--wandb_project", type=str, default="my-awesome-project", help="WandB 项目名称")
@@ -234,6 +242,9 @@ def main(argv: List[str] | None = None) -> None:
     # 将 -a/-t 也作为显式参数传入，便于在 meta.json 中完整记录 CLI 调用
     extra_params.setdefault("algorithm", algorithm)
     extra_params.setdefault("train_path", train_path)
+    # 显式传入数据集名称，便于下游记录到 WandB
+    if getattr(args, "dataset_name", None):
+        extra_params.setdefault("dataset_name", args.dataset_name)
 
     # WandB 相关参数仅在开启时透传，避免无谓污染参数空间
     if args.use_wandb:
