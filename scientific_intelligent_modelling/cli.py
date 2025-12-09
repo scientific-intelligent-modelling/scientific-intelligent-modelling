@@ -207,6 +207,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="数据集名称（将记录到 WandB 的 config.dataset.name 中）",
     )
 
+    # 全局随机种子：会透传到具体算法包装器（如 LLMSR），并写入实验元信息
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=1314,
+        help="随机种子（默认 1314，用于实验目录命名与下游算法的 seed 参数）",
+    )
+
     # prompts 类型/版本标签（用于区分当前使用的提示词版本）
     parser.add_argument(
         "--prompts-type",
@@ -254,6 +262,9 @@ def main(argv: List[str] | None = None) -> None:
     # 显式传入数据集名称，便于下游记录到 WandB
     if getattr(args, "dataset_name", None):
         extra_params.setdefault("dataset_name", args.dataset_name)
+    # 显式传入 seed，保证下游包装器与 LLMSRRegressor 能够拿到与 manifest 一致的种子
+    if getattr(args, "seed", None) is not None:
+        extra_params.setdefault("seed", args.seed)
     # 显式传入 prompts_type，便于在 WandB 中记录当前 prompts 类型/版本
     if getattr(args, "prompts_type", None):
         extra_params.setdefault("prompts_type", args.prompts_type)
