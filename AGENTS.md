@@ -68,3 +68,19 @@
   3) `get_total_equations` 可返回 list 并可 JSON 反序列化；  
   4) `predict` 可正常给出数值；  
   5) 直接实例化 `PySRRegressor` 的闭环也需通过。
+
+## 8. 算法验收脚本固化（check）
+
+- 每新增或改造一个算法接入，必须在 `check/` 下新增对应脚本，命名为 `check_<tool>.py`，至少覆盖：
+  - `fit`
+  - `get_optimal_equation`
+  - `get_total_equations`
+  - `predict`
+- 本次已完成的验收脚本：
+  - `check/check_gplearn.py`
+  - `check/check_pysr.py`
+  - `check/check_pyoperon.py`
+- 建议一并提供统一入口用于批量执行（后续可加）：
+  - `python check/check_gplearn.py`
+  - `python check/check_pysr.py`
+  - `python check/check_pyoperon.py`
