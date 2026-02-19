@@ -113,3 +113,17 @@
     - `nesymres_eq_setting_path`（默认 `nesymres/jupyter/100M/eq_setting.json`）
     - `nesymres_model_path`（优先读取该值；否则按 `nesymres/weights/{10MCompleted.ckpt,10M.ckpt}` 查找）
 - `check/check_tpsr.py` 要求两个骨干闭环都成功，不再做“无权重跳过”；缺失 ckpt 直接报错并提示 `TPSR_E2E_MODEL_PATH`/`TPSR_NESYMRES_MODEL_PATH` 环境变量。
+
+## 12. 集成状态与未完成项固化（2026-02-20）
+
+- 当前仓库子模块计数：6 个（`dso`, `tpsr`, `e2esr`, `drsr`, `llmsr`, `iMCTS`）。
+- 当前 `toolbox_config.json` 的工具映射计数：10 个（`gplearn/pysr/pyoperon/llmsr/dso/tpsr/e2esr/QLattice/iMCTS/drsr`）。
+- 本轮对齐结论：
+  - 从“主框架可调度”口径看，当前没有新增“未接入主映射”的算法（0 个未接入）。
+  - 需要继续关注的“工程一致性”点：
+    1. `operon_wrapper` 存在但未在 `toolbox_config` 注册为独立工具（当前主链路使用 `pyoperon`）；
+    2. `check/check_<tool>.py` 已覆盖 10 个已映射工具；
+    3. `check` 脚本名与工具名有大小写差异（如 `check_imcts.py`, `check_qlattice.py`）不影响手工执行，但建议统一风格以便脚本化扫描。
+- 建议动作：
+  - 明确是否要把 `operon` 正式作为独立入口注册（`tool_mapping` + 校验脚本 + 文档）；
+  - 若不注册，需在验收规范中明确其“辅助模块”角色，避免重复算术与误判未接入项。
