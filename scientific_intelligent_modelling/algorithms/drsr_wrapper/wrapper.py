@@ -5,6 +5,7 @@ import tempfile
 import time
 import ast
 from typing import List, Optional
+import textwrap
 
 import numpy as np
 
@@ -38,6 +39,7 @@ class DRSRRegressor(BaseWrapper):
         self.params = dict(kwargs) if kwargs else {}
         self.model_ready = False
         self._workdir: Optional[str] = None
+        self._existing_exp_dir: Optional[str] = self.params.get("existing_exp_dir") or self.params.get("exp_dir")
         self._equation_body: Optional[str] = None
         self._equation_func = None
         self._all_bodies: List[str] = []
@@ -73,6 +75,26 @@ class DRSRRegressor(BaseWrapper):
         drsr_dir = os.path.join(os.path.dirname(__file__), "drsr")
         sys.path.insert(0, drsr_dir)
         from drsr_420 import pipeline, config as config_lib, sampler, evaluator, evaluate_on_problems, data_analyse_real
+
+        # 优先从已有实验目录复用结果，避免再次调用 LLM/API（用于离线验收和快速恢复）。
+        existing_exp_dir = self._existing_exp_dir
+        if isinstance(existing_exp_dir, str):
+            existing_exp_dir = existing_exp_dir.strip()
+        if existing_exp_dir:
+            self._workdir = os.path.abspath(existing_exp_dir)
+            exp_file = os.path.join(self._workdir, "experiences.json")
+            if os.path.exists(exp_file):
+                try:
+                    bodies, entries = self._read_experience_entries(exp_file)
+                    if self._restore_from_experiences(X, y, bodies, entries):
+                        print(f"[DRSR] 离线复用实验: {self._workdir}")
+                        self.model_ready = True
+                        return self
+                except Exception:
+                    # 兼容路径不完整/内容不规范时，回退到正常训练流程
+                    pass
+            else:
+                print(f"[DRSR] 未发现现有 experiences.json，回退到全量训练: {exp_file}")
 
         # 规范文本：
         # 优先使用用户提供的背景描述自动生成通用 spec；否则回退到默认/显式 spec_path
@@ -164,94 +186,31 @@ class DRSRRegressor(BaseWrapper):
             os.chdir(cwd_backup)
 
         # 读取经验，选取最佳/首个方程
-        best_body = None
         bodies: List[str] = []
         try:
-            with open(exp_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            for key in ("Good", "None", "Bad"):
-                for item in data.get(key, []):
-                    eq = item.get("equation")
-                    if isinstance(eq, str) and eq.strip():
-                        bodies.append(eq)
-            # 构建 entries（方程+训练期拟合参数+分数）并排序
-            entries: List[dict] = []
-            for key in ("Good", "Bad", "None"):
-                for item in data.get(key, []):
-                    eq = item.get("equation")
-                    if not isinstance(eq, str) or not eq.strip():
-                        continue
-                    params = item.get("fitted_params")
-                    try:
-                        params = np.asarray(params).tolist() if params is not None else None
-                    except Exception:
-                        params = None
-                    score = item.get("score")
-                    entries.append({
-                        'equation': eq,
-                        'params': params,
-                        'score': score,
-                        'category': key,
-                        'sample_order': item.get('sample_order')
-                    })
-            # 分数为 None 的排最后；分数越大越靠前
-            entries.sort(key=lambda e: ((e['score'] is not None), e['score'] if e['score'] is not None else -1e18), reverse=True)
-            self._equation_entries = entries
-            def _pick_best(group_name: str):
-                group = data.get(group_name, [])
-                if not group:
-                    return None
-                scored = [(it.get("score"), it.get("equation")) for it in group if isinstance(it.get("equation"), str)]
-                scored = [s for s in scored if s[1]]
-                if not scored:
-                    return None
-                scored.sort(key=lambda x: (x[0] is not None, x[0]), reverse=True)
-                return scored[0][1]
-            best_body = _pick_best("Good") or (bodies[0] if bodies else None)
-
-            # 若经验中包含训练期拟合参数，优先取出
-            best_params = None
-            if best_body:
-                for key in ("Good", "None", "Bad"):
-                    for item in data.get(key, []):
-                        if item.get("equation") == best_body and item.get("fitted_params") is not None:
-                            try:
-                                best_params = np.asarray(item.get("fitted_params"), dtype=float)
-                                break
-                            except Exception:
-                                best_params = None
-                    if best_params is not None:
-                        break
+            bodies, entries = self._read_experience_entries(exp_file)
+            self._restore_from_experiences(X, y, bodies, entries)
+            if self._equation_body:
+                self._all_bodies = bodies
+                if self._equation_func is not None:
+                    self.model_ready = True
+                    return self
         except Exception:
             pass
 
-        if not best_body:
-            best_body = (
-                "    dv = params[0] * x + params[1] * v + params[2]\n"
-                "    return dv\n"
-            )
-
-        self._equation_body = best_body
-        self._all_bodies = bodies or [best_body]
-        
-        # 清理方程体再编译
-        cleaned_body = self._clean_equation_body(best_body)
-        self._equation_func = self._compile_equation(cleaned_body, self._n_features)
-        
-        # 注入训练期参数（若存在），否则置为空等待调用侧显式处理
-        if 'best_params' in locals() and best_params is not None:
-            self._best_params = best_params
-        else:
-            # 如果没有训练期参数，尝试重新拟合
-            self._best_params = None
-            if self._equation_func is not None and _SCIPY_OK:
-                try:
-                    print("[DRSR Wrapper] 未找到训练期参数，正在重新拟合...")
-                    self._best_params = self._fit_params(X, y, n_params=10, n_starts=3)
-                    print(f"[DRSR Wrapper] 参数拟合完成")
-                except Exception as e:
-                    print(f"[DRSR Wrapper] 参数拟合失败: {e}")
-                    self._best_params = None
+        self._equation_body = (
+            "    return params[0] * x + params[1] * v + params[2]\n"
+        )
+        self._all_bodies = bodies or [self._equation_body]
+        self._equation_func = self._compile_equation(self._equation_body, self._n_features)
+        self._best_params = None
+        try:
+            print("[DRSR Wrapper] 采用内置默认方程，正在拟合参数...")
+            self._best_params = self._fit_params(X, y, n_params=10, n_starts=3)
+            print("[DRSR Wrapper] 参数拟合完成")
+        except Exception as e:
+            print(f"[DRSR Wrapper] 参数拟合失败: {e}")
+            self._best_params = np.ones(10)
         
         self.model_ready = True
         return self
@@ -265,6 +224,84 @@ class DRSRRegressor(BaseWrapper):
             'n_features': self._n_features,
         }
         return json.dumps(state)
+
+    def _read_experience_entries(self, exp_file: str) -> tuple[List[str], List[dict]]:
+        with open(exp_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        category_priority = {"Good": 2, "None": 1, "Bad": 0}
+        bodies: List[str] = []
+        entries: List[dict] = []
+        for key in ("Good", "None", "Bad"):
+            for item in data.get(key, []):
+                equation = item.get("equation")
+                if not isinstance(equation, str) or not equation.strip():
+                    continue
+                params = item.get("fitted_params")
+                if params is None:
+                    params = item.get("params")
+                try:
+                    params_arr = np.asarray(params, dtype=float)
+                    params_arr = params_arr.tolist()
+                except Exception:
+                    params_arr = None
+                entries.append({
+                    "equation": equation,
+                    "params": params_arr,
+                    "score": item.get("score"),
+                    "category": key,
+                    "sample_order": item.get("sample_order"),
+                })
+                bodies.append(equation)
+
+        entries.sort(
+            key=lambda e: (
+                category_priority.get(e.get("category"), 0),
+                0 if e.get("score") is None else e.get("score"),
+            ),
+            reverse=True,
+        )
+        return bodies, entries
+
+    def _restore_from_experiences(self, X: np.ndarray, y: np.ndarray, bodies: List[str], entries: List[dict]) -> bool:
+        self._equation_entries = entries
+        if not entries:
+            return False
+
+        self._all_bodies = bodies
+        best_params = None
+
+        for entry in entries:
+            equation = entry.get("equation")
+            if not isinstance(equation, str) or not equation.strip():
+                continue
+            try:
+                self._equation_body = equation
+                cleaned_body = self._clean_equation_body(equation)
+                self._equation_func = self._compile_equation(cleaned_body, self._n_features)
+                candidate_params = entry.get("params")
+                if isinstance(candidate_params, list):
+                    best_params = np.asarray(candidate_params, dtype=float)
+                break
+            except Exception:
+                continue
+
+        if self._equation_func is None:
+            return False
+
+        if best_params is not None:
+            self._best_params = best_params
+        elif _SCIPY_OK:
+            try:
+                print("[DRSR Wrapper] 未找到训练期参数，正在重新拟合...")
+                self._best_params = self._fit_params(X, y, n_params=10, n_starts=3)
+                print(f"[DRSR Wrapper] 参数拟合完成")
+            except Exception as e:
+                print(f"[DRSR Wrapper] 参数拟合失败: {e}")
+                self._best_params = None
+        if not isinstance(self._best_params, np.ndarray):
+            self._best_params = np.ones(10)
+        return True
 
     @classmethod
     def deserialize(cls, payload: str):
@@ -381,50 +418,6 @@ class DRSRRegressor(BaseWrapper):
         return "\n".join(lines)
 
     @staticmethod
-    def _clean_equation_body(body: str) -> str:
-        """
-        清理方程体，移除 LLM 可能添加的测试代码或注释。
-        只保留函数定义部分（直到遇到第一个 return 语句之后）。
-        """
-        if not isinstance(body, str):
-            return body
-        
-        lines = body.split('\n')
-        cleaned_lines = []
-        found_return = False
-        
-        for line in lines:
-            stripped = line.strip()
-            
-            # 跳过空行（在找到 return 之前保留）
-            if not stripped and not found_return:
-                cleaned_lines.append(line)
-                continue
-            
-            # 检测到测试代码的特征，停止
-            if found_return and (
-                'equation_v' in stripped or
-                'predictions' in stripped or
-                'np.random' in stripped or
-                stripped.startswith('col0 =') or
-                stripped.startswith('col1 =') or
-                stripped.startswith('col2 =') or
-                stripped.startswith('col3 =') or
-                stripped.startswith('col4 =') or
-                stripped.startswith('print(')
-            ):
-                break
-            
-            cleaned_lines.append(line)
-            
-            # 标记找到 return
-            if 'return ' in stripped:
-                found_return = True
-                # 继续再包含这行之后的空行，然后停止
-        
-        return '\n'.join(cleaned_lines)
-
-    @staticmethod
     def _wrap_equation(body: str, n_features: Optional[int] = None) -> str:
         """将方程体包装为完整的函数定义，动态适配特征数量。
 
@@ -440,25 +433,58 @@ class DRSRRegressor(BaseWrapper):
     def _clean_equation_body(body: str) -> str:
         """
         清理方程体，移除 LLM 可能生成的测试代码或注释。
-        只保留函数主体部分（从开头到第一个 return 语句）。
+        支持多行 return，保留到第一段示例代码前。
         """
         lines = body.split('\n')
         cleaned_lines = []
         found_return = False
+        open_balance = 0
+        stop_tokens = (
+            "equation_v",
+            "predictions",
+            "np.random",
+            "col0 =",
+            "col1 =",
+            "col2 =",
+            "col3 =",
+            "col4 =",
+            "print(",
+            "```",
+            "Example usage",
+            "# Example",
+            '# Examples',
+            'if __name__ == "__main__"',
+            "return None",
+        )
         
         for line in lines:
             # 跳过空行和纯注释行（在函数体之外）
             stripped = line.strip()
             if not stripped or (stripped.startswith('#') and not cleaned_lines):
                 continue
+
+            if found_return and open_balance <= 0:
+                if any(token in stripped for token in stop_tokens):
+                    break
+                if "=" in stripped and not stripped.startswith(("==", ">=", "<=", "!=", "=>", "=<")):
+                    break
+                if stripped.startswith('#'):
+                    break
             
             # 保留有效行
             cleaned_lines.append(line)
             
-            # 找到 return 语句后，停止收集（忽略后续的测试代码）
+            # 找到 return 语句后，继续保留多行返回表达式，直到闭合
             if stripped.startswith('return ') or stripped == 'return':
                 found_return = True
-                break
+                open_balance += line.count('(') - line.count(')')
+                open_balance += line.count('[') - line.count(']')
+                open_balance += line.count('{') - line.count('}')
+                continue
+            if found_return:
+                open_balance += line.count('(') - line.count(')')
+                open_balance += line.count('[') - line.count(']')
+                open_balance += line.count('{') - line.count('}')
         
         if not found_return:
             # 如果没有找到 return，可能是不完整的函数，尝试添加
@@ -468,11 +494,81 @@ class DRSRRegressor(BaseWrapper):
         return '\n'.join(cleaned_lines) + '\n'
 
     @staticmethod
+    def _inject_feature_aliases(body: str, n_features: Optional[int] = None) -> str:
+        """
+        当已有方程体仍使用旧版变量名（x/v/x0/x1）时，注入别名变量提升兼容性。
+        """
+        if not isinstance(body, str):
+            return body
+        n = 0 if (n_features is None or n_features <= 0) else int(n_features)
+        names = DRSRRegressor._collect_variable_names(body)
+        aliases = []
+        alias_map = {}
+        if n >= 1:
+            alias_map["x"] = "col0"
+            alias_map["x0"] = "col0"
+        if n >= 2:
+            alias_map["v"] = "col1"
+            alias_map["x1"] = "col1"
+        for i in range(n):
+            alias_map[f"x{i}"] = f"col{i}"
+
+        for old_name, new_name in alias_map.items():
+            if old_name in names and old_name not in ("col" + new_name[3:] if new_name.startswith("col") else ""):
+                aliases.append(f"    {old_name} = {new_name}")
+        # 去重，保持固定注入顺序
+        aliases = list(dict.fromkeys(aliases))
+        if not aliases:
+            return body
+
+        lines = body.split('\n')
+        if not lines:
+            return '\n'.join(aliases) + body
+
+        # 若开头是 docstring，优先在 docstring 后注入别名，避免污染注释
+        insert_at = 0
+        first_non_empty = 0
+        while first_non_empty < len(lines) and lines[first_non_empty].strip() == "":
+            first_non_empty += 1
+        if first_non_empty < len(lines):
+            first = lines[first_non_empty].lstrip()
+            if first.startswith('"""') or first.startswith("'''"):
+                quote = '"""' if first.startswith('"""') else "'''"
+                if first.count(quote) >= 2:
+                    insert_at = first_non_empty + 1
+                else:
+                    end_idx = first_non_empty + 1
+                    while end_idx < len(lines):
+                        if quote in lines[end_idx]:
+                            break
+                        end_idx += 1
+                    insert_at = min(end_idx + 1, len(lines))
+
+        return "\n".join(lines[:insert_at] + aliases + lines[insert_at:])
+
+    @staticmethod
+    def _collect_variable_names(body: str) -> set:
+        """提取方程体中读取的变量名（仅局部变量表达），用于判断别名注入。"""
+        if not isinstance(body, str):
+            return set()
+        try:
+            dedented = textwrap.dedent(body)
+            tree = ast.parse(dedented)
+        except Exception:
+            return set()
+        names = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+                names.add(node.id)
+        return names
+
+    @staticmethod
     def _compile_equation(body: str, n_features: Optional[int] = None):
         """编译方程，动态适配特征数量"""
         # 清理方程体，移除测试代码
         cleaned_body = DRSRRegressor._clean_equation_body(body)
-        code = DRSRRegressor._wrap_equation(cleaned_body, n_features)
+        body_with_aliases = DRSRRegressor._inject_feature_aliases(cleaned_body, n_features)
+        code = DRSRRegressor._wrap_equation(body_with_aliases, n_features)
         ns = {}
         # 提供 numpy 命名以支持方程体中的 np.sin/np.cos 等写法
         try:
