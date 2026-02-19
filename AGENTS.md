@@ -84,3 +84,19 @@
   - `python check/check_gplearn.py`
   - `python check/check_pysr.py`
   - `python check/check_pyoperon.py`
+
+## 10. DRSR 固化经验（2026-02-20）
+
+- DRSR 的 `drsr_420` 本地代码与统一 LLM 接口存在差异，不能依赖 `set_shared_llm_client` 作为唯一注入方式。
+  - 实际兼容流程：
+    1. 若 `sampler` / `data_analyse_real` 有 `set_shared_llm_client`，先尝试注入。
+    2. 始终通过 `pipeline.main(..., llm_client=client)` 进行强制注入，确保在无旧接口时也能使用统一客户端。
+- `config.Config` 不支持 `use_api`/`api_model`，避免按外部默认字段直接透传：
+  - 可透传字段主要为 `num_samplers`, `num_evaluators`, `samples_per_prompt`, `evaluate_timeout_seconds`, `results_root`, `wall_time_limit_seconds`.
+- 离线复用策略：优先读取 `equation_experiences/experiences.json`，命中即直接恢复方程与参数，避免触发线上 LLM。
+- DRSR 在线闭环统一使用模型：
+  - `api_model="blt/gpt-4o-mini"`（同 llmsr）
+  - 在线运行需加环境变量 `DRSR_ALLOW_ONLINE=1`，并确保 `BLT_API_KEY` 有效。
+- 验收脚本：`check/check_drsr.py`
+  - 离线：`python check/check_drsr.py`
+  - 在线：`DRSR_ALLOW_ONLINE=1 python check/check_drsr.py`
