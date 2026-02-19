@@ -1,13 +1,17 @@
-# algorithms/tpsr_wrapper/wrapper.py
-import pickle
+"""Wrapper for TPSR (Transformer-based Planning for Symbolic Regression)."""
+
 import base64
-import numpy as np
 import os
-import sys
+import pickle
+import re
 import tempfile
-import time
+import sys
 import torch
+import numpy as np
+import shutil
+
 from ..base_wrapper import BaseWrapper
+
 
 class TPSRRegressor(BaseWrapper):
     def __init__(self, **kwargs):
@@ -16,299 +20,573 @@ class TPSRRegressor(BaseWrapper):
         self.model = None
         self.best_tree = None
         self.all_trees = []
+        self._predict_fn = None
+        self._backend_params = {}
 
         # 设置默认参数
-        self.params.setdefault('max_input_points', 10000)
-        self.params.setdefault('max_number_bags', -1)
-        self.params.setdefault('stop_refinement_after', 1)
-        self.params.setdefault('n_trees_to_refine', 1)
-        self.params.setdefault('rescale', True)
-        self.params.setdefault('beam_size', 10)
-        self.params.setdefault('beam_type', 'sampling')
-        self.params.setdefault('backbone_model', 'e2e')  # 'e2e' 或 'nesymres'
-        self.params.setdefault('no_seq_cache', False)
-        self.params.setdefault('no_prefix_cache', False)
-        self.params.setdefault('width', 3)  # Top-k in TPSR's expansion step
-        self.params.setdefault('num_beams', 1)  # Beam size in TPSR's evaluation
-        self.params.setdefault('rollout', 3)  # Number of rollouts in TPSR
-        self.params.setdefault('horizon', 200)  # Horizon of lookahead planning
-        
+        self.params.setdefault("backbone_model", "e2e")
+        self.params.setdefault("max_input_points", 10000)
+        self.params.setdefault("max_number_bags", -1)
+        self.params.setdefault("stop_refinement_after", 1)
+        self.params.setdefault("n_trees_to_refine", 1)
+        self.params.setdefault("rescale", True)
+        self.params.setdefault("beam_size", 10)
+        self.params.setdefault("beam_type", "sampling")
+        self.params.setdefault("no_seq_cache", False)
+        self.params.setdefault("no_prefix_cache", False)
+        self.params.setdefault("width", 3)  # Top-k in TPSR's expansion step
+        self.params.setdefault("num_beams", 1)  # Beam size in TPSR's evaluation
+        self.params.setdefault("rollout", 3)  # Number of rollouts in TPSR
+        self.params.setdefault("horizon", 200)  # Horizon of lookahead planning
+        self.params.setdefault("seed", 23)
+        self.params.setdefault("cpu", False)
+        self.params.setdefault("train_value", False)
+        self.params.setdefault("lam", 0.1)
+
+        # NeSymReS 配置
+        self.params.setdefault("nesymres_eq_setting_path", os.path.join("nesymres", "jupyter", "100M", "eq_setting.json"))
+        self.params.setdefault("nesymres_cfg_path", os.path.join("nesymres", "jupyter", "100M", "config.yaml"))
+        self.params.setdefault("nesymres_model_path", None)
+        self.params.setdefault("symbolicregression_model_path", os.path.join("symbolicregression", "weights", "model.pt"))
+        self.params.setdefault("symbolicregression_model_url", "https://dl.fbaipublicfiles.com/symbolicregression/model1.pt")
+
+    def _set_parser_attr(self, args, name: str, value):
+        if value is None:
+            return
+        try:
+            setattr(args, name, value)
+        except Exception:
+            # 某些参数可能不存在于当前 parser 版本中，略过即可
+            pass
+
+    def _resolve_tpsr_path(self, rel_path: str):
+        if not rel_path:
+            return None
+
+        if os.path.isabs(rel_path):
+            return rel_path
+
+        root_dir = os.path.dirname(os.path.abspath(__file__))
+        tpsr_dir = os.path.join(root_dir, "tpsr")
+        candidate = os.path.join(tpsr_dir, rel_path)
+        if os.path.isfile(candidate):
+            return candidate
+
+        return os.path.abspath(rel_path)
+
+    def _download_if_absent(self, url: str, target_path: str):
+        if not url:
+            return False
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        try:
+            import urllib.request
+
+            with urllib.request.urlopen(url) as response, open(target_path, "wb") as output:
+                shutil.copyfileobj(response, output)
+            return True
+        except Exception as e:
+            raise RuntimeError(f"TPSR 预训练权重下载失败: {url}, reason: {e}")
+
+    def _ensure_e2e_model(self):
+        requested_path = self._resolve_tpsr_path(self.params.get("symbolicregression_model_path"))
+        target_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "tpsr",
+            "symbolicregression",
+            "weights",
+            "model.pt",
+        )
+        if requested_path and os.path.isfile(requested_path):
+            if os.path.abspath(requested_path) != os.path.abspath(target_path):
+                os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                shutil.copy2(requested_path, target_path)
+            return target_path
+
+        download_url = self.params.get("symbolicregression_model_url")
+        if not os.path.isfile(target_path):
+            if not download_url:
+                raise FileNotFoundError(
+                    "未找到 e2e 预训练权重，且未配置 symbolicregression_model_url"
+                )
+            self._download_if_absent(download_url, target_path)
+            return target_path
+
+        return target_path
+
+    def _resolve_nesymres_weights(self, cfg):
+        model_path = self.params.get("nesymres_model_path")
+        if not model_path:
+            model_path = getattr(cfg, "model_path", None)
+
+        candidates = []
+        if model_path:
+            candidates.append(model_path)
+        candidates.extend(
+            [
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "tpsr", "nesymres", "weights", "10MCompleted.ckpt"),
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "tpsr", "nesymres", "weights", "10M.ckpt"),
+            ]
+        )
+
+        for candidate in candidates:
+            if not candidate:
+                continue
+            candidate = self._resolve_tpsr_path(candidate)
+            if candidate and os.path.isfile(candidate):
+                return candidate
+
+        return None
+
+    def _normalize_equation(self, expr):
+        if expr is None:
+            return ""
+
+        text = str(expr)
+        # 常见 token 到符号的替换（与 Symbolic SR 的表示统一）
+        replacements = {
+            "add": "+",
+            "mul": "*",
+            "sub": "-",
+            "pow": "**",
+            "inv": "1/",
+        }
+        for op, op_target in replacements.items():
+            text = re.sub(rf"\b{op}\b", op_target, text)
+        # 兼容某些形如 pow2/pow3 写法
+        text = re.sub(r"\bpow2\b", "**2", text)
+        text = re.sub(r"\bpow3\b", "**3", text)
+        text = re.sub(r"\bpow4\b", "**4", text)
+        return text
+
+    def _normalize_equation_list(self, trees):
+        equations = []
+        for tree in trees:
+            if tree is None:
+                continue
+            equations.append(self._normalize_equation(tree))
+        return equations
+
+    def _build_predictor_from_expression(self, expr_text: str, variable_names):
+        if not expr_text:
+            return None
+
+        expr_text = self._normalize_equation(expr_text)
+        try:
+            import sympy as sp
+
+            expr = sp.sympify(expr_text)
+            symbols = [sp.Symbol(v) for v in variable_names]
+            fn = sp.lambdify(symbols, expr, modules="numpy")
+            self._backend_params["predict_symbols"] = symbols
+            self._backend_params["predict_expr"] = expr
+
+            def _predict(X):
+                X_arr = np.asarray(X)
+                if X_arr.ndim == 1:
+                    X_arr = X_arr.reshape(1, -1)
+                if X_arr.shape[1] < len(symbols):
+                    raise ValueError(
+                        f"输入特征数不足（需要 {len(symbols)}，实际 {X_arr.shape[1]}）"
+                    )
+                outputs = fn(*[X_arr[:, idx] for idx in range(len(symbols))])
+                return np.asarray(outputs, dtype=float).reshape(-1)
+
+            return _predict
+
+        except Exception as e:
+            print(f"TPSR 解析表达式失败，无法生成在线预测函数: {str(e)}")
+            return None
+
+    def _fit_e2e(self, X, y, equation_env, args, samples):
+        self._ensure_e2e_model()
+
+        from symbolicregression.e2e_model import Transformer
+        from symbolicregression.model.model_wrapper import ModelWrapper
+        from symbolicregression.model.sklearn_wrapper import SymbolicTransformerRegressor
+        from dyna_gym.agents.uct import UCT
+        from dyna_gym.agents.mcts import update_root
+        from rl_env import RLEnv
+        from default_pi import E2EHeuristic
+
+        # 创建 TPSR 主体模型
+        model = Transformer(params=args, env=equation_env, samples=samples)
+        model.to(args.device)
+
+        # 创建 RL 环境
+        rl_env = RLEnv(
+            params=args,
+            samples=samples,
+            equation_env=equation_env,
+            model=model,
+        )
+
+        # 创建 TPSR planner
+        dp = E2EHeuristic(
+            equation_env=equation_env,
+            rl_env=rl_env,
+            model=model,
+            k=args.width,
+            num_beams=args.num_beams,
+            horizon=args.horizon,
+            device=args.device,
+            use_seq_cache=not args.no_seq_cache,
+            use_prefix_cache=not args.no_prefix_cache,
+            length_penalty=args.beam_length_penalty if hasattr(args, "beam_length_penalty") else 1.0,
+            train_value_mode=args.train_value if hasattr(args, "train_value") else False,
+            debug=args.debug,
+        )
+
+        # 创建 UCT 代理
+        agent = UCT(
+            action_space=[],
+            gamma=1.0,
+            ucb_constant=args.ucb_constant if hasattr(args, "ucb_constant") else 1.0,
+            horizon=args.horizon,
+            rollouts=args.rollout,
+            dp=dp,
+            width=args.width,
+            reuse_tree=True,
+            alg=args.uct_alg if hasattr(args, "uct_alg") else "uct",
+            ucb_base=args.ucb_base if hasattr(args, "ucb_base") else 4,
+        )
+
+        # 运行搜索
+        done = False
+        s = rl_env.state
+        for _ in range(args.horizon):
+            if done or len(s) >= args.horizon:
+                break
+            act = agent.act(rl_env, done)
+            s, _, done, _ = rl_env.step(act)
+            update_root(agent, act, s)
+            dp.update_cache(s)
+
+        # 使用 pretrain E2E 模型建立可复用回归器
+        mw = ModelWrapper(
+            env=equation_env,
+            embedder=model.embedder,
+            encoder=model.encoder,
+            decoder=model.decoder,
+            beam_size=args.beam_size,
+            beam_type=args.beam_type,
+            max_generated_output_len=args.horizon,
+        )
+
+        regressor = SymbolicTransformerRegressor(
+            model=mw,
+            max_input_points=self.params.get("max_input_points", 10000),
+            max_number_bags=self.params.get("max_number_bags", -1),
+            stop_refinement_after=self.params.get("stop_refinement_after", 1),
+            n_trees_to_refine=self.params.get("n_trees_to_refine", 1),
+            rescale=self.params.get("rescale", True),
+        )
+        regressor.fit(X, y)
+
+        # 记录搜索状态（用于输出与展示）
+        best_tree = regressor.retrieve_tree(refinement_type="BFGS", dataset_idx=0)
+        self.best_tree = best_tree
+        self.all_trees = []
+        for rt in regressor.retrieve_refinements_types():
+            t = regressor.retrieve_tree(refinement_type=rt, dataset_idx=0)
+            if t is not None:
+                self.all_trees.append(t)
+
+        self.model = regressor
+        self._predict_fn = None
+        self._backend_params["backend"] = "e2e"
+        self._backend_params["search_state"] = s
+
+    def _resolve_nesymres_resources(self, cfg):
+        eq_setting_path = self.params.get("nesymres_eq_setting_path", "")
+        cfg_path = self.params.get("nesymres_cfg_path", "")
+        if not eq_setting_path:
+            raise FileNotFoundError("NeSymReS 方程配置文件未设置：nesymres_eq_setting_path")
+        if not cfg_path:
+            raise FileNotFoundError("NeSymReS 配置文件未设置：nesymres_cfg_path")
+
+        eq_setting_path = self._resolve_tpsr_path(eq_setting_path)
+        cfg_path = self._resolve_tpsr_path(cfg_path)
+
+        if not os.path.isfile(eq_setting_path):
+            raise FileNotFoundError(f"未找到 NeSymReS 方程配置文件: {eq_setting_path}")
+        if not os.path.isfile(cfg_path):
+            raise FileNotFoundError(f"未找到 NeSymReS 配置文件: {cfg_path}")
+
+        model_path = self._resolve_nesymres_weights(cfg)
+        if not model_path:
+            raise FileNotFoundError(
+                "未找到 NeSymReS 预训练权重。建议设置 nesymres_model_path，或在 `nesymres/weights/` 下放置 ckpt 文件"
+            )
+
+        return eq_setting_path, cfg_path, model_path
+
+    def _fit_nesymres(self, X, y, args, samples):
+        import json
+        from functools import partial
+        from reward import compute_reward_nesymres
+        from nesymres.src.nesymres.architectures.model import Model
+        from nesymres.dclasses import FitParams, BFGSParams
+        from dyna_gym.agents.uct import UCT
+        from dyna_gym.agents.mcts import update_root
+        from rl_env import RLEnv
+        from default_pi import NesymresHeuristic
+        import omegaconf
+
+        cfg_path = self._resolve_tpsr_path(self.params.get("nesymres_cfg_path"))
+        if not cfg_path or not os.path.isfile(cfg_path):
+            raise FileNotFoundError(f"NeSymReS 配置文件不存在: {cfg_path}")
+        cfg = omegaconf.OmegaConf.load(cfg_path)
+        eq_setting_path = self._resolve_tpsr_path(self.params.get("nesymres_eq_setting_path"))
+        eq_setting_path, _, weight_path = self._resolve_nesymres_resources(cfg)
+        with open(eq_setting_path, "r", encoding="utf-8") as f:
+            eq_setting = json.load(f)
+
+        self._set_parser_attr(cfg.model, "cfg", cfg)
+        bfgs_cfg = BFGSParams(
+            activated=cfg.inference.bfgs.activated,
+            n_restarts=cfg.inference.bfgs.n_restarts,
+            add_coefficients_if_not_existing=cfg.inference.bfgs.add_coefficients_if_not_existing,
+            normalization_o=cfg.inference.bfgs.normalization_o,
+            idx_remove=cfg.inference.bfgs.idx_remove,
+            normalization_type=cfg.inference.bfgs.normalization_type,
+            stop_time=cfg.inference.bfgs.stop_time,
+        )
+
+        fit_params = FitParams(
+            word2id=eq_setting["word2id"],
+            id2word={int(k): v for k, v in eq_setting["id2word"].items()},
+            una_ops=eq_setting["una_ops"],
+            bin_ops=eq_setting["bin_ops"],
+            total_variables=list(eq_setting["total_variables"]),
+            total_coefficients=list(eq_setting["total_coefficients"]),
+            rewrite_functions=list(eq_setting["rewrite_functions"]),
+            bfgs=bfgs_cfg,
+            beam_size=cfg.inference.beam_size if hasattr(cfg, "inference") else 5,
+        )
+
+        cfg.model_path = weight_path
+        model = Model.load_from_checkpoint(weight_path, cfg=cfg.architecture)
+        model.eval()
+        if torch.cuda.is_available() and not args.cpu:
+            model.cuda()
+
+        fitfunc = partial(model.fitfunc, cfg_params=fit_params)
+        y_flat = np.asarray(y).reshape(-1)
+        baseline_output = fitfunc(X, y_flat)
+        all_preds = baseline_output.get("all_bfgs_preds", [])
+        best_preds = baseline_output.get("best_bfgs_preds", [])
+        baseline_expr = best_preds[0] if best_preds else (all_preds[0] if all_preds else None)
+
+        rl_env = RLEnv(
+            params=args,
+            samples=samples,
+            model=model,
+            cfg_params=fit_params,
+        )
+        model.to_encode(X, y_flat, cfg_params=fit_params)
+
+        dp = NesymresHeuristic(
+            rl_env=rl_env,
+            model=model,
+            k=args.width,
+            num_beams=args.num_beams,
+            horizon=args.horizon,
+            device=args.device,
+            use_seq_cache=not args.no_seq_cache,
+            use_prefix_cache=not args.no_prefix_cache,
+            length_penalty=args.beam_length_penalty if hasattr(args, "beam_length_penalty") else 1.0,
+            cfg_params=fit_params,
+            train_value_mode=args.train_value if hasattr(args, "train_value") else False,
+            debug=args.debug,
+        )
+
+        agent = UCT(
+            action_space=[],
+            gamma=1.0,
+            ucb_constant=args.ucb_constant if hasattr(args, "ucb_constant") else 1.0,
+            horizon=args.horizon,
+            rollouts=args.rollout,
+            dp=dp,
+            width=args.width,
+            reuse_tree=True,
+            alg=args.uct_alg if hasattr(args, "uct_alg") else "uct",
+            ucb_base=args.ucb_base if hasattr(args, "ucb_base") else 4,
+        )
+
+        done = False
+        s = rl_env.state
+        for _ in range(200 if not getattr(args, "sample_only", False) else 1):
+            if done or len(s) >= args.horizon:
+                break
+            act = agent.act(rl_env, done)
+            s, _, done, _ = rl_env.step(act)
+            update_root(agent, act, s)
+            dp.update_cache(s)
+
+        _, reward_mcts, pred_str = compute_reward_nesymres(model.X, model.y, s, fit_params)
+        mcts_expr = pred_str or baseline_expr
+        if reward_mcts is None:
+            print("NeSymReS 奖励无法计算，回退到预训练候选表达式")
+
+        self.best_tree = mcts_expr
+        self.all_trees = self._normalize_equation_list(all_preds)
+        if baseline_expr and baseline_expr not in self.all_trees:
+            self.all_trees.append(self._normalize_equation(baseline_expr))
+
+        if mcts_expr is None and self.all_trees:
+            mcts_expr = self.all_trees[0]
+
+        self.model = model
+        self._predict_fn = self._build_predictor_from_expression(
+            mcts_expr, eq_setting["total_variables"]
+        )
+        self._backend_params["backend"] = "nesymres"
+        self._backend_params["search_state"] = s
+        self._backend_params["best_expr"] = mcts_expr
+        self._backend_params["eq_variables"] = eq_setting["total_variables"]
+
     def fit(self, X, y):
         """
-        训练TPSR模型
-        
+        训练 TPSR 模型。
+
         参数:
-        X: 输入特征，形状为 (n_samples, n_features)
-        y: 目标变量，形状为 (n_samples,) 或 (n_samples, 1)
-        
-        返回:
-        self: 训练后的模型实例
+            X: 特征矩阵，形状 (n_samples, n_features)
+            y: 目标向量，形状 (n_samples,) 或 (n_samples, 1)
         """
-        # 确保y是二维的
         if y.ndim == 1:
             y = y.reshape(-1, 1)
-        
+
+        temp_dir = None
+        original_cwd = None
+        tpsr_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tpsr")
+
         # 导入必要的模块
         try:
-            # 将TPSR模块所在目录添加到sys.path
-            tpsr_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tpsr')
             if tpsr_dir not in sys.path:
                 sys.path.insert(0, tpsr_dir)
-                
-            # 切换到tpsr目录以确保相对导入正常工作
             original_cwd = os.getcwd()
             os.chdir(tpsr_dir)
-            
-            # 导入必要的模块
-            import symbolicregression
+
+            temp_dir = tempfile.mkdtemp(prefix="tpsr_")
+
             from symbolicregression.envs import build_env
-            from symbolicregression.model import build_modules
-            from symbolicregression.trainer import Trainer
-            from symbolicregression.e2e_model import Transformer, pred_for_sample, refine_for_sample
-            from symbolicregression.model.model_wrapper import ModelWrapper
-            from symbolicregression.model.sklearn_wrapper import SymbolicTransformerRegressor
             from parsers import get_parser
-            from dyna_gym.agents.uct import UCT
-            from rl_env import RLEnv
-            from default_pi import E2EHeuristic
-            
-            # 创建临时目录来保存输出
-            temp_dir = tempfile.mkdtemp(prefix='tpsr_')
-            
-            # 解析命令行参数
+
             parser = get_parser()
             args = parser.parse_args([])
-            
-            # 设置参数
-            args.backbone_model = self.params.get('backbone_model', 'e2e')
-            args.beam_size = self.params.get('beam_size', 10)
-            args.beam_type = self.params.get('beam_type', 'sampling')
-            args.no_seq_cache = self.params.get('no_seq_cache', False)
-            args.no_prefix_cache = self.params.get('no_prefix_cache', False)
-            args.width = self.params.get('width', 3)
-            args.num_beams = self.params.get('num_beams', 1)
-            args.rollout = self.params.get('rollout', 3)
-            args.horizon = self.params.get('horizon', 200)
-            args.debug = self.params.get('debug', False)
-            args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-            
-            # 构建环境和模型
-            equation_env = build_env(args)[0]
-            
-            # 准备数据
-            data = np.column_stack((X, y))
-            samples = {'x_to_fit': 0, 'y_to_fit': 0, 'x_to_pred': 0, 'y_to_pred': 0}
-            samples['x_to_fit'] = [X]
-            samples['y_to_fit'] = [y]
-            samples['x_to_pred'] = [X]
-            samples['y_to_pred'] = [y]
-            
-            # 创建和训练模型
-            if args.backbone_model == 'e2e':
-                model = Transformer(params=args, env=equation_env, samples=samples)
-                model.to(args.device)
-                
-                # 创建RL环境
-                rl_env = RLEnv(
-                    params=args,
-                    samples=samples,
-                    equation_env=equation_env,
-                    model=model
-                )
-                
-                # 创建TPSR规划器
-                dp = E2EHeuristic(
-                    equation_env=equation_env,
-                    rl_env=rl_env,
-                    model=model,
-                    k=args.width,
-                    num_beams=args.num_beams,
-                    horizon=args.horizon,
-                    device=args.device,
-                    use_seq_cache=not args.no_seq_cache,
-                    use_prefix_cache=not args.no_prefix_cache,
-                    length_penalty=args.beam_length_penalty if hasattr(args, 'beam_length_penalty') else 1.0,
-                    train_value_mode=args.train_value if hasattr(args, 'train_value') else False,
-                    debug=args.debug
-                )
-                
-                # 创建UCT代理
-                agent = UCT(
-                    action_space=[],
-                    gamma=1.0,
-                    ucb_constant=1.0,
-                    horizon=args.horizon,
-                    rollouts=args.rollout,
-                    dp=dp,
-                    width=args.width,
-                    reuse_tree=True,
-                    alg=args.uct_alg if hasattr(args, 'uct_alg') else 'uct',
-                    ucb_base=args.ucb_base if hasattr(args, 'ucb_base') else 4
-                )
-                
-                # 运行TPSR搜索
-                done = False
-                s = rl_env.state
-                for t in range(args.horizon):
-                    if len(s) >= args.horizon or done:
-                        break
-                    
-                    act = agent.act(rl_env, done)
-                    s, r, done, _ = rl_env.step(act)
-                    update_root(agent, act, s)
-                    dp.update_cache(s)
-                
-                # 获取结果
-                mcts_str = equation_env.detokenize(s)
-                
-                # 创建SymbolicTransformerRegressor对象
-                embedder = model.embedder
-                encoder = model.encoder
-                decoder = model.decoder
-                
-                # 使用ModelWrapper和SymbolicTransformerRegressor来获取方程
-                mw = ModelWrapper(
-                    env=equation_env,
-                    embedder=embedder,
-                    encoder=encoder,
-                    decoder=decoder,
-                    beam_size=args.beam_size,
-                    beam_type=args.beam_type,
-                    max_generated_output_len=args.horizon
-                )
-                
-                # 训练回归器
-                regressor = SymbolicTransformerRegressor(
-                    model=mw,
-                    max_input_points=self.params.get('max_input_points', 10000),
-                    max_number_bags=self.params.get('max_number_bags', -1),
-                    stop_refinement_after=self.params.get('stop_refinement_after', 1),
-                    n_trees_to_refine=self.params.get('n_trees_to_refine', 1),
-                    rescale=self.params.get('rescale', True)
-                )
-                
-                # 应用精调
-                regressor.fit(X, y)
-                
-                # 储存模型
-                self.model = regressor
-                
-                # 获取最优方程和所有方程
-                best_tree = regressor.retrieve_tree(refinement_type="BFGS", dataset_idx=0)
-                self.best_tree = best_tree
-                
-                all_refinement_types = regressor.retrieve_refinements_types()
-                self.all_trees = []
-                for refinement_type in all_refinement_types:
-                    tree = regressor.retrieve_tree(refinement_type=refinement_type, dataset_idx=0)
-                    if tree is not None:
-                        self.all_trees.append(tree)
-            
+
+            # 注入用户参数（兼容 parser 版本差异）
+            self._set_parser_attr(args, "backbone_model", self.params.get("backbone_model", "e2e"))
+            self._set_parser_attr(args, "beam_size", int(self.params.get("beam_size", 10)))
+            self._set_parser_attr(args, "beam_type", self.params.get("beam_type", "sampling"))
+            self._set_parser_attr(args, "no_seq_cache", bool(self.params.get("no_seq_cache", False)))
+            self._set_parser_attr(args, "no_prefix_cache", bool(self.params.get("no_prefix_cache", False)))
+            self._set_parser_attr(args, "width", int(self.params.get("width", 3)))
+            self._set_parser_attr(args, "num_beams", int(self.params.get("num_beams", 1)))
+            self._set_parser_attr(args, "rollout", int(self.params.get("rollout", 3)))
+            self._set_parser_attr(args, "horizon", int(self.params.get("horizon", 200)))
+            self._set_parser_attr(args, "seed", int(self.params.get("seed", 23)))
+            self._set_parser_attr(args, "debug", bool(self.params.get("debug", False)))
+            self._set_parser_attr(args, "beam_length_penalty", float(self.params.get("beam_length_penalty", 1.0)))
+            self._set_parser_attr(args, "train_value", bool(self.params.get("train_value", False)))
+            self._set_parser_attr(args, "ucb_constant", float(self.params.get("ucb_constant", 1.0)))
+            self._set_parser_attr(args, "uct_alg", self.params.get("uct_alg", "uct"))
+            self._set_parser_attr(args, "ucb_base", float(self.params.get("ucb_base", 4.0)))
+            self._set_parser_attr(args, "cpu", bool(self.params.get("cpu", False)))
+            self._set_parser_attr(args, "lam", float(self.params.get("lam", 0.1)))
+            self._set_parser_attr(args, "max_input_points", int(self.params.get("max_input_points", 10000)))
+            self._set_parser_attr(args, "max_number_bags", int(self.params.get("max_number_bags", 10)))
+            self._set_parser_attr(args, "rescale", bool(self.params.get("rescale", True)))
+            self._set_parser_attr(args, "sample_only", bool(self.params.get("sample_only", False)))
+
+            args.cpu = bool(self.params.get("cpu", False))
+            args.device = torch.device("cpu") if args.cpu else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+            equation_env = build_env(args)
+
+            samples = {
+                "x_to_fit": [np.asarray(X)],
+                "y_to_fit": [np.asarray(y)],
+                "x_to_pred": [np.asarray(X)],
+                "y_to_pred": [np.asarray(y)],
+            }
+
+            backbone_model = self.params.get("backbone_model", "e2e").lower()
+            if backbone_model == "e2e":
+                self._fit_e2e(X, y, equation_env, args, samples)
+            elif backbone_model == "nesymres":
+                self._fit_nesymres(np.asarray(X), np.asarray(y), args, samples)
             else:
-                # NesymRes后端
-                # 这部分可以在未来需要时实现
-                raise NotImplementedError("NesymRes后端暂未实现")
-            
-        except Exception as e:
-            print(f"TPSR训练过程中出现错误: {str(e)}")
+                raise ValueError(f"不支持的 backbone_model: {backbone_model}")
+
+            # 统一化所有树列表（若对象为 SymbolicTree，后续再做输出转换）
+            self.all_trees = self._normalize_equation_list(self.all_trees)
+            if self.best_tree is not None:
+                self.best_tree = self._normalize_equation(self.best_tree)
+            return self
+
+        except Exception:
             import traceback
+
             traceback.print_exc()
             raise
         finally:
-            # 恢复原始工作目录和Python路径
-            os.chdir(original_cwd)
+            if original_cwd is not None:
+                os.chdir(original_cwd)
             if tpsr_dir in sys.path:
-                sys.path.remove(tpsr_dir)
-            
-            # 清理临时目录
-            try:
-                import shutil
-                shutil.rmtree(temp_dir)
-            except:
-                pass
-                
-        return self
-    
+                try:
+                    sys.path.remove(tpsr_dir)
+                except ValueError:
+                    pass
+            if temp_dir is not None:
+                try:
+                    import shutil
+
+                    shutil.rmtree(temp_dir)
+                except Exception:
+                    pass
+
     def predict(self, X):
         """使用模型进行预测"""
         if self.model is None:
             raise ValueError("模型尚未训练，请先调用fit方法")
-        
-        try:
-            # 如果模型有predict方法，使用它
-            if hasattr(self.model, 'predict'):
-                return self.model.predict(X, refinement_type="BFGS")
-            else:
-                raise ValueError("模型没有可用的预测功能")
-        except Exception as e:
-            print(f"预测过程中出现错误: {str(e)}")
-            raise
-    
+
+        if self._predict_fn is not None:
+            return self._predict_fn(X)
+
+        if hasattr(self.model, "predict"):
+            return self.model.predict(X, refinement_type="BFGS")
+
+        raise ValueError("当前后端不支持 predict，需要重新检查 fit 是否已完成并能解析表达式")
+
     def get_optimal_equation(self):
         """获取模型学习到的最优符号方程"""
         if self.model is None:
             raise ValueError("模型尚未训练，请先调用fit方法")
-        
-        if self.best_tree is not None:
-            # 生成方程字符串表示
-            equation_str = str(self.best_tree)
-            
-            # 替换常见的操作符使其更易读
-            replace_ops = {"add": "+", "mul": "*", "sub": "-", "pow": "**", "inv": "1/"}
-            for op, replace_op in replace_ops.items():
-                equation_str = equation_str.replace(op, replace_op)
-                
-            return equation_str
-        else:
-            return "未找到可用的方程"
-    
+        if self.best_tree is None:
+            raise ValueError("未找到可用方程")
+        return self._normalize_equation(self.best_tree)
+
     def get_total_equations(self):
-        """获取模型学习到的所有符号方程"""
+        """获取模型学习到的所有候选符号方程"""
         if self.model is None:
             raise ValueError("模型尚未训练，请先调用fit方法")
-        
-        equations = []
-        if self.all_trees:
-            # 生成每个方程的字符串表示
-            replace_ops = {"add": "+", "mul": "*", "sub": "-", "pow": "**", "inv": "1/"}
-            for tree in self.all_trees:
-                if tree is not None:
-                    equation_str = str(tree)
-                    for op, replace_op in replace_ops.items():
-                        equation_str = equation_str.replace(op, replace_op)
-                    equations.append(equation_str)
-                    
-        return equations
+        return list(self.all_trees or [])
 
-# 导出工具
-__all__ = ["TPSRRegressor"]
 
 if __name__ == "__main__":
-    # 测试代码
     import numpy as np
-    
-    # 生成示例数据
-    X = np.random.rand(100, 1) * 10 - 5  # 范围 [-5, 5]
-    y = X[:, 0]**2 * np.sin(X[:, 0])  # 二次函数乘以正弦函数
-    
-    # 创建并训练模型
-    model = TPSRRegressor(
-        backbone_model='e2e',
-        beam_size=10,
-        beam_type='sampling',
+
+    X = np.random.rand(80, 2)
+    y = 2.0 * X[:, 0] - 0.5 * X[:, 1] + 0.02 * np.random.randn(80)
+
+    reg = TPSRRegressor(
+        backbone_model="e2e",
+        beam_size=6,
         width=3,
-        rollout=3
+        num_beams=1,
+        rollout=2,
     )
-    model.fit(X, y)
-    
-    # 获取最优方程
-    equation = model.get_optimal_equation()
-    print(f"最优方程: {equation}")
-    
-    # 获取所有方程
-    equations = model.get_total_equations()
-    print(f"所有方程: {equations}")
-    
-    # 使用模型进行预测
-    predictions = model.predict(X[:5])
-    print(f"预测结果: {predictions}")
+    reg.fit(X, y)
+    print("eq:", reg.get_optimal_equation())
+    print("pred:", reg.predict(X[:3]))

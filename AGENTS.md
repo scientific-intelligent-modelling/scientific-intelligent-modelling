@@ -100,3 +100,16 @@
 - 验收脚本：`check/check_drsr.py`
   - 离线：`python check/check_drsr.py`
   - 在线：`DRSR_ALLOW_ONLINE=1 python check/check_drsr.py`
+
+## 11. TPSR 固化经验（2026-02-20）
+
+- TPSR 的 `e2e` 后端加载权重文件时有固定路径假设：`symbolicregression/weights/model.pt`，建议在 Wrapper 内强制落盘到该路径，避免 `chdir` 后找不到模型。
+  - 推荐参数：
+    - `symbolicregression_model_path`：自定义 e2e 权重路径（可使用绝对路径）。
+    - `symbolicregression_model_url`：缺失时自动从官方地址拉取。
+- TPSR 的 `nesymres` 需要 `eq_setting`/`config` 与 ckpt 同时存在，否则回退会直接报错；
+  - 推荐参数：
+    - `nesymres_cfg_path`（默认 `nesymres/jupyter/100M/config.yaml`）
+    - `nesymres_eq_setting_path`（默认 `nesymres/jupyter/100M/eq_setting.json`）
+    - `nesymres_model_path`（优先读取该值；否则按 `nesymres/weights/{10MCompleted.ckpt,10M.ckpt}` 查找）
+- `check/check_tpsr.py` 要求两个骨干闭环都成功，不再做“无权重跳过”；缺失 ckpt 直接报错并提示 `TPSR_E2E_MODEL_PATH`/`TPSR_NESYMRES_MODEL_PATH` 环境变量。
