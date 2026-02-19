@@ -145,9 +145,15 @@ class DRSRRegressor(BaseWrapper):
         if isinstance(self.params.get('api_params'), dict):
             client.kwargs.update(self.params['api_params'])
 
-        # 注入到 drsr 的 sampler 模块（共享使用）
-        sampler.set_shared_llm_client(client)
-        data_analyse_real.set_shared_llm_client(client)
+        # 注入到 drsr 的 sampler 和 analyzer。
+        # 兼容不同版本 drsr：若存在旧版本 set_shared_* 接口则使用，不存在则走现代 pipeline llm_client 注入路径。
+        for _mod in (sampler, data_analyse_real):
+            setter = getattr(_mod, "set_shared_llm_client", None)
+            if callable(setter):
+                try:
+                    setter(client)
+                except Exception:
+                    pass
         llm_class = sampler.LocalLLM
 
         # 经验文件预创建（相对 self._workdir）
@@ -161,13 +167,12 @@ class DRSRRegressor(BaseWrapper):
         # 组装配置并运行
         cls_cfg = config_lib.ClassConfig(llm_class=llm_class, sandbox_class=evaluator.LocalSandbox)
         cfg = config_lib.Config(
-            use_api=bool(self.params.get("use_api", False)),
-            api_model=str(self.params.get("api_model", "deepseek/deepseek-chat")),
             num_samplers=1,
             num_evaluators=1,
             samples_per_prompt=int(self.params.get("samples_per_prompt", 1)),
             evaluate_timeout_seconds=int(self.params.get("evaluate_timeout_seconds", 10)),
             results_root=self._workdir,
+            wall_time_limit_seconds=self.params.get("wall_time_limit_seconds"),
         )
 
         # 切换 cwd 到工作目录，确保 drsr 相对路径输出写入其中
@@ -181,6 +186,7 @@ class DRSRRegressor(BaseWrapper):
                 max_sample_nums=int(self.params.get("max_samples", 2)),
                 class_config=cls_cfg,
                 log_dir=self.params.get("log_dir") or os.path.join(self._workdir, "logs"),
+                llm_client=client,
             )
         finally:
             os.chdir(cwd_backup)
