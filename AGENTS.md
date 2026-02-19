@@ -52,3 +52,19 @@
 - 是否要优先保持原有环境与新功能兼容。
 - 是否需要同时更新 `examples`、文档与参数导出接口。
 - 超参数搜索与外部算法参数曝光时，需先定义参数白名单与安全范围。
+
+## 7. pysr 落地经验固化（本轮）
+
+- `pysr` 主链路闭环失败的高频原因是参数透传：`SymbolicRegressor` 会注入 `exp_name/exp_path/problem_name/seed`，未剥离会直接喂给 `PySRRegressor` 报错。  
+  结论：wrapper 层必须先过滤元参数，再决定是否将 `seed` 映射为 `random_state`。
+- `pysr` 与 `sklearn` 风格参数不完全一致：`n_jobs` 需映射到 `procs`。  
+  结论：wrapper 应统一适配层，将外部接口风格转成工具实际支持参数。
+- `get_total_equations` 返回值在 `pysr` 中常为 `pandas.DataFrame`，子进程落盘时会在 JSON 阶段因类型不可序列化失败。  
+  结论：wrapper 必须将方程清单标准化为可序列化字符串/字典列表。
+- `pysr` 首次运行会触发 Julia 后端编译/依赖安装，建议在闭环测试记录中将第一次耗时与警告（如 Julia 后端相关）视为正常，不与功能失败混淆。
+- `pysr` 新增修复后闭环标准建议：  
+  1) `SymbolicRegressor('pysr', ...)` 的 `fit` 成功；  
+  2) `get_optimal_equation` 成功；  
+  3) `get_total_equations` 可返回 list 并可 JSON 反序列化；  
+  4) `predict` 可正常给出数值；  
+  5) 直接实例化 `PySRRegressor` 的闭环也需通过。
