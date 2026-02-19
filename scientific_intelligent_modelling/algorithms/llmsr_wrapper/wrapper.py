@@ -90,7 +90,7 @@ class LLMSRRegressor(BaseWrapper):
         self._core: Optional[Any] = None
 
         # 实验相关元信息
-        self._exp_dir: Optional[str] = None
+        self._exp_dir: Optional[str] = self.params.pop("existing_exp_dir", None) or self.params.pop("exp_dir", None)
         self._problem_name: Optional[str] = self.params.get("problem_name")
 
     # ------------------------------------------------------------------
@@ -265,6 +265,20 @@ class LLMSRRegressor(BaseWrapper):
             seed=self.params.get("seed"),
             existing_exp_dir=self._exp_dir,
         )
+        # existing_exp_dir 模式下，LLMSRRegressor 会跳过部分元信息恢复判断，
+        # 为保证 predict/方程恢复稳定，这里显式补齐关键元信息。
+        try:
+            if os.path.isfile(os.path.join(self._exp_dir, "meta.json")):
+                with open(os.path.join(self._exp_dir, "meta.json"), "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                if core.feature_names_ is None and meta.get("feature_names"):
+                    core.feature_names_ = meta.get("feature_names")
+                if core.target_name_ is None and meta.get("target_name"):
+                    core.target_name_ = meta.get("target_name")
+        except Exception:
+            pass
+        # 避免既有现成实验被当作已拟合模型直接跳过元信息/方程恢复路径
+        core.is_fitted_ = False
         self._core = core
         return core
 
