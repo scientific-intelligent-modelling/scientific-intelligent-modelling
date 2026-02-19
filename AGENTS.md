@@ -33,6 +33,10 @@
   - 结果命令输出摘要
 - 任何脚本/模型包装器改动要给出最小运行验证。
 - 不新增依赖前，先明确是否影响 `conda` 环境一致性。
+- gplearn 闭环经验（本项目当前实例）：`_validate_data` 缺失与 `n_features_in_` 缺失属于 `sim_base` 下 sklearn/gplearn 兼容问题，修复时优先在 wrapper 内做兼容垫片，而不是在环境上盲目升级包。
+- 参数治理经验（gplearn）：框架会自动注入 `exp_name/exp_path/problem_name/seed` 这类元参数，必须在 wrapper 白名单前剥离，否则会误报为“不受支持参数”。
+- `seed` 建议通过 `random_state` 映射进入算法参数，保证子进程链路与主流程可复现性一致。
+- gplearn 闭环验证建议：固定一条最小脚本 `fit -> predict -> get_optimal_equation` + 至少一条子进程主链路 `SymbolicRegressor('gplearn', ...)`，两者都通过才算闭环完成。
 
 ## 5. 提交规范（必须）
 
