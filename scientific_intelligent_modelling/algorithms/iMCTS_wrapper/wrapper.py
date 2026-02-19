@@ -98,7 +98,11 @@ class iMCTSRegressor(BaseWrapper):
         self._best_expr_simplified = simplified_expr
         self._best_expr_vector = vec_expr
         self._eval_count = int(eval_count) if eval_count is not None else None
-        self._best_path = int(path) if path is not None else None
+        if path is not None and not isinstance(path, (list, tuple)):
+            self._best_path = int(path)
+        else:
+            # iMCTS 运行时返回 path 可能为路径列表，保留原始结构用于调试
+            self._best_path = path
 
         return self
 
@@ -164,4 +168,3 @@ class iMCTSRegressor(BaseWrapper):
         if self._eval_count is not None:
             lines.append(f"评估表达式数: {self._eval_count}")
         return "\n".join(lines)
-
