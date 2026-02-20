@@ -3,16 +3,16 @@
 	url = https://github.com/scientific-intelligent-modelling/deep-symbolic-optimization.git
 [submodule "scientific_intelligent_modelling/algorithms/tpsr_wrapper/tpsr"]
 	path = scientific_intelligent_modelling/algorithms/tpsr_wrapper/tpsr
-	url = git@gitee.com:ziwenhahaha/TPSR.git
+	url = https://github.com/scientific-intelligent-modelling/TPSR.git
 [submodule "scientific_intelligent_modelling/algorithms/e2esr_wrapper/e2esr"]
 	path = scientific_intelligent_modelling/algorithms/e2esr_wrapper/e2esr
-	url = git@gitee.com:ziwenhahaha/e2e-symbolic-regression.git
+	url = https://github.com/scientific-intelligent-modelling/e2e-symbolic-regression.git
 [submodule "scientific_intelligent_modelling/algorithms/drsr_wrapper/drsr"]
 	path = scientific_intelligent_modelling/algorithms/drsr_wrapper/drsr
-	url = git@gitee.com:ziwenhahaha/drsr.git
+	url = https://github.com/scientific-intelligent-modelling/drsr.git
 [submodule "scientific_intelligent_modelling/algorithms/llmsr_wrapper/llmsr"]
 	path = scientific_intelligent_modelling/algorithms/llmsr_wrapper/llmsr
-	url = git@gitee.com:ziwenhahaha/llm-sr
+	url = https://github.com/deep-symbolic-mathematics/LLM-SR.git
 [submodule "scientific_intelligent_modelling/algorithms/iMCTS_wrapper/MCTS-4-SR"]
 	path = scientific_intelligent_modelling/algorithms/iMCTS_wrapper/MCTS-4-SR
-	url = git@gitee.com:ziwenhahaha/MCTS-4-SR
+	url = https://github.com/PKU-CMEGroup/MCTS-4-SR.git
