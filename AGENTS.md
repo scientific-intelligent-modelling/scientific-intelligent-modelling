@@ -121,9 +121,9 @@
 - 本轮对齐结论：
   - 从“主框架可调度”口径看，当前没有新增“未接入主映射”的算法（0 个未接入）。
   - 需要继续关注的“工程一致性”点：
-    1. `operon_wrapper` 存在但未在 `toolbox_config` 注册为独立工具（当前主链路使用 `pyoperon`）；
+    1. `operon_wrapper` 与 `pyoperon` 约定为同一主工具链入口（当前主链路统一使用 `pyoperon`），不再按“独立未接入工具”单独统计；
     2. `check/check_<tool>.py` 已覆盖 10 个已映射工具；
     3. `check` 脚本名与工具名有大小写差异（如 `check_imcts.py`, `check_qlattice.py`）不影响手工执行，但建议统一风格以便脚本化扫描。
 - 建议动作：
-  - 明确是否要把 `operon` 正式作为独立入口注册（`tool_mapping` + 校验脚本 + 文档）；
-  - 若不注册，需在验收规范中明确其“辅助模块”角色，避免重复算术与误判未接入项。
+  - `operon_wrapper` 文件存在时，验收与调度统一以 `pyoperon` 为准；
+  - 若需区分仓库别名展示，请在文档中注明“operon alias=pyoperon”，避免重复算术与误判未接入项。
