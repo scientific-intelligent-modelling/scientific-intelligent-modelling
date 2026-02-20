@@ -1,13 +1,16 @@
 import argparse
 import os
+import sys
 import json
 from collections import OrderedDict
 from typing import Any, Dict, List, Tuple
 from contextlib import redirect_stdout, redirect_stderr
+from pathlib import Path
 
 import numpy as np
 
 from .srkit.regressor import SymbolicRegressor
+from .pipelines.iterative_experiment import IterativeExperimentPipeline
 
 
 def _resolve_dataset_path(path: str) -> str:
@@ -180,7 +183,7 @@ def _load_dataset(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """构建命令行解析器（极简版：只保留算法与训练数据路径）。"""
+    """构建默认的单次训练模式解析器。"""
     parser = argparse.ArgumentParser(
         prog="sim-cli",
         description="Scientific Intelligent Modelling 统一命令行入口",
@@ -241,9 +244,119 @@ def build_parser() -> argparse.ArgumentParser:
 
     return parser
 
+def build_pipeline_parser() -> argparse.ArgumentParser:
+    """构建迭代实验流水线的解析器。"""
+    parser = argparse.ArgumentParser(
+        prog="sim-cli run-pipeline",
+        description="运行迭代式符号回归实验流水线",
+    )
+    parser.add_argument(
+        "--dataset-dir",
+        "--dataset_dir",
+        dest="dataset_dir",
+        type=str,
+        required=True,
+        help="数据集目录路径 (需包含 train.csv, valid.csv, metadata.yaml 等)"
+    )
+    parser.add_argument(
+        "--tool-name",
+        "--tool_name",
+        dest="tool_name",
+        type=str,
+        required=True,
+        help="符号回归算法名称 (例如: gplearn, pysr, llmsr)"
+    )
+    parser.add_argument(
+        "--iterations",
+        type=int,
+        default=1,
+        help="迭代训练次数/循环数"
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=1314,
+        help="随机种子"
+    )
+    parser.add_argument(
+        "--params-json",
+        "--params_json",
+        dest="params_json",
+        type=str,
+        default="{}",
+        help="JSON 格式的算法参数字符串 (例如: '{"population_size": 100}')"
+    )
+    parser.add_argument(
+        "--output-path",
+        "--output_path",
+        dest="output_path",
+        type=str,
+        default="iterative_experiment_report.json",
+        help="实验报告输出路径 (JSON)"
+    )
+    return parser
+
+def run_pipeline_command(argv: List[str]) -> None:
+    """处理 run-pipeline 子命令。"""
+    parser = build_pipeline_parser()
+    args = parser.parse_args(argv)
+
+    dataset_dir = args.dataset_dir
+    tool_name = args.tool_name
+    iterations = args.iterations
+    seed = args.seed
+    output_path = args.output_path
+    
+    try:
+        params = json.loads(args.params_json)
+    except json.JSONDecodeError as e:
+        print(f"Error parsing JSON parameters: {e}")
+        sys.exit(1)
+
+    print(f"[sim-cli] Running Iterative Pipeline")
+    print(f"Dataset: {dataset_dir}")
+    print(f"Algorithm: {tool_name}")
+    print(f"Iterations: {iterations}")
+
+    try:
+        pipeline = IterativeExperimentPipeline(
+            dataset_dir=dataset_dir,
+            algorithm=tool_name,
+            params=params,
+            seed=seed
+        )
+        report = pipeline.run(num_iterations=iterations)
+
+        # 保存报告
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(report, f, indent=4, ensure_ascii=False)
+        print(f"\n[sim-cli] Experiment report saved to {output_path}")
+
+        # 简单摘要
+        print("\n--- Experiment Summary ---")
+        print(f"Total Fit Time: {report['total_fit_time']:.4f}s")
+        print(f"Final ID Test RMSE: {report['final_id_test_metrics']['rmse']:.4f}")
+        print(f"Final OOD Test RMSE: {report['final_ood_test_metrics']['rmse']:.4f}")
+
+    except Exception as e:
+        print(f"\n[sim-cli] An error occurred during the pipeline execution: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
 
 def main(argv: List[str] | None = None) -> None:
     """命令行入口函数。"""
+    if argv is None:
+        argv = sys.argv[1:]
+
+    # 检查是否为 run-pipeline 模式
+    if len(argv) > 0 and argv[0] == "run-pipeline":
+        # 剥离 "run-pipeline"，将剩余参数传给专用处理函数
+        run_pipeline_command(argv[1:])
+        return
+
+    # 默认模式：单次训练 (Backward Compatibility)
     parser = build_parser()
     # 使用 parse_known_args：只消费通用参数，其余透传给具体 wrapper 处理
     args, unknown = parser.parse_known_args(argv)

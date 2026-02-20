@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import ast
 import numbers
+import warnings
+import numpy as np
 from typing import Any, Dict, Tuple
 
 from ..base_wrapper import BaseWrapper
@@ -11,6 +13,12 @@ from ..base_wrapper import BaseWrapper
 
 class GPLearnRegressor(BaseWrapper):
     """gplearn SymbolicRegressor 的参数化适配层。"""
+    _META_PARAMS = {
+        "exp_name",
+        "exp_path",
+        "problem_name",
+        "seed",
+    }
 
     _ALLOWED_PARAMS = {
         # 主搜索参数
@@ -48,6 +56,7 @@ class GPLearnRegressor(BaseWrapper):
     )
 
     def __init__(self, **kwargs):
+        kwargs = dict(kwargs)
         # 延迟导入，避免环境问题
         self.params = self._validate_and_normalize_params(kwargs)
         self.model = None
@@ -55,6 +64,13 @@ class GPLearnRegressor(BaseWrapper):
     @classmethod
     def _validate_and_normalize_params(cls, raw_params: Dict[str, Any]) -> Dict[str, Any]:
         params: Dict[str, Any] = {}
+        raw_params = dict(raw_params)
+        seed = raw_params.pop("seed", None)
+        for key in cls._META_PARAMS:
+            raw_params.pop(key, None)
+        if "random_state" not in raw_params and seed is not None:
+            raw_params["random_state"] = int(seed)
+
         unknown = sorted(set(raw_params.keys()) - set(cls._ALLOWED_PARAMS))
         if unknown:
             allowed = ", ".join(sorted(cls._ALLOWED_PARAMS))
@@ -113,6 +129,52 @@ class GPLearnRegressor(BaseWrapper):
 
         cls._validate_mutation_probabilities(params)
         return params
+
+    @staticmethod
+    def _ensure_gplearn_sklearn_compat(symbolic_regressor_cls):
+        if hasattr(symbolic_regressor_cls, "_validate_data"):
+            return
+
+        try:
+            from sklearn.utils.validation import check_X_y, check_array
+        except Exception as e:
+            warnings.warn(f"无法引入 sklearn 兼容校验函数: {e}")
+            return
+
+        def _build_validation_kwargs(base_kwargs):
+            import inspect
+
+            validation_kwargs = dict(base_kwargs)
+            sig = inspect.signature(check_array)
+            if "ensure_all_finite" in sig.parameters:
+                validation_kwargs.pop("force_all_finite", None)
+                validation_kwargs.setdefault("ensure_all_finite", True)
+            else:
+                validation_kwargs.setdefault("force_all_finite", True)
+            return validation_kwargs
+
+        def _validate_data(self, X, y=None, reset=True, validate_separately=False, **kwargs):
+            if y is None:
+                X_checked = check_array(
+                    X,
+                    ensure_2d=True,
+                    dtype=np.float64,
+                    order="C",
+                    **_build_validation_kwargs(kwargs),
+                )
+                self.n_features_in_ = int(X_checked.shape[1])
+                return X_checked
+            X_checked, y_checked = check_X_y(
+                X,
+                y,
+                ensure_2d=True,
+                dtype=np.float64,
+                **_build_validation_kwargs(kwargs),
+            )
+            self.n_features_in_ = int(np.asarray(X_checked).shape[1])
+            return X_checked, y_checked
+
+        setattr(symbolic_regressor_cls, "_validate_data", _validate_data)
 
     @staticmethod
     def _normalize_function_set(value: Any) -> Tuple[str, ...] | None:
@@ -215,6 +277,7 @@ class GPLearnRegressor(BaseWrapper):
         )
 
         # 创建并训练模型
+        self._ensure_gplearn_sklearn_compat(GPLearnSR)
         self.model = GPLearnSR(**self.params)
         self.model.fit(X, y)
         return self

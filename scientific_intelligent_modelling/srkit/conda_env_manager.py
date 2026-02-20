@@ -5,6 +5,7 @@ import os
 import sys
 import json
 import logging
+import shutil
 from pathlib import Path
 from .config_manager import config_manager
 
@@ -39,8 +40,40 @@ class EnvManager:
             print(f"{GREEN}conda_prefix: {conda_info['conda_prefix']}{RESET}")
             return conda_info['conda_prefix']
         except Exception as e:
+            # 在某些受限环境（如系统权限限制导致conda插件不可运行）下，
+            # 使用已知路径兜底，避免工具链完全不可用
+            fallback = self._get_conda_base_path_fallback()
+            if fallback:
+                print(f"\033[93m警告: conda info获取失败，使用兜底路径 {fallback} 继续。原因: {e}\033[0m")
+                return fallback
             logger.error(f"获取conda路径失败: {e}")
             return None
+
+    def _get_conda_base_path_fallback(self):
+        """在conda info不可用时的兼容路径探测"""
+        # 1) 常见环境变量
+        env_candidates = [
+            os.environ.get("CONDA_PREFIX"),
+            os.environ.get("CONDA_ROOT"),
+            os.environ.get("CONDA_HOME"),
+            os.environ.get("MAMBA_ROOT_PREFIX"),
+        ]
+        for candidate in env_candidates:
+            if candidate:
+                base = Path(candidate).expanduser().resolve()
+                if base.joinpath("bin", "conda").exists():
+                    return str(base)
+                if base.parent.name == "envs":
+                    return str(base.parent.parent)
+
+        # 2) 从conda可执行文件反推
+        conda_exe = shutil.which("conda")
+        if conda_exe:
+            conda_exe = Path(conda_exe).resolve()
+            base = conda_exe.parent.parent
+            if base.joinpath("bin", "activate").exists() or base.joinpath("bin", "conda").exists():
+                return str(base)
+        return None
         
     def check_conda_installed(self):
         """检查是否安装Conda并可在PATH中使用"""

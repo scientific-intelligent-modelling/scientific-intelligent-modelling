@@ -239,7 +239,19 @@ def handle_fit(regressor_class, command):
     y = np.array(data['y'])
     
     # 创建回归器并训练
-    regressor = regressor_class(**params)  # 使用动态获取的类
+    regressor = None
+    serialized_model_from_command = command.get('serialized_model')
+
+    if serialized_model_from_command and hasattr(regressor_class, 'deserialize'):
+        # 尝试反序列化以从之前的状态恢复
+        regressor = regressor_class.deserialize(serialized_model_from_command)
+        # 注意：这里的 `params` 参数是本次 fit 调用的，而不是初始化的。
+        # 如果具体的算法包装器需要在反序列化后更新参数（例如增加迭代次数），
+        # 则需要在包装器内部的 `fit` 方法中处理。
+        # 我们这里假设反序列化会恢复完整的模型状态，并且 `fit` 方法能基于此状态继续训练。
+    else:
+        # 第一次拟合，或没有提供序列化模型，初始化一个新的回归器
+        regressor = regressor_class(**params)
     regressor.fit(X, y)
     
     # 序列化模型状态

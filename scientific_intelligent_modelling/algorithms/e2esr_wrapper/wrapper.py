@@ -16,6 +16,7 @@ class E2ESRRegressor(BaseWrapper):
                  max_input_points=200, 
                  n_trees_to_refine=100, 
                  rescale=True,
+                 force_cpu=True,
                  **kwargs):
         """
         初始化E2ESR回归器
@@ -32,6 +33,7 @@ class E2ESRRegressor(BaseWrapper):
             'max_input_points': max_input_points,
             'n_trees_to_refine': n_trees_to_refine,
             'rescale': rescale,
+            'force_cpu': force_cpu,
             **kwargs
         }
         self.model = None
@@ -71,11 +73,24 @@ class E2ESRRegressor(BaseWrapper):
                 print(f"模型已保存到 {self.model_path}")
             
             # 加载模型
-            if not torch.cuda.is_available():
+            force_cpu = bool(self.params.get('force_cpu', True))
+
+            # 默认优先 CPU，避免不同机器 CUDA 兼容性问题（例如驱动/算力不一致导致加载失败）
+            if force_cpu:
                 self.model = torch.load(self.model_path, map_location=torch.device('cpu'))
+                self.model = self.model.cpu()
             else:
-                self.model = torch.load(self.model_path)
-                self.model = self.model.cuda()
+                # 保留旧行为：有 CUDA 时优先上卡，未命中则自动回退 CPU
+                try:
+                    if not torch.cuda.is_available():
+                        self.model = torch.load(self.model_path, map_location=torch.device('cpu'))
+                    else:
+                        self.model = torch.load(self.model_path, map_location=torch.device('cuda'))
+                        self.model = self.model.cuda()
+                except Exception:
+                    # 兼容某些环境的 CUDA 无法匹配时回退 CPU（例如显卡能力不匹配）
+                    self.model = torch.load(self.model_path, map_location=torch.device('cpu'))
+                    self.model = self.model.cpu()
             
             print(f"模型已成功加载！设备: {self.model.device if hasattr(self.model, 'device') else 'cpu'}")
             
@@ -96,11 +111,27 @@ class E2ESRRegressor(BaseWrapper):
             # 如果模型尚未加载，报错
             if self.model is None:
                 raise ValueError("模型未加载成功，请检查模型路径或网络连接")
+
+            allowed_regressor_params = {
+                "max_input_points",
+                "max_number_bags",
+                "stop_refinement_after",
+                "n_trees_to_refine",
+                "rescale",
+            }
+            regressor_kwargs = {
+                k: v
+                for k, v in self.params.items()
+                if k in allowed_regressor_params
+            }
+            unknown_params = [k for k in self.params if k not in allowed_regressor_params and k != "force_cpu"]
+            if unknown_params:
+                # 剔除 SymbolicRegressor 注入的元参数，避免 __init__ 透传失败
+                pass
             
-            # 创建回归器
             self.regressor = SymbolicTransformerRegressor(
                 model=self.model,
-                **self.params
+                **regressor_kwargs
             )
             
             # 训练回归器

@@ -127,3 +127,16 @@
 - 建议动作：
   - `operon_wrapper` 文件存在时，验收与调度统一以 `pyoperon` 为准；
   - 若需区分仓库别名展示，请在文档中注明“operon alias=pyoperon”，避免重复算术与误判未接入项。
+
+## 13. 环境隔离与主控关系固化（2026-02-20）
+
+- 主控流程可运行在 `sim` 或 `base`（由用户当前 Python 运行环境决定），但**算法执行仍按 `toolbox_config.json` 映射走各自原生子环境**，实现工具隔离。
+- 当前调度映射恢复为分隔环境策略：
+  - `gplearn/pysr/pyoperon` -> `sim_base`
+  - `llmsr/drsr` -> `sim_llm`
+  - `dso` -> `sim_dso`
+  - `tpsr` -> `sim_tpsr`
+  - `e2esr` -> `sim_e2esr`
+  - `QLattice` -> `sim_qLattice`
+  - `iMCTS` -> `sim_iMCTS`
+- 该设计与“主环境统一调用入口、子环境隔离执行”一致；每次环境变更需同步 `envs_config.json` + `toolbox_config.json`，并补充对应 check 脚本验收。

@@ -5,6 +5,7 @@ import json
 import tempfile
 import subprocess
 import time
+from pathlib import Path
 from datetime import datetime, timezone
 import numpy as np
 
@@ -112,7 +113,8 @@ class SymbolicRegressor:
             'action': 'fit',
             'data': {'X': X, 'y': y},
             'params': self.params,
-            'tool_name': self.tool_name
+            'tool_name': self.tool_name,
+            'serialized_model': self.serialized_model  # 传递现有模型状态以支持继续训练
         }
         
         # 标记实验进入 running
@@ -328,6 +330,20 @@ class SymbolicRegressor:
         try:
             # 执行子进程（无缓冲），并实时转发其 stdout/stderr 到当前进程
             env = os.environ.copy()
+            # 防止 julia/pip 等库在子进程内错误读取主环境CONDA_PREFIX，导致写权限到基环境
+            # 统一将 CONDA_PREFIX 指向当前工具环境的真实目录，提升跨环境一致性
+            try:
+                py_path = env_manager.get_env_python(self.env_name)
+                if py_path:
+                    env["CONDA_PREFIX"] = str(Path(py_path).resolve().parent.parent)
+            except Exception:
+                pass
+            # 避免 julia/pythoncall 在受限环境尝试在只读 conda 环境中创建目录
+            env.setdefault(
+                "PYTHON_JULIAPKG_PROJECT",
+                str(Path(tempfile.gettempdir()) / f"pyjuliapkg_{self.env_name}")
+            )
+            # 如果工具不依赖 julia，此注入不会产生副作用
             env.setdefault('PYTHONUNBUFFERED', '1')
             proc = subprocess.Popen(
                 [python_path, '-u', runner_script, '--input', cmd_path, '--output', result_path],

@@ -74,11 +74,13 @@
         "conda-forge"
       ],
       "pip_packages": [
-        "numpy"
+        "numpy",
+        "protobuf==3.20.3",
+        "tensorflow==1.14.0",
+        "tensorflow-estimator==1.14.0"
       ],
       "post_install_commands": [
-        "pip install -e .",
-        "pip install -e ./scientific_intelligent_modelling/algorithms/dso_wrapper/dso/dso"
+        "pip install -e ."
       ]
     },
     "sim_tpsr": {
