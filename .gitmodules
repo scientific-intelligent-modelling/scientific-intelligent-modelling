@@ -15,4 +15,4 @@
 	url = https://github.com/deep-symbolic-mathematics/LLM-SR.git
 [submodule "scientific_intelligent_modelling/algorithms/iMCTS_wrapper/MCTS-4-SR"]
 	path = scientific_intelligent_modelling/algorithms/iMCTS_wrapper/MCTS-4-SR
-	url = https://github.com/PKU-CMEGroup/MCTS-4-SR.git
+	url = https://github.com/ziwenhahaha/MCTS-4-SR.git
