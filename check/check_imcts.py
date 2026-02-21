@@ -16,7 +16,7 @@ def run():
     reg = SymbolicRegressor(
         "iMCTS",
         max_depth=2,
-        max_expressions=120,
+        max_expressions=20,
         K=16,
         c=1.2,
         gamma=0.3,

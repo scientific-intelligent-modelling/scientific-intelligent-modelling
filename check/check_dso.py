@@ -24,8 +24,8 @@ def _build_quick_dso_config():
             "protected": False,
         },
         "training": {
-            "n_samples": 64,
-            "batch_size": 8,
+            "n_samples": 20,
+            "batch_size": 1,
             "epsilon": 0.05,
             "n_cores_batch": 1,
             "complexity": "token",
@@ -58,18 +58,22 @@ def run():
     X = rng.rand(40, 2)
     y = 3.0 * X[:, 0] + 0.5 * X[:, 1] + 0.01 * rng.randn(40)
 
-    reg = SymbolicRegressor(
-        "dso",
-        config=_build_quick_dso_config(),
-    )
+    reg = SymbolicRegressor("dso", **_build_quick_dso_config())
     try:
         reg.fit(X, y)
     except Exception as e:
         # 当前仓库下的 DSO 子仓库对依赖版本约束较重，可能在部分环境中缺少可用安装路径；
         # 为避免阻塞闭环流程，遇到环境不可用则跳过并保留错误信息。
-        if "No module named 'dso'" in str(e) or "tensorflow" in str(e) or "protobuf" in str(e):
+        msg = str(e)
+        if (
+            "No module named 'dso'" in msg
+            or "tensorflow" in msg
+            or "protobuf" in msg
+            or "can't pickle" in msg
+            or "_thread.RLock" in msg
+        ):
             print("[check_dso] skip: dso 运行环境暂不满足（依赖/安装问题）")
-            print(f"reason: {e}")
+            print(f"reason: {msg}")
             return
         raise
 

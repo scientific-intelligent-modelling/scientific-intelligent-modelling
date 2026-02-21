@@ -15,7 +15,7 @@ def run():
 
     reg = SymbolicRegressor(
         "pyoperon",
-        niterations=5,
+        niterations=20,
         population_size=20,
         n_threads=1,
         random_state=42,

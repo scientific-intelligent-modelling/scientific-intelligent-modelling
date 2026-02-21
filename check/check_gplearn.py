@@ -17,7 +17,7 @@ def run():
     reg = SymbolicRegressor(
         "gplearn",
         n_jobs=1,
-        generations=6,
+        generations=20,
         population_size=20,
         tournament_size=3,
         function_set="add,sub,mul,div",

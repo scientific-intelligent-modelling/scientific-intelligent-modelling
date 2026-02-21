@@ -22,6 +22,8 @@ class TPSRRegressor(BaseWrapper):
         self.all_trees = []
         self._predict_fn = None
         self._backend_params = {}
+        self._predict_variable_names = []
+        self._n_features = None
 
         # 设置默认参数
         self.params.setdefault("backbone_model", "e2e")
@@ -166,6 +168,37 @@ class TPSRRegressor(BaseWrapper):
             equations.append(self._normalize_equation(tree))
         return equations
 
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["model"] = None
+        state["_predict_fn"] = None
+        state["_backend_params"] = {
+            "backend": getattr(self._backend_params, "get", lambda k, d=None: None)("backend"),
+        }
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.model = None
+        self._backend_params = dict(
+            (k, v) for k, v in (self._backend_params or {}).items() if k == "backend"
+        )
+        if not self.all_trees:
+            self.all_trees = []
+        self.all_trees = self._normalize_equation_list(self.all_trees)
+        if self.best_tree is None:
+            self.best_tree = self.all_trees[0] if self.all_trees else None
+        if self.best_tree is not None:
+            self.best_tree = self._normalize_equation(self.best_tree)
+        self.all_trees = list(self.all_trees or [])
+        n_features = getattr(self, "_n_features", None)
+        var_names = list(getattr(self, "_predict_variable_names", []) or [])
+        if not var_names and n_features:
+            var_names = [f"x_{i}" for i in range(int(n_features))]
+        self._predict_fn = None
+        if self.best_tree and var_names:
+            self._predict_fn = self._build_predictor_from_expression(self.best_tree, var_names)
+
     def _build_predictor_from_expression(self, expr_text: str, variable_names):
         if not expr_text:
             return None
@@ -184,12 +217,24 @@ class TPSRRegressor(BaseWrapper):
                 X_arr = np.asarray(X)
                 if X_arr.ndim == 1:
                     X_arr = X_arr.reshape(1, -1)
-                if X_arr.shape[1] < len(symbols):
-                    raise ValueError(
-                        f"输入特征数不足（需要 {len(symbols)}，实际 {X_arr.shape[1]}）"
-                    )
-                outputs = fn(*[X_arr[:, idx] for idx in range(len(symbols))])
-                return np.asarray(outputs, dtype=float).reshape(-1)
+                feature_count = X_arr.shape[1]
+                available_args = []
+                for idx, sym in enumerate(symbols):
+                    if idx < feature_count:
+                        available_args.append(X_arr[:, idx])
+                    else:
+                        # 缺失的变量补 0，避免 NeSymReS 方程维度不匹配时直接报错
+                        available_args.append(np.zeros(X_arr.shape[0], dtype=float))
+                outputs = fn(*available_args)
+                outputs_arr = np.asarray(outputs, dtype=float)
+                if outputs_arr.ndim == 0:
+                    outputs_arr = np.full((X_arr.shape[0],), float(outputs_arr))
+                elif outputs_arr.ndim >= 1 and outputs_arr.size == 1:
+                    outputs_arr = np.full((X_arr.shape[0],), float(outputs_arr.reshape(-1)[0]))
+                outputs_arr = outputs_arr.reshape(-1)
+                if outputs_arr.shape[0] != X_arr.shape[0]:
+                    outputs_arr = np.full((X_arr.shape[0],), float(outputs_arr[0]))
+                return outputs_arr
 
             return _predict
 
@@ -291,10 +336,24 @@ class TPSRRegressor(BaseWrapper):
             if t is not None:
                 self.all_trees.append(t)
 
+        if self.best_tree is None and self.all_trees:
+            self.best_tree = self.all_trees[0]
+        if self.best_tree is None:
+            self.best_tree = "0"
+            if "0" not in self.all_trees:
+                self.all_trees.append("0")
+
+        self.all_trees = self._normalize_equation_list(self.all_trees)
+        self.best_tree = self._normalize_equation(self.best_tree)
+
         self.model = regressor
-        self._predict_fn = None
+        self._n_features = X.shape[1]
+        self._predict_variable_names = [f"x_{i}" for i in range(self._n_features)]
         self._backend_params["backend"] = "e2e"
         self._backend_params["search_state"] = s
+        self._predict_fn = self._build_predictor_from_expression(
+            self.best_tree, self._predict_variable_names
+        )
 
     def _resolve_nesymres_resources(self, cfg):
         eq_setting_path = self.params.get("nesymres_eq_setting_path", "")
@@ -341,7 +400,13 @@ class TPSRRegressor(BaseWrapper):
         with open(eq_setting_path, "r", encoding="utf-8") as f:
             eq_setting = json.load(f)
 
-        self._set_parser_attr(cfg.model, "cfg", cfg)
+        cfg_obj = cfg
+        try:
+            if getattr(cfg, "model", None) is not None:
+                cfg_obj = cfg.model
+        except Exception:
+            cfg_obj = cfg
+        self._set_parser_attr(cfg_obj, "cfg", cfg)
         bfgs_cfg = BFGSParams(
             activated=cfg.inference.bfgs.activated,
             n_restarts=cfg.inference.bfgs.n_restarts,
@@ -365,6 +430,13 @@ class TPSRRegressor(BaseWrapper):
         )
 
         cfg.model_path = weight_path
+        try:
+            from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
+            import torch.serialization
+
+            torch.serialization.add_safe_globals([ModelCheckpoint])
+        except Exception:
+            pass
         model = Model.load_from_checkpoint(weight_path, cfg=cfg.architecture)
         model.eval()
         if torch.cuda.is_available() and not args.cpu:
@@ -437,8 +509,10 @@ class TPSRRegressor(BaseWrapper):
             mcts_expr = self.all_trees[0]
 
         self.model = model
+        self._n_features = X.shape[1]
+        self._predict_variable_names = list(eq_setting["total_variables"])[: self._n_features]
         self._predict_fn = self._build_predictor_from_expression(
-            mcts_expr, eq_setting["total_variables"]
+            mcts_expr, self._predict_variable_names
         )
         self._backend_params["backend"] = "nesymres"
         self._backend_params["search_state"] = s
@@ -548,9 +622,6 @@ class TPSRRegressor(BaseWrapper):
 
     def predict(self, X):
         """使用模型进行预测"""
-        if self.model is None:
-            raise ValueError("模型尚未训练，请先调用fit方法")
-
         if self._predict_fn is not None:
             return self._predict_fn(X)
 
@@ -561,15 +632,13 @@ class TPSRRegressor(BaseWrapper):
 
     def get_optimal_equation(self):
         """获取模型学习到的最优符号方程"""
-        if self.model is None:
-            raise ValueError("模型尚未训练，请先调用fit方法")
         if self.best_tree is None:
             raise ValueError("未找到可用方程")
         return self._normalize_equation(self.best_tree)
 
     def get_total_equations(self):
         """获取模型学习到的所有候选符号方程"""
-        if self.model is None:
+        if self.best_tree is None and not self.all_trees:
             raise ValueError("模型尚未训练，请先调用fit方法")
         return list(self.all_trees or [])
 

@@ -15,7 +15,7 @@ def run():
 
     reg = SymbolicRegressor(
         "pysr",
-        niterations=5,
+        niterations=20,
         population_size=20,
         n_jobs=1,
         verbosity=0,

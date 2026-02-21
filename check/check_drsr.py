@@ -100,7 +100,7 @@ def run_online_smoke():
         background="y 与 x0, x1 的线性关系：y = 2*x0 - 3*x1",
         use_api=True,
         api_model="blt/gpt-4o-mini",
-        max_samples=1,
+        max_samples=20,
         samples_per_prompt=1,
         evaluate_timeout_seconds=10,
     )

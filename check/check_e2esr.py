@@ -17,6 +17,7 @@ def run():
         "e2esr",
         force_cpu=True,
         n_trees_to_refine=3,
+        stop_refinement_after=20,
         max_input_points=120,
     )
     reg.fit(X, y)

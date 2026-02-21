@@ -1,16 +1,24 @@
 # tools/gplearn_wrapper/wrapper.py
 import os
 import sys
-import pickle
-import base64
+from typing import Any, Dict
+
 import numpy as np
-from ..base_wrapper import BaseWrapper 
+from sympy import sympify, lambdify
+from sympy.core.sympify import SympifyError
+
+from ..base_wrapper import BaseWrapper
 
 class DSORegressor(BaseWrapper):
     def __init__(self, **kwargs):
         # 延迟导入，避免环境问题
         self.params = kwargs
         self.model = None
+        self._dso_equation = None
+        self._dso_expression = None
+        self._dso_pred_fn = None
+        self._dso_var_count = 0
+        self._dso_input_indices = []
     
     def fit(self, X, y):
         # 优先使用子仓库源码，避免环境可复现性差异导致的 editable 安装问题
@@ -32,16 +40,96 @@ class DSORegressor(BaseWrapper):
         # 创建并训练模型
         self.model = DeepSymbolicRegressor(config=self.params)
         self.model.fit(X, y)
+        self._cache_post_fit_state()
         return self
+
+    def _cache_post_fit_state(self):
+        if self.model is None or not hasattr(self.model, "program_"):
+            self._dso_equation = None
+            self._dso_expression = None
+            self._dso_pred_fn = None
+            self._dso_var_count = 0
+            return
+
+        self._dso_expression = str(self.model.program_.sympy_expr)
+        self._dso_equation = str(self.model.program_.pretty())
+        # 仅在运行时可进行反序列化后的预测，不在主进程训练过程里触发额外解析成本
+        self._build_predict_fn_from_equation(self._dso_expression)
+
+    def _build_predict_fn_from_equation(self, equation: str):
+        try:
+            expr = sympify(equation.strip(), locals={"x": None})
+        except (SympifyError, TypeError, SyntaxError, ValueError):
+            self._dso_var_count = 0
+            self._dso_pred_fn = None
+            return
+
+        raw_indices = []
+        for token in expr.free_symbols:
+            name = str(token)
+            if not name.startswith("x"):
+                continue
+            suffix = name[1:]
+            if suffix.isdigit():
+                raw_indices.append(int(suffix))
+
+        raw_indices = sorted(set(raw_indices))
+        if not raw_indices:
+            self._dso_var_count = 0
+            self._dso_pred_fn = None
+            self._dso_input_indices = []
+            return
+
+        one_based = 0 not in raw_indices
+        input_indices = []
+        for idx in raw_indices:
+            mapped = idx - 1 if one_based else idx
+            if mapped < 0:
+                self._dso_var_count = 0
+                self._dso_pred_fn = None
+                self._dso_input_indices = []
+                return
+            input_indices.append(mapped)
+
+        self._dso_var_count = max(input_indices) + 1
+        self._dso_pred_fn = None
+        self._dso_input_indices = input_indices
+
+        if self._dso_var_count <= 0:
+            self._dso_input_indices = []
+            return
+
+        symbols = [f"x{idx}" for idx in raw_indices]
+        self._dso_pred_fn = lambdify(symbols, expr, modules="numpy")
+
+    def _predict_with_cached_fn(self, X):
+        if self._dso_pred_fn is None:
+            raise RuntimeError("DSO 反序列化模型不包含可执行方程，无法继续执行 predict")
+
+        x_arr = np.asarray(X, dtype=float)
+        if x_arr.ndim == 1:
+            x_arr = x_arr.reshape(1, -1)
+
+        n_features = x_arr.shape[1] if x_arr.ndim > 1 else 0
+        if n_features < self._dso_var_count:
+            raise ValueError("DSO 反序列化状态下的输入特征维度不足")
+
+        args = [x_arr[:, idx] for idx in self._dso_input_indices]
+        y = self._dso_pred_fn(*args)
+        return np.asarray(y, dtype=float).reshape(-1)
     
     def predict(self, X):
         if self.model is None:
+            if self._dso_pred_fn is not None:
+                return self._predict_with_cached_fn(X)
             raise ValueError("模型尚未训练，请先调用fit方法")
         return self.model.predict(X)
     
     def get_optimal_equation(self):
         """返回模型拟合的数学方程"""
         if self.model is None:
+            if self._dso_equation is not None:
+                return self._dso_equation
             raise ValueError("模型尚未训练，请先调用fit方法")
         
         # 返回模型的字符串表示，这就是拟合的方程
@@ -52,8 +140,35 @@ class DSORegressor(BaseWrapper):
             获取模型学习到的所有符号方程
         """
         if self.model is None:
+            if self._dso_equation is not None:
+                return [self._dso_equation]
             raise ValueError("模型尚未训练，请先调用fit方法")
         
         # 返回模型的字符串表示，这就是拟合的方程
         return [str(self.model.program_.pretty())]
+
+    def __getstate__(self) -> Dict[str, Any]:
+        state = self.__dict__.copy()
+        # 规避 RLock/进程上下文等不可 pickle 对象，保留方程文本供反序列化恢复预测
+        if state.get("model") is not None:
+            self._cache_post_fit_state()
+        state["model"] = None
+        state["_dso_input_indices"] = self._dso_input_indices
+        state["_dso_pred_fn"] = None
+        return state
+
+    def __setstate__(self, state: Dict[str, Any]):
+        self.__dict__.update(state)
+        if self.model is not None:
+            self.model = None
+        if self._dso_expression:
+            self._build_predict_fn_from_expression()
+            return
+        if self._dso_equation:
+            self._build_predict_fn_from_equation(self._dso_equation)
+
+    def _build_predict_fn_from_expression(self):
+        if not self._dso_expression:
+            return
+        self._build_predict_fn_from_equation(self._dso_expression)
     

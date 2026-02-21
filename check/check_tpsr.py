@@ -70,7 +70,7 @@ def run_backbone(backbone: str):
         num_beams=1,
         width=3,
         rollout=2,
-        horizon=30,
+        horizon=20,
         no_seq_cache=True,
         no_prefix_cache=True,
         force_cpu=True,

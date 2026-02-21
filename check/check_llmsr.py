@@ -82,7 +82,7 @@ def run_online_smoke():
         "llmsr",
         problem_name="ci_llmsr_check",
         background="y 与 x0,x1 的线性关系：y = 2*x0 - 3*x1",
-        niterations=2,
+        niterations=20,
         samples_per_iteration=1,
     )
 

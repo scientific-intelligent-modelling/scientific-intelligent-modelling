@@ -15,7 +15,7 @@ def run():
 
     reg = SymbolicRegressor(
         "QLattice",
-        n_epochs=5,
+        n_epochs=20,
     )
     reg.fit(X, y)
 
