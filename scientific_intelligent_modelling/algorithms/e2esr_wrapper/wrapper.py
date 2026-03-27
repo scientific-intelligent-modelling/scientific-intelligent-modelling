@@ -10,6 +10,17 @@ import torch
 from ..base_wrapper import BaseWrapper 
 
 class E2ESRRegressor(BaseWrapper):
+    @staticmethod
+    def _resolve_default_model_path(current_dir):
+        candidates = [
+            os.path.join(current_dir, "model.pt"),
+            os.path.join(current_dir, "e2esr", "model1.pt"),
+        ]
+        for candidate in candidates:
+            if os.path.isfile(candidate):
+                return candidate
+        return candidates[0]
+
     def __init__(self, 
                  model_path=None, 
                  model_url="https://dl.fbaipublicfiles.com/symbolicregression/model1.pt",
@@ -43,12 +54,13 @@ class E2ESRRegressor(BaseWrapper):
         # 获取e2esr模块的路径，添加到系统路径中
         current_dir = os.path.dirname(os.path.abspath(__file__))
         self.e2esr_path = os.path.join(current_dir, "e2esr")
-        sys.path.append(self.e2esr_path)
+        if self.e2esr_path not in sys.path:
+            sys.path.insert(0, self.e2esr_path)
         
         # 如果提供了模型路径，则使用该路径，否则使用默认路径
         if model_path is None:
-            # 默认模型路径修改为当前包装器目录下的model.pt文件
-            model_path = os.path.join(current_dir, "model.pt")
+            # 优先使用包装器目录下的 model.pt，其次兼容历史的 e2esr/model1.pt
+            model_path = self._resolve_default_model_path(current_dir)
         
         self.model_path = model_path
         self.model_url = model_url
@@ -63,6 +75,9 @@ class E2ESRRegressor(BaseWrapper):
             return
             
         try:
+            fallback_model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "e2esr", "model1.pt")
+            if not os.path.isfile(self.model_path) and os.path.isfile(fallback_model_path):
+                self.model_path = fallback_model_path
             # 检查模型文件是否存在，不存在则从URL下载
             if not os.path.isfile(self.model_path):
                 print(f"从 {self.model_url} 下载模型...")

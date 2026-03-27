@@ -52,6 +52,14 @@ class TPSRRegressor(BaseWrapper):
         self.params.setdefault("symbolicregression_model_path", os.path.join("symbolicregression", "weights", "model.pt"))
         self.params.setdefault("symbolicregression_model_url", "https://dl.fbaipublicfiles.com/symbolicregression/model1.pt")
 
+    def _runtime_import_paths(self):
+        root_dir = os.path.dirname(os.path.abspath(__file__))
+        tpsr_dir = os.path.join(root_dir, "tpsr")
+        return [
+            tpsr_dir,
+            os.path.join(tpsr_dir, "nesymres", "src"),
+        ]
+
     def _set_parser_attr(self, args, name: str, value):
         if value is None:
             return
@@ -533,11 +541,14 @@ class TPSRRegressor(BaseWrapper):
         temp_dir = None
         original_cwd = None
         tpsr_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tpsr")
+        inserted_paths = []
 
         # 导入必要的模块
         try:
-            if tpsr_dir not in sys.path:
-                sys.path.insert(0, tpsr_dir)
+            for import_path in self._runtime_import_paths():
+                if os.path.isdir(import_path) and import_path not in sys.path:
+                    sys.path.insert(0, import_path)
+                    inserted_paths.append(import_path)
             original_cwd = os.getcwd()
             os.chdir(tpsr_dir)
 
@@ -607,11 +618,12 @@ class TPSRRegressor(BaseWrapper):
         finally:
             if original_cwd is not None:
                 os.chdir(original_cwd)
-            if tpsr_dir in sys.path:
-                try:
-                    sys.path.remove(tpsr_dir)
-                except ValueError:
-                    pass
+            for import_path in reversed(inserted_paths):
+                if import_path in sys.path:
+                    try:
+                        sys.path.remove(import_path)
+                    except ValueError:
+                        pass
             if temp_dir is not None:
                 try:
                     import shutil

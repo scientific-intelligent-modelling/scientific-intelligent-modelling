@@ -3,7 +3,7 @@ import os
 import sys
 import json
 from collections import OrderedDict
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 
@@ -108,7 +108,7 @@ def _parse_unknown_to_kwargs(unknown: List[str]) -> Dict[str, Any]:
 
 def _load_dataset(
     path: str,
-    target_column: str | None = None,
+    target_column: Optional[str] = None,
     delimiter: str = ",",
     has_header: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -284,7 +284,7 @@ def build_pipeline_parser() -> argparse.ArgumentParser:
         dest="params_json",
         type=str,
         default="{}",
-        help="JSON 格式的算法参数字符串 (例如: '{"population_size": 100}')"
+        help='JSON 格式的算法参数字符串 (例如: \'{"population_size": 100}\')'
     )
     parser.add_argument(
         "--output-path",
@@ -345,7 +345,7 @@ def run_pipeline_command(argv: List[str]) -> None:
         sys.exit(1)
 
 
-def main(argv: List[str] | None = None) -> None:
+def main(argv: Optional[List[str]] = None) -> None:
     """命令行入口函数。"""
     if argv is None:
         argv = sys.argv[1:]

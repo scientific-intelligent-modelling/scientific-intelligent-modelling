@@ -10,15 +10,81 @@ from sympy.core.sympify import SympifyError
 from ..base_wrapper import BaseWrapper
 
 class DSORegressor(BaseWrapper):
+    _DEFAULT_EXPERIMENT = {
+        "logdir": None,
+    }
+    _DEFAULT_TASK = {
+        "task_type": "regression",
+        "function_set": ["add", "sub", "mul", "div"],
+        "metric": "inv_nrmse",
+        "metric_params": [1.0],
+        "threshold": 1e-12,
+        "protected": False,
+    }
+    _DEFAULT_TRAINING = {
+        "batch_size": 1,
+        "n_samples": 20,
+        "epsilon": 0.05,
+    }
+    _EXPERIMENT_KEYS = {"logdir", "exp_name", "seed"}
+    _TASK_KEYS = {"task_type", "function_set", "metric", "metric_params", "threshold", "protected"}
+    _TRAINING_KEYS = {"batch_size", "n_samples", "epsilon"}
+
     def __init__(self, **kwargs):
         # 延迟导入，避免环境问题
-        self.params = kwargs
+        self.params = self._build_config(kwargs)
         self.model = None
         self._dso_equation = None
         self._dso_expression = None
         self._dso_pred_fn = None
         self._dso_var_count = 0
         self._dso_input_indices = []
+
+    @classmethod
+    def _build_config(cls, raw_kwargs):
+        params = dict(raw_kwargs or {})
+        experiment = dict(cls._DEFAULT_EXPERIMENT)
+        task = dict(cls._DEFAULT_TASK)
+        training = dict(cls._DEFAULT_TRAINING)
+
+        for key in list(params.keys()):
+            value = params[key]
+            if key == "experiment" and isinstance(value, dict):
+                experiment.update(value)
+                params.pop(key)
+            elif key == "task" and isinstance(value, dict):
+                task.update(value)
+                params.pop(key)
+            elif key == "training" and isinstance(value, dict):
+                training.update(value)
+                params.pop(key)
+
+        for key in list(params.keys()):
+            if key in cls._EXPERIMENT_KEYS:
+                experiment[key] = params.pop(key)
+            elif key in cls._TASK_KEYS:
+                task[key] = params.pop(key)
+            elif key in cls._TRAINING_KEYS:
+                training[key] = params.pop(key)
+
+        exp_path = params.pop("exp_path", None)
+        exp_name = params.pop("exp_name", None)
+        problem_name = params.pop("problem_name", None)
+        seed = params.pop("seed", None)
+
+        if seed is not None and "seed" not in experiment:
+            experiment["seed"] = int(seed)
+        if exp_name and "exp_name" not in experiment:
+            experiment["exp_name"] = str(exp_name)
+        if exp_path and experiment.get("logdir") is None:
+            run_name = exp_name or problem_name or "dso"
+            experiment["logdir"] = os.path.join(str(exp_path), str(run_name))
+
+        config = dict(params)
+        config["experiment"] = experiment
+        config["task"] = task
+        config["training"] = training
+        return config
     
     def fit(self, X, y):
         # 优先使用子仓库源码，避免环境可复现性差异导致的 editable 安装问题

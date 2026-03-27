@@ -7,13 +7,14 @@ import subprocess
 import time
 from pathlib import Path
 from datetime import datetime, timezone
+from typing import Optional
 import numpy as np
 
 from .config_manager import config_manager
 from .conda_env_manager import env_manager
 
 class SymbolicRegressor:
-    def __init__(self, tool_name, problem_name: str | None = None, experiments_dir: str | None = None, seed: int = 1314, **kwargs):
+    def __init__(self, tool_name, problem_name: Optional[str] = None, experiments_dir: Optional[str] = None, seed: int = 1314, **kwargs):
         """
         初始化符号回归器
         

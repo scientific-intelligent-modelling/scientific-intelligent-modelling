@@ -11,7 +11,7 @@ authors = [
     {name = "Ziwen Zhang", email = "244824379@qq.com"},
     {name = "Kai Li", email = "kai.li@ia.ac.cn"}
 ]
-license = "gpl-3.0"
+license = {text = "GPL-3.0-or-later"}
 keywords = ["modeling", "gplearn", "integration", "pytorch"]
 classifiers = [
     "Programming Language :: Python :: 3",
