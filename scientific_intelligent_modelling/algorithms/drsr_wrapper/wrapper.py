@@ -12,6 +12,7 @@ import numpy as np
 
 from ..base_wrapper import BaseWrapper
 from scientific_intelligent_modelling.srkit.llm import ClientFactory, parse_provider_model
+from scientific_intelligent_modelling.srkit.spec_builder import build_specification as build_shared_specification
 from typing import Tuple
 try:
     # 可选：用于参数拟合（与评估一致的 BFGS）
@@ -22,6 +23,7 @@ except Exception:
 
 
 class DRSRRegressor(BaseWrapper):
+    _DEFAULT_MAX_PARAMS = 12
     """
     DRSR 封装改造：
     - 优先改造"采样用的 LLM API"到统一的 llm.ClientFactory，其他执行逻辑尽量保持不变。
@@ -221,11 +223,11 @@ class DRSRRegressor(BaseWrapper):
         self._best_params = None
         try:
             print("[DRSR Wrapper] 采用内置默认方程，正在拟合参数...")
-            self._best_params = self._fit_params(X, y, n_params=10, n_starts=3)
+            self._best_params = self._fit_params(X, y, n_params=self._max_params(), n_starts=3)
             print("[DRSR Wrapper] 参数拟合完成")
         except Exception as e:
             print(f"[DRSR Wrapper] 参数拟合失败: {e}")
-            self._best_params = np.ones(10)
+            self._best_params = np.ones(self._max_params())
         
         self.model_ready = True
         return self
@@ -414,13 +416,13 @@ class DRSRRegressor(BaseWrapper):
         elif _SCIPY_OK:
             try:
                 print("[DRSR Wrapper] 未找到训练期参数，正在重新拟合...")
-                self._best_params = self._fit_params(X, y, n_params=10, n_starts=3)
+                self._best_params = self._fit_params(X, y, n_params=self._max_params(), n_starts=3)
                 print(f"[DRSR Wrapper] 参数拟合完成")
             except Exception as e:
                 print(f"[DRSR Wrapper] 参数拟合失败: {e}")
                 self._best_params = None
         if not isinstance(self._best_params, np.ndarray):
-            self._best_params = np.ones(10)
+            self._best_params = np.ones(self._max_params())
         self.model_ready = True
         return True
 
@@ -474,7 +476,7 @@ class DRSRRegressor(BaseWrapper):
         if isinstance(params, np.ndarray):
             sample_params = params
         else:
-            sample_params = np.ones(10, dtype=float)
+            sample_params = np.ones(DRSRRegressor._DEFAULT_MAX_PARAMS, dtype=float)
 
         y_pred = np.asarray(equation_func(*sample_X.T, sample_params)).reshape(-1)
         if y_pred.shape != (sample_rows,):
@@ -487,6 +489,12 @@ class DRSRRegressor(BaseWrapper):
         # 清理方程体再包装显示
         cleaned_body = self._clean_equation_body(self._equation_body)
         return self._wrap_equation(cleaned_body, self._n_features)
+
+    def _max_params(self) -> int:
+        try:
+            return int(self.params.get("max_params", self._DEFAULT_MAX_PARAMS))
+        except Exception:
+            return self._DEFAULT_MAX_PARAMS
 
     def get_total_equations(self, n=None):
         eqs = []
@@ -750,17 +758,15 @@ class DRSRRegressor(BaseWrapper):
         except Exception:
             n_features = 2
         
-        # 生成特征变量名列表
-        feature_names = ', '.join([f'col{i}' for i in range(n_features)])
-        
-        header = f"\"\"\"\nAuto-generated specification for data-driven scientific regression.\n\nBackground:\n{background.strip()}\n\nNotes:\n- Inputs: {n_features} columns detected.\n- Equation signature: equation({feature_names}, params) - all positional arguments.\n- Param slots default to 10; the optimizer will fit usable subset automatically.\n\"\"\"\n\nimport numpy as np\n\n# Initialize parameters\nMAX_NPARAMS = 10\nparams = [1.0] * MAX_NPARAMS\n\n@evaluate.run\ndef evaluate(data: dict) -> float:\n    \"\"\" Evaluate the equation on data observations (placeholder).\n    In current runtime, an external evaluator is used; this function is a marker.\n    \"\"\"\n    inputs, outputs = data['inputs'], data['outputs']\n    # 按列解包输入\n    cols = [inputs[:, i] for i in range(inputs.shape[1])]\n    try:\n        y_pred = equation(*cols, params)\n        loss = np.mean((y_pred - outputs) ** 2)\n        if np.isnan(loss) or np.isinf(loss):\n            return None\n        return -loss\n    except Exception:\n        return None\n\n@equation.evolve\ndef equation({feature_names}, params):\n    \"\"\"Generic mathematical function to be evolved by LLM.\n\n    Args:\n        {feature_names}: numpy arrays, each is a column from inputs.\n        params: numeric parameters array to be optimized by the evaluator (BFGS).\n\n    Return:\n        A numpy array as predictions.\n    \"\"\"\n    # 初始线性骨架\n    total = params[{n_features}]  # bias term\n"
-        
-        # 添加线性项
-        for i in range(n_features):
-            header += f"    total = total + params[{i}] * col{i}\n"
-        
-        header += "    return total\n"
-        return header
+        feature_names = [f"x{i}" for i in range(n_features)]
+        return build_shared_specification(
+            background=background,
+            features=feature_names,
+            target="y",
+            max_params=self._max_params(),
+            problem=self.params.get("problem_name"),
+            evaluate_style="drsr",
+        )
 
     def _fit_params(self, X: np.ndarray, y: np.ndarray, n_params: int = 10, n_starts: int = 5) -> np.ndarray:
         """
