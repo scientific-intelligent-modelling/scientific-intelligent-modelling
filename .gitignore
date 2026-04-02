@@ -12,3 +12,4 @@ dist/
 .env
 experiments/
 wandb
+.sim_datasets/
