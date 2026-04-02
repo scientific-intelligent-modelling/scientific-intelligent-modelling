@@ -32,3 +32,37 @@ def test_llmsr_and_drsr_spec_align_text_semantics():
     assert "from scipy.optimize import minimize" not in drsr_spec
     assert "BFGS_PARAMS = None" in llmsr_spec
     assert "BFGS_PARAMS = None" not in drsr_spec
+
+
+def test_spec_injects_feature_and_target_descriptions():
+    background = "demo background"
+    features = ["x0", "x1", "x2"]
+    feature_descriptions = ["Position at time t", "Time", "Velocity at time t"]
+    target_description = "Acceleration in Nonl-linear Harmonic Oscillator"
+
+    llmsr_spec = prompts.build_specification(
+        background=background,
+        features=features,
+        target="y",
+        max_params=12,
+        problem="PO0",
+        feature_descriptions=feature_descriptions,
+        target_description=target_description,
+    )
+
+    reg = DRSRRegressor(
+        problem_name="PO0",
+        background=background,
+        max_params=12,
+        feature_descriptions=feature_descriptions,
+        target_description=target_description,
+    )
+    drsr_spec = reg._build_spec_from_background(np.zeros((8, 3)), np.zeros(8), background)
+
+    for text in (llmsr_spec, drsr_spec):
+        assert "- Independents:" in text
+        assert "  - x0: Position at time t" in text
+        assert "  - x1: Time" in text
+        assert "  - x2: Velocity at time t" in text
+        assert "- Dependent:" in text
+        assert "  - y: Acceleration in Nonl-linear Harmonic Oscillator" in text

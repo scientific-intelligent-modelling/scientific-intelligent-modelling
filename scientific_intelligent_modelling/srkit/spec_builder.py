@@ -47,11 +47,33 @@ Variables:
 '''
 
 
+def _format_variables_block(
+    cleaned_features: List[str],
+    target_clean: str,
+    feature_descriptions: Optional[List[Optional[str]]] = None,
+    target_description: Optional[str] = None,
+) -> str:
+    if feature_descriptions and len(feature_descriptions) == len(cleaned_features):
+        lines = ["- Independents:"]
+        for name, desc in zip(cleaned_features, feature_descriptions):
+            if desc and str(desc).strip():
+                lines.append(f"  - {name}: {str(desc).strip()}")
+            else:
+                lines.append(f"  - {name}")
+        lines.append("- Dependent:")
+        if target_description and str(target_description).strip():
+            lines.append(f"  - {target_clean}: {str(target_description).strip()}")
+        else:
+            lines.append(f"  - {target_clean}")
+        return "\n".join(lines)
+    feature_doc = ", ".join(cleaned_features)
+    return f"- Independents: {feature_doc}\n- Dependent: {target_clean}"
+
+
 def _build_equation_block(
     feature_sig: str,
     background_text: str,
-    feature_doc: str,
-    target_clean: str,
+    variables_block: str,
     linear_seed: str,
 ) -> str:
     return f'''
@@ -63,8 +85,7 @@ def equation({feature_sig}, params: np.ndarray) -> np.ndarray:
     {background_text}
 
     Variables:
-    - Independents: {feature_doc}
-    - Dependent: {target_clean}
+    {variables_block}
 
     Parameters:
     - params (np.ndarray): Trainable coefficients used by the equation skeleton.
@@ -80,6 +101,8 @@ def build_specification(
     max_params: int = 12,
     problem: Optional[str] = None,
     evaluate_style: Literal["llmsr", "drsr"] = "llmsr",
+    feature_descriptions: Optional[List[Optional[str]]] = None,
+    target_description: Optional[str] = None,
 ) -> str:
     """
     统一构建 llmsr/drsr 的 spec 文本。
@@ -95,12 +118,26 @@ def build_specification(
     target_clean = sanitize_name(target)
     problem_str = (problem or target or "target relation").strip()
     background_text = background.strip() if background else ""
-    feature_doc = ", ".join(cleaned_features)
+    variables_block = _format_variables_block(
+        cleaned_features=cleaned_features,
+        target_clean=target_clean,
+        feature_descriptions=feature_descriptions,
+        target_description=target_description,
+    )
     feature_sig = ", ".join([f"{n}: np.ndarray" for n in cleaned_features])
     linear_terms = ["params[0]"] + [f"params[{i}] * {n}" for i, n in enumerate(cleaned_features, start=1)]
     linear_seed = " + ".join(linear_terms)
 
-    header = _build_header(problem_str, background_text, feature_doc, target_clean)
+    header = f'''"""
+Find the mathematical function skeleton that represents {problem_str}.
+
+Background:
+{background_text}
+
+Variables:
+{variables_block}
+"""
+'''
 
     if evaluate_style == "llmsr":
         evaluate_block = f'''
@@ -162,8 +199,7 @@ def evaluate(data: dict) -> float:
     equation_block = _build_equation_block(
         feature_sig=feature_sig,
         background_text=background_text,
-        feature_doc=feature_doc,
-        target_clean=target_clean,
+        variables_block=variables_block,
         linear_seed=linear_seed,
     )
     return header + evaluate_block + equation_block

@@ -9,6 +9,7 @@ from typing import List, Optional
 import textwrap
 
 import numpy as np
+import yaml
 
 from ..base_wrapper import BaseWrapper
 from scientific_intelligent_modelling.srkit.llm import ClientFactory, parse_provider_model
@@ -759,6 +760,26 @@ class DRSRRegressor(BaseWrapper):
             n_features = 2
         
         feature_names = [f"x{i}" for i in range(n_features)]
+        feature_descriptions = self.params.get("feature_descriptions")
+        target_description = self.params.get("target_description")
+        metadata_path = self.params.get("metadata_path")
+        if (feature_descriptions is None or target_description is None) and metadata_path:
+            try:
+                with open(metadata_path, "r", encoding="utf-8") as f:
+                    meta_root = yaml.safe_load(f)
+                dataset_meta = meta_root.get("dataset", meta_root)
+                features_meta = dataset_meta.get("features") or []
+                if feature_descriptions is None:
+                    feature_descriptions = [
+                        item.get("description") if isinstance(item, dict) else None
+                        for item in features_meta[:n_features]
+                    ]
+                if target_description is None:
+                    target_meta = dataset_meta.get("target") or {}
+                    if isinstance(target_meta, dict):
+                        target_description = target_meta.get("description")
+            except Exception:
+                pass
         return build_shared_specification(
             background=background,
             features=feature_names,
@@ -766,6 +787,8 @@ class DRSRRegressor(BaseWrapper):
             max_params=self._max_params(),
             problem=self.params.get("problem_name"),
             evaluate_style="drsr",
+            feature_descriptions=feature_descriptions,
+            target_description=target_description,
         )
 
     def _fit_params(self, X: np.ndarray, y: np.ndarray, n_params: int = 10, n_starts: int = 5) -> np.ndarray:

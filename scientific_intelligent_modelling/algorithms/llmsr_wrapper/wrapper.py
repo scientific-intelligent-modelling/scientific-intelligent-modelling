@@ -207,6 +207,9 @@ class LLMSRRegressor(BaseWrapper):
                 niterations=niterations,
                 samples_per_iteration=samples_per_iter,
                 seed=seed,
+                metadata_path=self.params.get("metadata_path"),
+                feature_descriptions=self.params.get("feature_descriptions"),
+                target_description=self.params.get("target_description"),
                 wandb_config=wandb_cfg,
             )
             core.fit()
@@ -263,6 +266,9 @@ class LLMSRRegressor(BaseWrapper):
             niterations=int(self.params.get("niterations", 2500)),
             samples_per_iteration=int(self.params.get("samples_per_iteration", 4)),
             seed=self.params.get("seed"),
+            metadata_path=self.params.get("metadata_path"),
+            feature_descriptions=self.params.get("feature_descriptions"),
+            target_description=self.params.get("target_description"),
             existing_exp_dir=self._exp_dir,
         )
         # existing_exp_dir 模式下，LLMSRRegressor 会跳过部分元信息恢复判断，
