@@ -10,7 +10,6 @@ from typing import Dict, Tuple
 import numpy as np
 import pandas as pd
 import yaml
-from sklearn.metrics import mean_squared_error, r2_score
 
 from scientific_intelligent_modelling.srkit.regressor import SymbolicRegressor
 
@@ -39,10 +38,15 @@ def safe_float(value):
 
 def evaluate(reg, X: np.ndarray, y: np.ndarray) -> Dict[str, float]:
     pred = np.asarray(reg.predict(X)).reshape(-1)
-    rmse = math.sqrt(mean_squared_error(y, pred))
-    r2 = r2_score(y, pred)
+    residual = pred - y
+    mse = float(np.mean(np.square(residual)))
+    rmse = math.sqrt(mse)
+    y_mean = float(np.mean(y))
+    ss_res = float(np.sum(np.square(residual)))
+    ss_tot = float(np.sum(np.square(y - y_mean)))
+    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else float("nan")
     denom = float(np.mean(np.square(y))) if len(y) else float("nan")
-    nmse = float(np.mean(np.square(pred - y)) / denom) if denom and not math.isnan(denom) else float("nan")
+    nmse = float(mse / denom) if denom and not math.isnan(denom) else float("nan")
     return {
         "rmse": safe_float(rmse),
         "r2": safe_float(r2),
