@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import glob
 import tempfile
 import time
 import ast
@@ -43,6 +44,7 @@ class DRSRRegressor(BaseWrapper):
         self._equation_body: Optional[str] = None
         self._equation_func = None
         self._all_bodies: List[str] = []
+        self._equation_entries: List[dict] = []
         self._best_params: Optional[np.ndarray] = None
         self._n_features: Optional[int] = None  # 记录特征数量
 
@@ -82,19 +84,16 @@ class DRSRRegressor(BaseWrapper):
             existing_exp_dir = existing_exp_dir.strip()
         if existing_exp_dir:
             self._workdir = os.path.abspath(existing_exp_dir)
-            exp_file = os.path.join(self._workdir, "experiences.json")
-            if os.path.exists(exp_file):
-                try:
-                    bodies, entries = self._read_experience_entries(exp_file)
-                    if self._restore_from_experiences(X, y, bodies, entries):
-                        print(f"[DRSR] 离线复用实验: {self._workdir}")
-                        self.model_ready = True
-                        return self
-                except Exception:
-                    # 兼容路径不完整/内容不规范时，回退到正常训练流程
-                    pass
-            else:
-                print(f"[DRSR] 未发现现有 experiences.json，回退到全量训练: {exp_file}")
+            try:
+                bodies, entries = self._read_experiment_outputs(self._workdir)
+                if self._restore_from_experiences(X, y, bodies, entries):
+                    print(f"[DRSR] 离线复用实验: {self._workdir}")
+                    self.model_ready = True
+                    return self
+            except Exception:
+                # 兼容路径不完整/内容不规范时，回退到正常训练流程
+                pass
+            print(f"[DRSR] 未找到可恢复的实验结果，回退到全量训练: {self._workdir}")
 
         # 规范文本：
         # 优先使用用户提供的背景描述自动生成通用 spec；否则回退到默认/显式 spec_path
@@ -194,7 +193,7 @@ class DRSRRegressor(BaseWrapper):
         # 读取经验，选取最佳/首个方程
         bodies: List[str] = []
         try:
-            bodies, entries = self._read_experience_entries(exp_file)
+            bodies, entries = self._read_experiment_outputs(self._workdir)
             self._restore_from_experiences(X, y, bodies, entries)
             if self._equation_body:
                 self._all_bodies = bodies
@@ -231,43 +230,142 @@ class DRSRRegressor(BaseWrapper):
         }
         return json.dumps(state)
 
+    @staticmethod
+    def _extract_equation_body(text: str) -> str:
+        """兼容“仅函数体”和“完整 def equation(...) 定义”两种持久化格式。"""
+        if not isinstance(text, str):
+            return ""
+
+        stripped = textwrap.dedent(text).strip("\n")
+        if not stripped:
+            return ""
+
+        lines = stripped.splitlines()
+        while lines and lines[0].lstrip().startswith("@"):
+            lines = lines[1:]
+
+        if lines and lines[0].lstrip().startswith("def "):
+            body = "\n".join(lines[1:])
+            return textwrap.dedent(body).rstrip("\n") + "\n"
+
+        return stripped.rstrip("\n") + "\n"
+
+    @staticmethod
+    def _sort_entries(entries: List[dict]) -> None:
+        category_priority = {"Good": 2, "None": 1, "Bad": 0}
+        entries.sort(
+            key=lambda e: (
+                category_priority.get(e.get("category"), 0),
+                float("-inf") if e.get("score") is None else e.get("score"),
+            ),
+            reverse=True,
+        )
+
+    def _build_entry(self, item: dict, category: str) -> Optional[dict]:
+        raw_equation = item.get("equation")
+        if raw_equation is None:
+            raw_equation = item.get("function")
+        equation = self._extract_equation_body(raw_equation)
+        if not equation.strip():
+            return None
+
+        params = item.get("fitted_params")
+        if params is None:
+            params = item.get("params")
+        try:
+            params_arr = np.asarray(params, dtype=float).tolist() if params is not None else None
+        except Exception:
+            params_arr = None
+
+        return {
+            "equation": equation,
+            "params": params_arr,
+            "score": item.get("score"),
+            "category": category,
+            "sample_order": item.get("sample_order"),
+        }
+
     def _read_experience_entries(self, exp_file: str) -> tuple[List[str], List[dict]]:
         with open(exp_file, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        category_priority = {"Good": 2, "None": 1, "Bad": 0}
         bodies: List[str] = []
         entries: List[dict] = []
         for key in ("Good", "None", "Bad"):
             for item in data.get(key, []):
-                equation = item.get("equation")
-                if not isinstance(equation, str) or not equation.strip():
+                entry = self._build_entry(item, key)
+                if entry is None:
                     continue
-                params = item.get("fitted_params")
-                if params is None:
-                    params = item.get("params")
-                try:
-                    params_arr = np.asarray(params, dtype=float)
-                    params_arr = params_arr.tolist()
-                except Exception:
-                    params_arr = None
-                entries.append({
-                    "equation": equation,
-                    "params": params_arr,
-                    "score": item.get("score"),
-                    "category": key,
-                    "sample_order": item.get("sample_order"),
-                })
-                bodies.append(equation)
+                entries.append(entry)
+                bodies.append(entry["equation"])
 
-        entries.sort(
-            key=lambda e: (
-                category_priority.get(e.get("category"), 0),
-                0 if e.get("score") is None else e.get("score"),
-            ),
-            reverse=True,
-        )
+        self._sort_entries(entries)
         return bodies, entries
+
+    def _read_sample_json_entries(self, paths: List[str], category: str) -> tuple[List[str], List[dict]]:
+        bodies: List[str] = []
+        entries: List[dict] = []
+        for path in paths:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    item = json.load(f)
+            except Exception:
+                continue
+
+            entry = self._build_entry(item, category)
+            if entry is None:
+                continue
+
+            entries.append(entry)
+            bodies.append(entry["equation"])
+
+        self._sort_entries(entries)
+        return bodies, entries
+
+    def _merge_entry_groups(self, groups: List[tuple[List[str], List[dict]]]) -> tuple[List[str], List[dict]]:
+        bodies: List[str] = []
+        entries: List[dict] = []
+        seen = set()
+        for group_bodies, group_entries in groups:
+            for body in group_bodies:
+                if body not in bodies:
+                    bodies.append(body)
+            for entry in group_entries:
+                dedup_key = (entry.get("sample_order"), entry.get("equation"))
+                if dedup_key in seen:
+                    continue
+                seen.add(dedup_key)
+                entries.append(entry)
+
+        self._sort_entries(entries)
+        return bodies, entries
+
+    def _read_experiment_outputs(self, base_dir: str) -> tuple[List[str], List[dict]]:
+        """兼容 DRSR 多种结果落盘路径与 JSON 协议。"""
+        groups: List[tuple[List[str], List[dict]]] = []
+
+        aggregate_files = [
+            os.path.join(base_dir, "experiences.json"),
+            os.path.join(base_dir, "equation_experiences", "experiences.json"),
+        ]
+        for path in aggregate_files:
+            if os.path.isfile(path):
+                try:
+                    groups.append(self._read_experience_entries(path))
+                except Exception:
+                    continue
+
+        flat_specs = [
+            (sorted(glob.glob(os.path.join(base_dir, "best_history", "best_sample_*.json"))), "Good"),
+            (sorted(glob.glob(os.path.join(base_dir, "samples", "top*.json"))), "Good"),
+            (sorted(glob.glob(os.path.join(base_dir, "samples", "samples_*.json"))), "None"),
+        ]
+        for paths, category in flat_specs:
+            if not paths:
+                continue
+            groups.append(self._read_sample_json_entries(paths, category))
+
+        return self._merge_entry_groups(groups)
 
     def _restore_from_experiences(self, X: np.ndarray, y: np.ndarray, bodies: List[str], entries: List[dict]) -> bool:
         self._equation_entries = entries
@@ -430,7 +528,14 @@ class DRSRRegressor(BaseWrapper):
         重要：统一使用 (col0, col1, ..., params) 的签名，以与采样产生的变量名保持一致，
         避免 body 中引用 col0/col1 而签名却是 (x, v) 导致的 NameError。
         """
-        body = body.rstrip("\n") + "\n"
+        body = textwrap.dedent(body.rstrip("\n"))
+        indented_lines = []
+        for line in body.splitlines():
+            if line.strip():
+                indented_lines.append("    " + line)
+            else:
+                indented_lines.append("")
+        body = "\n".join(indented_lines).rstrip("\n") + "\n"
         n = 2 if (n_features is None or n_features <= 0) else int(n_features)
         feature_names = ', '.join([f'col{i}' for i in range(n)])
         return f"def equation({feature_names}, params):\n" + body
