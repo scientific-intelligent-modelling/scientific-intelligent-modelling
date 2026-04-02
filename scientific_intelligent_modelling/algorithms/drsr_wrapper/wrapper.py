@@ -31,7 +31,7 @@ class DRSRRegressor(BaseWrapper):
 
     关键参数（与 llmsr 封装对齐）：
     - spec_path: 规范文件（默认 drsr/specs/specification_oscillator1_numpy.txt）
-    - samples_per_prompt: 每提示采样数（默认 1）
+    - samples_per_prompt: 每提示采样数（默认 4）
     - max_samples: 采样上限（默认 2）
     - evaluate_timeout_seconds: 评估超时（默认 10）
     - log_dir: 日志目录（默认写入 workdir/logs）
@@ -171,7 +171,7 @@ class DRSRRegressor(BaseWrapper):
         cfg = config_lib.Config(
             num_samplers=1,
             num_evaluators=1,
-            samples_per_prompt=int(self.params.get("samples_per_prompt", 1)),
+            samples_per_prompt=int(self.params.get("samples_per_prompt", 4)),
             evaluate_timeout_seconds=int(self.params.get("evaluate_timeout_seconds", 10)),
             results_root=self._workdir,
             wall_time_limit_seconds=self.params.get("wall_time_limit_seconds"),
