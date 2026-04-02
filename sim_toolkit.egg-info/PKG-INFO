@@ -3,7 +3,7 @@ Name: sim-toolkit
 Version: 1.0.0
 Summary: A comprehensive scientific modeling framework that provides a unified access interface for various symbolic regression algorithms and scientific computing tools. This framework utilizes the conda environment management system to isolate dependencies of different tools, ensuring stable operation through a subprocess mechanism.
 Author-email: Ziwen Zhang <244824379@qq.com>, Kai Li <kai.li@ia.ac.cn>
-License-Expression: GPL-3.0
+License: GPL-3.0-or-later
 Keywords: modeling,gplearn,integration,pytorch
 Classifier: Programming Language :: Python :: 3
 Classifier: Operating System :: POSIX :: Linux
@@ -55,7 +55,7 @@ Dynamic: license-file
    git clone --recursive  https://github.com/scientific-intelligent-modelling/scientific-intelligent-modelling.git
 
 
-   git clone --recursive  git@gitee.com:ziwenhahaha/scientific-intelligent-modelling.git
+   git clone --recursive  https://github.com/scientific-intelligent-modelling/scientific-intelligent-modelling.git
    cd scientific-intelligent-modelling
    ```
 2. 创建并激活conda环境：

@@ -94,7 +94,7 @@ def run_backbone(backbone: str):
 
 def run():
     run_backbone("e2e")
-    run_backbone("nesymres")
+    # run_backbone("nesymres")
 
 
 if __name__ == "__main__":

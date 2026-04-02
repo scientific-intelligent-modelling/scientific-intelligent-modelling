@@ -254,8 +254,7 @@ class TPSRRegressor(BaseWrapper):
         self._ensure_e2e_model()
 
         from symbolicregression.e2e_model import Transformer
-        from symbolicregression.model.model_wrapper import ModelWrapper
-        from symbolicregression.model.sklearn_wrapper import SymbolicTransformerRegressor
+        from symbolicregression.e2e_model import pred_for_sample_no_refine, refine_for_sample
         from dyna_gym.agents.uct import UCT
         from dyna_gym.agents.mcts import update_root
         from rl_env import RLEnv
@@ -314,51 +313,86 @@ class TPSRRegressor(BaseWrapper):
             update_root(agent, act, s)
             dp.update_cache(s)
 
-        # 使用 pretrain E2E 模型建立可复用回归器
-        mw = ModelWrapper(
-            env=equation_env,
-            embedder=model.embedder,
-            encoder=model.encoder,
-            decoder=model.decoder,
-            beam_size=args.beam_size,
-            beam_type=args.beam_type,
-            max_generated_output_len=args.horizon,
-        )
+        # `s` 可能只是搜索到当前 horizon 的中间前缀，并不保证是完整程序。
+        # 优先从 default policy 已经生成的完整候选中选最优者；只有在搜索确实完成时，才回退到 `s`。
+        candidate_sequences = []
+        for seq in getattr(dp, "candidate_programs", []) or []:
+            if seq is None:
+                continue
+            candidate_sequences.append(seq)
+        if done and s is not None:
+            candidate_sequences.append(s)
 
-        regressor = SymbolicTransformerRegressor(
-            model=mw,
-            max_input_points=self.params.get("max_input_points", 10000),
-            max_number_bags=self.params.get("max_number_bags", -1),
-            stop_refinement_after=self.params.get("stop_refinement_after", 1),
-            n_trees_to_refine=self.params.get("n_trees_to_refine", 1),
-            rescale=self.params.get("rescale", True),
-        )
-        regressor.fit(X, y)
+        if not candidate_sequences:
+            raise RuntimeError("TPSR 搜索阶段未生成任何候选程序")
 
-        # 记录搜索状态（用于输出与展示）
-        best_tree = regressor.retrieve_tree(refinement_type="BFGS", dataset_idx=0)
-        self.best_tree = best_tree
+        def _reward_of(seq):
+            try:
+                return float(rl_env.get_reward(seq, mode="test"))
+            except Exception:
+                return float("-inf")
+
+        best_sequence = max(candidate_sequences, key=_reward_of)
+
         self.all_trees = []
-        for rt in regressor.retrieve_refinements_types():
-            t = regressor.retrieve_tree(refinement_type=rt, dataset_idx=0)
-            if t is not None:
-                self.all_trees.append(t)
 
-        if self.best_tree is None and self.all_trees:
-            self.best_tree = self.all_trees[0]
-        if self.best_tree is None:
-            self.best_tree = "0"
-            if "0" not in self.all_trees:
-                self.all_trees.append("0")
+        # TPSR 的核心结果来自搜索得到的完整候选程序，而不是重新跑一遍预训练 E2E 回归器。
+        # 这里优先取 “MCTS + refinement” 的表达式；若 refinement 失败，则退回到 no-ref 结果。
+        try:
+            _, refined_expr, refined_trees = refine_for_sample(
+                args,
+                model,
+                equation_env,
+                best_sequence,
+                samples["x_to_fit"],
+                samples["y_to_fit"],
+            )
+        except Exception:
+            refined_expr, refined_trees = None, []
 
-        self.all_trees = self._normalize_equation_list(self.all_trees)
-        self.best_tree = self._normalize_equation(self.best_tree)
+        try:
+            _, raw_expr, raw_trees = pred_for_sample_no_refine(
+                model,
+                equation_env,
+                best_sequence,
+                samples["x_to_fit"],
+            )
+        except Exception:
+            raw_expr, raw_trees = None, []
 
-        self.model = regressor
+        candidate_exprs = []
+        for expr in (refined_expr, raw_expr):
+            if isinstance(expr, str) and expr.strip():
+                candidate_exprs.append(expr)
+
+        for tree_group in (refined_trees, raw_trees):
+            if not isinstance(tree_group, list):
+                continue
+            for tree in tree_group:
+                if tree is None:
+                    continue
+                text = str(tree.infix() if hasattr(tree, "infix") else tree).strip()
+                if text:
+                    candidate_exprs.append(text)
+
+        # 去重并保留顺序
+        seen = set()
+        self.all_trees = []
+        for expr in candidate_exprs:
+            normalized = self._normalize_equation(expr)
+            if normalized not in seen:
+                seen.add(normalized)
+                self.all_trees.append(normalized)
+
+        if not self.all_trees:
+            raise RuntimeError("TPSR 未生成任何有效候选方程")
+
+        self.best_tree = self.all_trees[0]
+        self.model = model
         self._n_features = X.shape[1]
         self._predict_variable_names = [f"x_{i}" for i in range(self._n_features)]
         self._backend_params["backend"] = "e2e"
-        self._backend_params["search_state"] = s
+        self._backend_params["search_state"] = best_sequence
         self._predict_fn = self._build_predictor_from_expression(
             self.best_tree, self._predict_variable_names
         )
