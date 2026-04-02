@@ -390,12 +390,18 @@ class DRSRRegressor(BaseWrapper):
             if not isinstance(equation, str) or not equation.strip():
                 continue
             try:
-                self._equation_body = equation
                 cleaned_body = self._clean_equation_body(equation)
-                self._equation_func = self._compile_equation(cleaned_body, self._n_features)
                 candidate_params = entry.get("params")
+                candidate_params_arr = None
                 if isinstance(candidate_params, list):
-                    best_params = np.asarray(candidate_params, dtype=float)
+                    candidate_params_arr = np.asarray(candidate_params, dtype=float)
+                candidate_func = self._compile_equation(cleaned_body, self._n_features)
+                if not self._validate_compiled_equation(candidate_func, X, candidate_params_arr):
+                    continue
+                self._equation_body = equation
+                self._equation_func = candidate_func
+                if candidate_params_arr is not None:
+                    best_params = candidate_params_arr
                 break
             except Exception:
                 continue
@@ -415,6 +421,7 @@ class DRSRRegressor(BaseWrapper):
                 self._best_params = None
         if not isinstance(self._best_params, np.ndarray):
             self._best_params = np.ones(10)
+        self.model_ready = True
         return True
 
     @classmethod
@@ -446,6 +453,33 @@ class DRSRRegressor(BaseWrapper):
         params = self._best_params
         # 动态传递所有列
         return self._equation_func(*X.T, params)
+
+    @staticmethod
+    def _validate_compiled_equation(equation_func, X: np.ndarray, params: Optional[np.ndarray]) -> bool:
+        """
+        校验候选方程在 wrapper 的最终执行语境下能否独立预测。
+
+        只要编译后的方程在一个很小的样本切片上无法正常执行、返回形状异常、
+        或产生非有限值，就视为坏候选并直接淘汰。
+        """
+        if not callable(equation_func):
+            return False
+
+        X = np.asarray(X)
+        if X.ndim != 2 or X.shape[0] == 0:
+            return False
+
+        sample_rows = min(8, X.shape[0])
+        sample_X = X[:sample_rows]
+        if isinstance(params, np.ndarray):
+            sample_params = params
+        else:
+            sample_params = np.ones(10, dtype=float)
+
+        y_pred = np.asarray(equation_func(*sample_X.T, sample_params)).reshape(-1)
+        if y_pred.shape != (sample_rows,):
+            return False
+        return bool(np.all(np.isfinite(y_pred)))
 
     def get_optimal_equation(self):
         if not self._equation_body:
