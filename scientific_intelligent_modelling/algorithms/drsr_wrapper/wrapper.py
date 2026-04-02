@@ -51,6 +51,95 @@ class DRSRRegressor(BaseWrapper):
         self._best_params: Optional[np.ndarray] = None
         self._n_features: Optional[int] = None  # 记录特征数量
 
+    @staticmethod
+    def _resolve_api_key_from_config(api_key_cfg, model_name: str, provider: str):
+        """兼容 llm.config 中 api_key 为字符串或字典两种形式。"""
+        if isinstance(api_key_cfg, dict):
+            def _get_case_insensitive(d: dict, key: str):
+                for kk, vv in d.items():
+                    try:
+                        if str(kk).lower() == str(key).lower():
+                            return vv
+                    except Exception:
+                        pass
+                return None
+            return _get_case_insensitive(api_key_cfg, model_name) or _get_case_insensitive(api_key_cfg, provider)
+        if isinstance(api_key_cfg, str):
+            return api_key_cfg
+        return None
+
+    @staticmethod
+    def _normalize_base_url(base_url: Optional[str], host: Optional[str]) -> Optional[str]:
+        """兼容 llm.config 中使用 host 或 base_url 两种字段。"""
+        if isinstance(base_url, str) and base_url.strip():
+            return base_url.strip()
+        if not isinstance(host, str) or not host.strip():
+            return None
+        host = host.strip()
+        if host.startswith("http://") or host.startswith("https://"):
+            return host if host.rstrip("/").endswith("/v1") else host.rstrip("/") + "/v1"
+        return f"https://{host}/v1"
+
+    def _resolve_llm_client_config(self) -> dict:
+        """
+        统一解析 drsr 的 LLM 配置。
+
+        优先级：
+        1. 显式传入的 wrapper 参数
+        2. llm_config_path 指向的 JSON 配置
+        3. 环境变量兜底
+        """
+        cfg = {}
+        llm_config_path = self.params.get("llm_config_path")
+        if isinstance(llm_config_path, str) and llm_config_path.strip():
+            with open(llm_config_path, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+
+        model_name = self.params.get("api_model") or cfg.get("model")
+        if not model_name or not isinstance(model_name, str):
+            raise ValueError("DRSRRegressor: 缺少 LLM 模型配置，请提供 api_model 或 llm_config_path")
+
+        provider, _ = parse_provider_model(model_name)
+        api_key = self.params.get("api_key")
+        if not api_key:
+            api_key = self._resolve_api_key_from_config(cfg.get("api_key"), model_name, provider)
+
+        base_url = self._normalize_base_url(
+            self.params.get("api_base") or cfg.get("base_url"),
+            cfg.get("host"),
+        )
+
+        client_config = {
+            "model": model_name,
+            "api_key": api_key,
+            "base_url": base_url,
+        }
+
+        generation_overrides = {}
+        for key in (
+            "max_tokens",
+            "temperature",
+            "top_p",
+            "n",
+            "stream",
+            "presence_penalty",
+            "frequency_penalty",
+            "stop",
+            "logprobs",
+        ):
+            if key in cfg:
+                generation_overrides[key] = cfg[key]
+
+        if self.params.get("temperature") is not None:
+            generation_overrides["temperature"] = self.params["temperature"]
+        if isinstance(self.params.get("api_params"), dict):
+            generation_overrides.update(self.params["api_params"])
+
+        return {
+            "client_config": client_config,
+            "generation_overrides": generation_overrides,
+        }
+
     def fit(self, X, y):
         X = np.asarray(X)
         y = np.asarray(y).reshape(-1)
@@ -124,28 +213,10 @@ class DRSRRegressor(BaseWrapper):
         dataset = {"data": {"inputs": X, "outputs": y}}
 
         # 由 Wrapper 构建并注入单例 LLM 客户端；LocalLLM 仅负责 prompt 组织
-        api_model = str(self.params.get('api_model'))
-        provider, _model = parse_provider_model(api_model)
-        api_key = self.params.get('api_key')
-        if not api_key:
-            if provider == 'deepseek':
-                api_key = os.getenv('DEEPSEEK_API_KEY', '')
-            elif provider in ('siliconflow', 'silicon-flow', 'sflow'):
-                api_key = os.getenv('SILICONFLOW_API_KEY', '')
-            elif provider in ('blt', 'bltcy', 'plato'):
-                api_key = os.getenv('BLT_API_KEY', '')
-            elif provider == 'ollama':
-                api_key = ''
-        client = ClientFactory.from_config({
-            'model': api_model,
-            'api_key': api_key,
-            'base_url': self.params.get('api_base')
-        })
-        # 透传生成参数
-        if self.params.get('temperature') is not None:
-            client.kwargs['temperature'] = self.params['temperature']
-        if isinstance(self.params.get('api_params'), dict):
-            client.kwargs.update(self.params['api_params'])
+        llm_runtime = self._resolve_llm_client_config()
+        client = ClientFactory.from_config(llm_runtime["client_config"])
+        if isinstance(llm_runtime["generation_overrides"], dict):
+            client.kwargs.update(llm_runtime["generation_overrides"])
 
         # 注入到 drsr 的 sampler 和 analyzer。
         # 兼容不同版本 drsr：若存在旧版本 set_shared_* 接口则使用，不存在则走现代 pipeline llm_client 注入路径。
