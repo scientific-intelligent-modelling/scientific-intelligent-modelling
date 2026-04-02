@@ -76,7 +76,7 @@ class DRSRRegressor(BaseWrapper):
         # 导入 drsr_420 模块
         drsr_dir = os.path.join(os.path.dirname(__file__), "drsr")
         sys.path.insert(0, drsr_dir)
-        from drsr_420 import pipeline, config as config_lib, sampler, evaluator, evaluate_on_problems, data_analyse_real
+        from drsr_420 import pipeline, config as config_lib, sampler, evaluator, evaluate_on_problems, data_analyse_real, prompt_config as prompt_config_lib
 
         # 优先从已有实验目录复用结果，避免再次调用 LLM/API（用于离线验收和快速恢复）。
         existing_exp_dir = self._existing_exp_dir
@@ -174,6 +174,15 @@ class DRSRRegressor(BaseWrapper):
             wall_time_limit_seconds=self.params.get("wall_time_limit_seconds"),
         )
 
+        feature_names = [f"col{i}" for i in range(self._n_features or 0)]
+        prompt_ctx = prompt_config_lib.PromptContext(
+            n_features=self._n_features or 0,
+            feature_names=feature_names or None,
+            dependent_name="y",
+            problem_name=self.params.get("problem_name"),
+            background=background,
+        )
+
         # 切换 cwd 到工作目录，确保 drsr 相对路径输出写入其中
         cwd_backup = os.getcwd()
         os.chdir(self._workdir)
@@ -186,6 +195,7 @@ class DRSRRegressor(BaseWrapper):
                 class_config=cls_cfg,
                 log_dir=self.params.get("log_dir") or os.path.join(self._workdir, "logs"),
                 llm_client=client,
+                prompt_ctx=prompt_ctx,
             )
         finally:
             os.chdir(cwd_backup)
