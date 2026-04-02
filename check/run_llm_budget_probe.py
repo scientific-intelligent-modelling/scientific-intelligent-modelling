@@ -99,7 +99,7 @@ def main():
             api_key=os.environ["BLT_API_KEY"],
             api_base=os.environ.get("BLT_API_BASE", "https://api.bltcy.ai/v1"),
             max_samples=args.budget,
-            samples_per_prompt=1,
+            samples_per_prompt=4,
             evaluate_timeout_seconds=20,
             wall_time_limit_seconds=900,
             seed=1314,

@@ -101,7 +101,7 @@ def run_online_smoke():
         use_api=True,
         api_model="blt/gpt-4o-mini",
         max_samples=20,
-        samples_per_prompt=1,
+        samples_per_prompt=4,
         evaluate_timeout_seconds=10,
     )
 
