@@ -13,6 +13,7 @@
 [submodule "scientific_intelligent_modelling/algorithms/llmsr_wrapper/llmsr"]
 	path = scientific_intelligent_modelling/algorithms/llmsr_wrapper/llmsr
 	url = https://github.com/scientific-intelligent-modelling/LLM-SR.git
+	branch = main
 [submodule "scientific_intelligent_modelling/algorithms/iMCTS_wrapper/MCTS-4-SR"]
 	path = scientific_intelligent_modelling/algorithms/iMCTS_wrapper/MCTS-4-SR
 	url = https://github.com/scientific-intelligent-modelling/MCTS-4-SR.git
