@@ -345,7 +345,9 @@ class DRSRRegressor(BaseWrapper):
             with open(exp_file, "w", encoding="utf-8") as f:
                 json.dump({"None": [], "Good": [], "Bad": []}, f)
 
-        # 组装配置并运行
+        # 组装配置并运行。
+        # DRSR 现在默认不再使用 wall_time_limit_seconds 截断实验，
+        # 统一按预算（niterations * samples_per_iteration）跑完。
         cls_cfg = config_lib.ClassConfig(llm_class=llm_class, sandbox_class=evaluator.LocalSandbox)
         cfg = config_lib.Config(
             num_samplers=1,
@@ -353,7 +355,6 @@ class DRSRRegressor(BaseWrapper):
             samples_per_prompt=samples_per_iteration,
             evaluate_timeout_seconds=int(self.params.get("evaluate_timeout_seconds", 10)),
             results_root=self._workdir,
-            wall_time_limit_seconds=self.params.get("wall_time_limit_seconds"),
         )
 
         feature_names, feature_descriptions, target_description = self._resolve_prompt_semantics(self._n_features or 0)

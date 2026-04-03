@@ -56,24 +56,24 @@ def main():
     meta, target, X_train, y_train, X_id, y_id, X_ood, y_ood = load_dataset(dataset_dir)
     problem_name = f"{dataset_dir.name}_budget{args.budget}"
     background = meta["description"]
+    llm_config_path = output_dir / "llm.config"
+    llm_config_path.write_text(
+        json.dumps(
+            {
+                "host": "api.bltcy.ai",
+                "api_key": os.environ["BLT_API_KEY"],
+                "model": args.api_model,
+                "max_tokens": 1024,
+                "temperature": 0.6,
+                "top_p": 0.3,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
     if args.tool == "llmsr":
-        llm_config_path = output_dir / "llm.config"
-        llm_config_path.write_text(
-            json.dumps(
-                {
-                    "host": "api.bltcy.ai",
-                    "api_key": os.environ["BLT_API_KEY"],
-                    "model": args.api_model,
-                    "max_tokens": 1024,
-                    "temperature": 0.6,
-                    "top_p": 0.3,
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
         reg = SymbolicRegressor(
             "llmsr",
             problem_name=problem_name,
@@ -93,15 +93,12 @@ def main():
             problem_name=problem_name,
             background=background,
             metadata_path=str(dataset_dir / "metadata.yaml"),
-            workdir=str(output_dir / "drsr_workdir"),
-            use_api=True,
-            api_model=args.api_model,
-            api_key=os.environ["BLT_API_KEY"],
-            api_base=os.environ.get("BLT_API_BASE", "https://api.bltcy.ai/v1"),
-            max_samples=args.budget,
-            samples_per_prompt=4,
+            llm_config_path=str(llm_config_path),
+            exp_path=str(output_dir / "experiments"),
+            exp_name=problem_name,
+            niterations=max(1, args.budget // 4),
+            samples_per_iteration=4,
             evaluate_timeout_seconds=20,
-            wall_time_limit_seconds=900,
             seed=1314,
         )
 
