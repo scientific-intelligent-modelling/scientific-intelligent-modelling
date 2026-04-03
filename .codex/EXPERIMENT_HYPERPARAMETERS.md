@@ -29,59 +29,7 @@ verbosity = 1
 random_state = 1314
 ```
 
-说明：
-- PySR 内部显示的总进度是：
-  ```text
-  total_iterations = niterations * populations
-  ```
-- 所以上面这组会显示：
-  ```text
-  100 * 32 = 3200 total iterations
-  ```
-
-### 1.2 论文量级参数映射
-
-如果按 PySR 语义近似映射论文里的：
-
-- `population size = 4000`
-- `sub-populations = 100`
-- `2M total iterations`
-
-则更接近：
-
-```python
-population_size = 4000
-populations = 100
-niterations = 20000
-```
-
-原因：
-
-```text
-20000 * 100 = 2,000,000
-```
-
----
-
 ## 2. LLM-SR
-
-### 2.1 旧基线参数
-
-适用于：
-- 之前的 `matsci` 小预算批次
-
-```python
-niterations = 30
-samples_per_iteration = 2
-max_params = 12
-```
-
-总预算：
-
-```text
-30 * 2 = 60
-```
-
 ### 2.2 高预算参数
 
 适用于：
@@ -144,30 +92,6 @@ max_samples = niterations * samples_per_iteration
 samples_per_prompt = samples_per_iteration
 ```
 
-### 3.3 旧基线参数
-
-历史上曾使用：
-
-```python
-max_samples = 32
-samples_per_prompt = 4
-evaluate_timeout_seconds = 20
-wall_time_limit_seconds = 900
-```
-
-这大致等价于：
-
-```python
-niterations = 8
-samples_per_iteration = 4
-```
-
-因为：
-
-```text
-8 * 4 = 32
-```
-
 ### 3.4 高预算参数
 
 当前推荐的高预算参数是：
@@ -200,58 +124,15 @@ workdir
 
 ---
 
-## 4. 公平对比规则
-
-### 4.1 对齐预算时的推荐写法
-
-若要让 `llmsr` 与 `drsr` 真正预算一致，应统一按：
-
-```text
-total_budget = niterations * samples_per_iteration
-```
-
-例如总预算 200：
-
-```python
-llmsr:
-niterations = 50
-samples_per_iteration = 4
-
-drsr:
-niterations = 50
-samples_per_iteration = 4
-```
-
-此时两者内部总预算都为：
-
-```text
-50 * 4 = 200
-```
-
-### 4.2 不推荐的写法
-
-不要把下面这两者当作同预算：
-
-```text
-llmsr: 200 × 4
-drsr: 200 / 4
-```
-
-因为它们实际预算是：
-
-```text
-llmsr ≈ 800
-drsr ≈ 200
-```
-
----
 
 ## 5. 远程实验约定
 
 ### 5.1 matsci 数据路径
 
 ```bash
-.sim_datasets/llm-srbench/matsci/<dataset>
+.sim_datasets/llm-srbench/
+
+具体数据集需听指示，如果没有需要使用sim_datasets包去下载，该包存放在项目根目录中
 ```
 
 ### 5.2 运行环境

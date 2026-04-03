@@ -5,13 +5,15 @@
 - `pysr`
 - `llmsr`
 - `drsr`
+以及其他，其他暂时还没跑
 
 ## 总体原则
 
+0. 开始实验分发之前，先检查远程的代码是否和本地的保持完全一致，若没有，需让我确认是否把远程的进行同步。
+
 1. 做实验前，先确认当前实验目标：
    - 是流程验证
-   - 还是公平对比
-   - 还是高预算冲榜
+   - 还是固定超参数进行实验分发
 
 2. 远程批量实验默认按**每个数据集一个 tmux 会话**执行。
 
@@ -108,38 +110,6 @@ samples_per_prompt = samples_per_iteration
 - 统一使用 `x0/x1/.../y`
 - 如果有 `metadata.yaml`，优先带入物理语义描述
 
-### 遗留兼容
-
-`wrapper` 内部仍保留对旧候选表达式的最小执行兼容，例如：
-
-- `col0`
-- `col1`
-
-但这只允许存在于**最终候选编译与预测**路径中，不能再出现在发给模型的 prompt 文本里。
-
-## 公平对比原则
-
-进行 `llmsr` 与 `drsr` 公平比较时，要按**总预算**对齐：
-
-- `llmsr`：
-  ```text
-  total_budget = niterations * samples_per_iteration
-  ```
-
-- `drsr`：
-  ```text
-  total_budget = niterations * samples_per_iteration
-  ```
-
-不要再使用这种不等价配置做对比：
-
-- `llmsr: 200 × 4`
-- `drsr: 200 / 4`
-
-因为这会导致：
-
-- `llmsr ≈ 800`
-- `drsr ≈ 200`
 
 ## 监控约定
 
