@@ -51,6 +51,50 @@ class DRSRRegressor(BaseWrapper):
         self._best_params: Optional[np.ndarray] = None
         self._n_features: Optional[int] = None  # 记录特征数量
 
+    def _resolve_prompt_semantics(self, n_features: int) -> Tuple[List[str], List[Optional[str]], Optional[str]]:
+        """
+        为 spec 与外层 prompt 统一解析变量命名与物理语义。
+
+        约定：
+        - 外层 prompt 与 spec 一律使用 x0/x1/.../y
+        - 若 metadata 中存在 description，则优先使用 description
+        - 否则退化到 name
+        """
+        feature_names = [f"x{i}" for i in range(n_features)]
+        feature_descriptions = self.params.get("feature_descriptions")
+        target_description = self.params.get("target_description")
+        metadata_path = self.params.get("metadata_path")
+
+        if (feature_descriptions is None or target_description is None) and metadata_path:
+            try:
+                with open(metadata_path, "r", encoding="utf-8") as f:
+                    meta_root = yaml.safe_load(f)
+                dataset_meta = meta_root.get("dataset", meta_root)
+                features_meta = dataset_meta.get("features") or []
+                if feature_descriptions is None:
+                    feature_descriptions = []
+                    for idx in range(n_features):
+                        item = features_meta[idx] if idx < len(features_meta) else {}
+                        if isinstance(item, dict):
+                            feature_descriptions.append(item.get("description") or item.get("name"))
+                        else:
+                            feature_descriptions.append(None)
+                if target_description is None:
+                    target_meta = dataset_meta.get("target") or {}
+                    if isinstance(target_meta, dict):
+                        target_description = target_meta.get("description") or target_meta.get("name")
+            except Exception:
+                pass
+
+        if feature_descriptions is None:
+            normalized_feature_descriptions = None
+        else:
+            normalized_feature_descriptions = list(feature_descriptions[:n_features]) + [None] * max(0, n_features - len(feature_descriptions))
+            if not any(item for item in normalized_feature_descriptions) and not target_description:
+                normalized_feature_descriptions = None
+
+        return feature_names, normalized_feature_descriptions, target_description
+
     @staticmethod
     def _resolve_api_key_from_config(api_key_cfg, model_name: str, provider: str):
         """兼容 llm.config 中 api_key 为字符串或字典两种形式。"""
@@ -248,13 +292,15 @@ class DRSRRegressor(BaseWrapper):
             wall_time_limit_seconds=self.params.get("wall_time_limit_seconds"),
         )
 
-        feature_names = [f"col{i}" for i in range(self._n_features or 0)]
+        feature_names, feature_descriptions, target_description = self._resolve_prompt_semantics(self._n_features or 0)
         prompt_ctx = prompt_config_lib.PromptContext(
             n_features=self._n_features or 0,
             feature_names=feature_names or None,
             dependent_name="y",
             problem_name=self.params.get("problem_name"),
             background=background,
+            feature_descriptions=feature_descriptions,
+            target_description=target_description,
         )
 
         # 切换 cwd 到工作目录，确保 drsr 相对路径输出写入其中
@@ -830,27 +876,7 @@ class DRSRRegressor(BaseWrapper):
         except Exception:
             n_features = 2
         
-        feature_names = [f"x{i}" for i in range(n_features)]
-        feature_descriptions = self.params.get("feature_descriptions")
-        target_description = self.params.get("target_description")
-        metadata_path = self.params.get("metadata_path")
-        if (feature_descriptions is None or target_description is None) and metadata_path:
-            try:
-                with open(metadata_path, "r", encoding="utf-8") as f:
-                    meta_root = yaml.safe_load(f)
-                dataset_meta = meta_root.get("dataset", meta_root)
-                features_meta = dataset_meta.get("features") or []
-                if feature_descriptions is None:
-                    feature_descriptions = [
-                        item.get("description") if isinstance(item, dict) else None
-                        for item in features_meta[:n_features]
-                    ]
-                if target_description is None:
-                    target_meta = dataset_meta.get("target") or {}
-                    if isinstance(target_meta, dict):
-                        target_description = target_meta.get("description")
-            except Exception:
-                pass
+        feature_names, feature_descriptions, target_description = self._resolve_prompt_semantics(n_features)
         return build_shared_specification(
             background=background,
             features=feature_names,
