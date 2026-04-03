@@ -13,3 +13,4 @@ dist/
 experiments/
 wandb
 .sim_datasets/
+tmp/
