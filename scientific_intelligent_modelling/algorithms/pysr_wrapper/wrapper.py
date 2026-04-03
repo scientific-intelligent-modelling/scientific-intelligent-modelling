@@ -65,6 +65,10 @@ class PySRRegressor(BaseWrapper):
                 continue
             params[key] = value
 
+        # 默认打开进度与基础日志，便于远程实验观测。
+        params.setdefault("progress", True)
+        params.setdefault("verbosity", 1)
+
         return params
     
     def fit(self, X, y):
