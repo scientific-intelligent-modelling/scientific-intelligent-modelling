@@ -1,5 +1,7 @@
 import glob
 import os
+import json
+import tempfile
 
 import numpy as np
 
@@ -67,7 +69,8 @@ def run_offline_replay():
         "drsr",
         existing_exp_dir=exp_dir,
         problem_name="ci_drsr_replay",
-        max_samples=1,
+        niterations=1,
+        samples_per_iteration=1,
     )
     reg.fit(X[:120], y[:120])
 
@@ -94,14 +97,38 @@ def run_online_smoke():
     X = rng.rand(24, 2)
     y = 2.0 * X[:, 0] - 3.0 * X[:, 1] + 0.05 * rng.randn(24)
 
+    api_key = ""
+    for k in ("BLT_API_KEY", "DEEPSEEK_API_KEY", "SILICONFLOW_API_KEY", "OPENAI_API_KEY"):
+        v = os.getenv(k)
+        if v and str(v).strip():
+            api_key = str(v).strip()
+            break
+    if not api_key:
+        raise RuntimeError("未找到可用 API Key")
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as f:
+        json.dump(
+            {
+                "host": "api.bltcy.ai",
+                "api_key": api_key,
+                "model": "blt/gpt-3.5-turbo",
+                "max_tokens": 1024,
+                "temperature": 0.6,
+                "top_p": 0.3,
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+        llm_config_path = f.name
+
     reg = SymbolicRegressor(
         "drsr",
         problem_name="ci_drsr_check",
         background="y 与 x0, x1 的线性关系：y = 2*x0 - 3*x1",
-        use_api=True,
-        api_model="blt/gpt-4o-mini",
-        max_samples=20,
-        samples_per_prompt=4,
+        llm_config_path=llm_config_path,
+        niterations=5,
+        samples_per_iteration=4,
         evaluate_timeout_seconds=10,
     )
 

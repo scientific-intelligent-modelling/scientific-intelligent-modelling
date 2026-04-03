@@ -127,12 +127,13 @@ def build_regressor(tool: str, dataset_dir: Path, output_dir: Path, meta: dict, 
     if tool == "drsr":
         llm_config_path = build_llm_config(output_dir, api_model)
         params = {
-            "workdir": str(output_dir / "drsr_workdir"),
+            "exp_path": str(output_dir / "experiments"),
+            "exp_name": f"{problem_name}_{tool}",
             "background": background,
             "metadata_path": str(dataset_dir / "metadata.yaml"),
             "llm_config_path": str(llm_config_path),
-            "max_samples": 32,
-            "samples_per_prompt": 4,
+            "niterations": 8,
+            "samples_per_iteration": 4,
             "evaluate_timeout_seconds": 20,
             "wall_time_limit_seconds": 900,
         }

@@ -26,17 +26,25 @@ except Exception:
 class DRSRRegressor(BaseWrapper):
     _DEFAULT_MAX_PARAMS = 12
     """
-    DRSR 封装改造：
-    - 优先改造"采样用的 LLM API"到统一的 llm.ClientFactory，其他执行逻辑尽量保持不变。
+    DRSR 封装对外接口对齐到 llmsr：
+    - llm_config_path
+    - background
+    - metadata_path
+    - niterations
+    - samples_per_iteration
+    - seed
+    - problem_name
+    - exp_path
+    - exp_name
 
-    关键参数（与 llmsr 封装对齐）：
-    - spec_path: 规范文件（默认 drsr/specs/specification_oscillator1_numpy.txt）
-    - samples_per_prompt: 每提示采样数（默认 4）
-    - max_samples: 采样上限（默认 2）
-    - evaluate_timeout_seconds: 评估超时（默认 10）
-    - log_dir: 日志目录（默认写入 workdir/logs）
-    - workdir: DRSR 相对输出目录（默认临时创建）
-    - use_api, api_model, api_key, api_base, temperature, api_params: API 相关设置
+    内部预算映射：
+    - max_samples = niterations * samples_per_iteration
+    - samples_per_prompt = samples_per_iteration
+
+    兼容说明：
+    - 旧参数 max_samples / samples_per_prompt / workdir 仅作为 fallback 保留；
+      如果显式提供了 niterations / samples_per_iteration / exp_path / exp_name，
+      一律优先使用新接口。
     """
 
     def __init__(self, **kwargs):
@@ -50,6 +58,71 @@ class DRSRRegressor(BaseWrapper):
         self._equation_entries: List[dict] = []
         self._best_params: Optional[np.ndarray] = None
         self._n_features: Optional[int] = None  # 记录特征数量
+
+    def _resolve_experiment_layout(self) -> Tuple[str, str, str]:
+        """
+        统一解析 DRSR 的实验目录布局，优先对齐 llmsr 的 exp_path / exp_name。
+
+        返回：
+        - experiments_root: 实验根目录
+        - exp_name: 实验名
+        - workdir: drsr 实际写入目录
+        """
+        exp_path = self.params.get("exp_path")
+        exp_name = self.params.get("exp_name")
+        if isinstance(exp_path, str) and exp_path.strip() and isinstance(exp_name, str) and exp_name.strip():
+            experiments_root = os.path.abspath(exp_path.strip())
+            resolved_exp_name = exp_name.strip()
+            workdir = os.path.join(experiments_root, resolved_exp_name)
+            return experiments_root, resolved_exp_name, workdir
+
+        user_workdir = self.params.get("workdir")
+        if isinstance(user_workdir, str) and user_workdir.strip():
+            workdir = os.path.abspath(user_workdir.strip())
+            experiments_root = os.path.dirname(workdir)
+            resolved_exp_name = os.path.basename(workdir)
+            return experiments_root, resolved_exp_name, workdir
+
+        default_base = os.getcwd()
+        problem = str(self.params.get("problem_name") or "problem").strip()
+        ts = time.strftime('%Y%m%d-%H%M%S')
+        resolved_exp_name = f"drsr_{problem}_{ts}"
+        experiments_root = os.path.join(default_base, "outputs")
+        workdir = os.path.join(experiments_root, resolved_exp_name)
+        return experiments_root, resolved_exp_name, workdir
+
+    def _resolve_search_budget(self) -> Tuple[int, int, int]:
+        """
+        统一解析对外预算语义。
+
+        主接口：
+        - niterations
+        - samples_per_iteration
+
+        内部派生：
+        - max_samples = niterations * samples_per_iteration
+        - samples_per_prompt = samples_per_iteration
+        """
+        niterations = self.params.get("niterations")
+        samples_per_iteration = self.params.get("samples_per_iteration")
+
+        if niterations is not None or samples_per_iteration is not None:
+            resolved_niterations = int(niterations if niterations is not None else 50)
+            resolved_samples_per_iteration = int(samples_per_iteration if samples_per_iteration is not None else 4)
+            if resolved_niterations <= 0:
+                raise ValueError("DRSRRegressor: niterations 必须大于 0")
+            if resolved_samples_per_iteration <= 0:
+                raise ValueError("DRSRRegressor: samples_per_iteration 必须大于 0")
+            max_samples = resolved_niterations * resolved_samples_per_iteration
+            return resolved_niterations, resolved_samples_per_iteration, max_samples
+
+        # fallback：兼容旧接口
+        max_samples = int(self.params.get("max_samples", 2))
+        samples_per_prompt = int(self.params.get("samples_per_prompt", 4))
+        if samples_per_prompt <= 0:
+            raise ValueError("DRSRRegressor: samples_per_prompt 必须大于 0")
+        resolved_niterations = max(1, max_samples // samples_per_prompt)
+        return resolved_niterations, samples_per_prompt, max_samples
 
     def _resolve_prompt_semantics(self, n_features: int) -> Tuple[List[str], List[Optional[str]], Optional[str]]:
         """
@@ -191,23 +264,14 @@ class DRSRRegressor(BaseWrapper):
         # 记录特征数量
         self._n_features = X.shape[1] if X.ndim == 2 else 1
 
-        # 工作目录（承载 equation_experiences/residual_analyze 等相对输出）
-        # 默认：使用当前工作目录下的 `drsr_<problem>_<timestamp>`，可通过参数覆盖
-        user_workdir = self.params.get("workdir")
-        if user_workdir and str(user_workdir).strip():
-            self._workdir = user_workdir
-        else:
-            default_base = os.getcwd()
-            problem = str(self.params.get("problem_name") or "problem").strip()
-            ts = time.strftime('%Y%m%d-%H%M%S')
-            dir_name = f"drsr_{problem}_{ts}"
-            # 默认前缀 outputs/
-            self._workdir = os.path.join(default_base, "outputs", dir_name)
+        _, _, self._workdir = self._resolve_experiment_layout()
         os.makedirs(self._workdir, exist_ok=True)
         try:
             print(f"[DRSR] 使用工作目录: {os.path.abspath(self._workdir)}")
         except Exception:
             pass
+
+        niterations, samples_per_iteration, max_samples = self._resolve_search_budget()
 
         # 导入 drsr_420 模块
         drsr_dir = os.path.join(os.path.dirname(__file__), "drsr")
@@ -286,7 +350,7 @@ class DRSRRegressor(BaseWrapper):
         cfg = config_lib.Config(
             num_samplers=1,
             num_evaluators=1,
-            samples_per_prompt=int(self.params.get("samples_per_prompt", 4)),
+            samples_per_prompt=samples_per_iteration,
             evaluate_timeout_seconds=int(self.params.get("evaluate_timeout_seconds", 10)),
             results_root=self._workdir,
             wall_time_limit_seconds=self.params.get("wall_time_limit_seconds"),
@@ -311,7 +375,7 @@ class DRSRRegressor(BaseWrapper):
                 specification=specification,
                 inputs=dataset,
                 config=cfg,
-                max_sample_nums=int(self.params.get("max_samples", 2)),
+                max_sample_nums=max_samples,
                 class_config=cls_cfg,
                 log_dir=self.params.get("log_dir") or os.path.join(self._workdir, "logs"),
                 llm_client=client,
