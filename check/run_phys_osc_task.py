@@ -125,17 +125,12 @@ def build_regressor(tool: str, dataset_dir: Path, output_dir: Path, meta: dict, 
         return SymbolicRegressor(tool, **params, **common)
 
     if tool == "drsr":
-        api_key = os.getenv("BLT_API_KEY", "").strip()
-        if not api_key:
-            raise RuntimeError("缺少 BLT_API_KEY，无法运行 drsr")
+        llm_config_path = build_llm_config(output_dir, api_model)
         params = {
             "workdir": str(output_dir / "drsr_workdir"),
             "background": background,
             "metadata_path": str(dataset_dir / "metadata.yaml"),
-            "use_api": True,
-            "api_model": api_model,
-            "api_key": api_key,
-            "api_base": os.getenv("BLT_API_BASE", "https://api.bltcy.ai/v1"),
+            "llm_config_path": str(llm_config_path),
             "max_samples": 32,
             "samples_per_prompt": 4,
             "evaluate_timeout_seconds": 20,
