@@ -62,7 +62,7 @@ SH
 chmod +x /tmp/dcodex_runs/run_${{RUN_NAME}}.sh
 tmux has-session -t "${{RUN_NAME}}" 2>/dev/null && tmux kill-session -t "${{RUN_NAME}}" || true
 tmux new-session -d -s "${{RUN_NAME}}" "bash /tmp/dcodex_runs/run_${{RUN_NAME}}.sh"
-echo STARTED:${cfg['label']}
+echo STARTED:{cfg['label']}
 """
 
 
