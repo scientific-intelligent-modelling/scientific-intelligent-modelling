@@ -1,4 +1,5 @@
 # tools/pysr_wrapper/wrapper.py
+import os
 import pickle
 import base64
 import numpy as np
@@ -7,6 +8,15 @@ from ..base_wrapper import BaseWrapper
 
 class PySRRegressor(BaseWrapper):
     _META_PARAMS = {"exp_name", "exp_path", "problem_name", "seed"}
+    _THREAD_ENV_VARS = (
+        "PYTHON_JULIACALL_THREADS",
+        "JULIA_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+    )
+    _FIXED_THREAD_COUNT = "4"
     _ALLOWED_PARAMS = {
         "niterations",
         "population_size",
@@ -70,8 +80,16 @@ class PySRRegressor(BaseWrapper):
         params.setdefault("verbosity", 1)
 
         return params
+
+    @classmethod
+    def _apply_fixed_thread_env(cls):
+        """固定 PySR/Julia 相关线程数，避免远程环境并行层叠失控。"""
+        for key in cls._THREAD_ENV_VARS:
+            os.environ[key] = cls._FIXED_THREAD_COUNT
     
     def fit(self, X, y):
+        # 必须在导入 pysr/juliacall 前固定线程环境，否则远程多核环境容易过度订阅。
+        self._apply_fixed_thread_env()
         # 仅在需要时导入
         from pysr import PySRRegressor
         
