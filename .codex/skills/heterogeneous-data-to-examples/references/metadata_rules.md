@@ -34,6 +34,14 @@
 - 数据来自真实实验而不是合成 benchmark
 - 只能观测输入输出，无法给出解析式
 
+## 若写了 formula.py，额外要求
+
+- `dataset.ground_truth_formula.file` 必须指向真实存在的文件
+- `formula.py` 必须能被 Python 导入
+- 优先提供与 `dataset.target.name` 同名的函数
+- 该函数应能接受按 `dataset.features` 顺序传入的特征数组
+- 必须在至少一个 split 上做代入验证，而不是只检查文件存在
+
 ## 常见错误
 
 - metadata 的目标列名和 CSV 不一致

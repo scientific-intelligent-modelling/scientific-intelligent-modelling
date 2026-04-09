@@ -47,7 +47,9 @@ description: 当需要把用户提供的异构数据源整理成当前仓库 exa
 6. 生成 `metadata.yaml`：
    - 可参考 `tools/example_dataset_onboarder/templates/metadata_template.yaml`
 7. 若已知真值公式，再写 `formula.py`。
-8. 跑校验：
+8. 若存在 `ground_truth_formula.file`，必须做公式代入校验：
+   - `python3 tools/example_dataset_onboarder/scripts/validate_example_dataset.py --dataset-dir <dir> --verify-formula`
+9. 跑校验：
    - `python3 tools/example_dataset_onboarder/scripts/validate_example_dataset.py --dataset-dir <dir>`
 
 ## 强约束
@@ -57,6 +59,7 @@ description: 当需要把用户提供的异构数据源整理成当前仓库 exa
 - `metadata.yaml` 里的 `dataset.target.name` 必须和 CSV 目标列名一致。
 - 若没有可靠的 OOD 定义，不要伪造；可以生成带表头的空 `ood_test.csv`，并在 metadata 里写清楚。
 - 若做了列重命名、单位换算、过滤或聚合，必须在 metadata 的 `description` 或 `resources/notes` 中说明。
+- 若声明了 `ground_truth_formula.file`，该公式必须能被实际导入，并在一个或多个 split 上代入得到与目标列一致或近似一致的结果。
 
 ## 这个 skill 默认会做什么
 
@@ -64,6 +67,7 @@ description: 当需要把用户提供的异构数据源整理成当前仓库 exa
 - 帮你把异构源数据映射成统一 split 目录
 - 帮你补最小可用 metadata
 - 帮你用校验器检查产物
+- 若存在真值公式，帮你实际代入公式验证它是否与数据一致
 
 ## 这个 skill 不会替你臆造什么
 

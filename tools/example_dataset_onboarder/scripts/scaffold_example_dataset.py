@@ -95,6 +95,7 @@ def main():
 
     if args.with_formula:
         formula_content = (
+            "import numpy as np\n\n"
             f"def {args.target}({', '.join(feature_names)}):\n"
             f"    raise NotImplementedError('Replace with ground-truth formula if known')\n"
         )

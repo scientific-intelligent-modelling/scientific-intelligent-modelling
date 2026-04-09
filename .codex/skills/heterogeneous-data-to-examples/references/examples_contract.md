@@ -74,8 +74,35 @@ dataset:
 例如：
 
 ```python
+import numpy as np
+
 def y(x0, x1):
     return x0**2 + x1
 ```
 
+建议：
+
+- 函数名优先与 `dataset.target.name` 一致
+- 若公式里会用 `sin/exp/log` 等数组运算，默认写 `import numpy as np`
+
 如果真实公式未知，就不要伪造 `formula.py`。
+
+## 公式一致性校验
+
+若 metadata 声明了：
+
+```yaml
+dataset:
+  ground_truth_formula:
+    file: formula.py
+```
+
+则应对一个或多个 split 做公式代入验证：
+
+- 读取特征列
+- 把特征列按 metadata.features 顺序传给公式函数
+- 比较公式输出和目标列
+- 至少记录或检查：
+  - `rmse`
+  - `nmse`
+  - `max_abs_err`
