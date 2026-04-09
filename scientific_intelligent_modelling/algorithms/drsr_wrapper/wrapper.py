@@ -24,7 +24,7 @@ except Exception:
 
 
 class DRSRRegressor(BaseWrapper):
-    _DEFAULT_MAX_PARAMS = 12
+    _DEFAULT_MAX_PARAMS = 10
     """
     DRSR 封装对外接口对齐到 llmsr：
     - llm_config_path
@@ -366,6 +366,7 @@ class DRSRRegressor(BaseWrapper):
             background=background,
             feature_descriptions=feature_descriptions,
             target_description=target_description,
+            max_params=self._max_params(),
         )
 
         # 切换 cwd 到工作目录，确保 drsr 相对路径输出写入其中

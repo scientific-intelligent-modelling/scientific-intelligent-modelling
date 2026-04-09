@@ -134,7 +134,7 @@ def build_regressor(tool: str, dataset_dir: Path, output_dir: Path, meta: dict, 
             "llm_config_path": str(llm_config_path),
             "niterations": 8,
             "samples_per_iteration": 4,
-            "evaluate_timeout_seconds": 20,
+            "evaluate_timeout_seconds": 60,
         }
         params.update(params_override)
         return SymbolicRegressor(tool, **params, **common)
