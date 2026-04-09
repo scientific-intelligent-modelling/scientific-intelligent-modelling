@@ -10,7 +10,7 @@ SREvoLab targets a practical research setting in which symbolic regression progr
     \item \textbf{Protocol preservation}: any iterative improvement mechanism must respect fixed benchmark semantics, split usage rules, and evaluation procedures.
 \end{enumerate}
 
-At a high level, the architecture consists of a method substrate, a dataset substrate, a skill layer, and a lightweight audited evolution loop.
+At a high level, the architecture consists of a method substrate, a dataset substrate, a skill layer, and a lightweight audited evolution loop. The control principle is review before evolve: every run must first be interpreted and audited before any follow-up change is admitted.
 
 \subsection{Unified Method Substrate}
 
@@ -106,7 +106,7 @@ The configured backend is run under the unified execution substrate. The result 
 Method outputs are normalized into a common representation, including equation strings and candidate equation sets when available. This step is the insertion point for future symbolic simplification or constant refinement.
 
 \paragraph{Audit.}
-The loop performs explicit validity checks before accepting any reported improvement. The audit layer is intended to prevent benchmark drift and protocol violations, including changes to evaluation scripts, silent redefinition of splits, inconsistent metric usage, and misuse of ground-truth formulas.
+The loop performs explicit validity checks before accepting any reported improvement. The audit layer is intended to prevent benchmark drift and protocol violations, including changes to evaluation scripts, silent redefinition of splits, inconsistent metric usage, and misuse of ground-truth formulas. If audit fails, no evolutionary action is allowed to proceed.
 
 \paragraph{Review and Archive.}
-Finally, the loop summarizes the run, records failure modes or candidate improvements, and stores the resulting artifact state for future continuation. The current implementation should be understood as a lightweight scaffold for bounded iteration rather than a full autonomous scientific agent.
+Finally, the loop summarizes the run, records failure modes or candidate improvements, and stores the resulting artifact state for future continuation. Concretely, the reviewer maps each run into a small action vocabulary: keep the baseline, repair execution, tune bounded hyperparameters, or try a structure-level modification such as changing the operator set or post-processing step. Actions that alter evaluator semantics, split definitions, or leak ground truth into search are explicitly disallowed. The current implementation should therefore be understood as a lightweight scaffold for review-gated iteration rather than a full autonomous scientific agent.

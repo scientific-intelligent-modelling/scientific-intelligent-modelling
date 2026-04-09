@@ -17,12 +17,12 @@ SREvoLab is built around two normalization layers. The first is a \emph{unified 
 
 On top of this substrate, we introduce a modular \emph{skill layer}. Rather than leaving repository integration, data conversion, protocol checking, and expression processing as ad hoc chores, SREvoLab packages them into reusable operations such as repository onboarding, heterogeneous-data conversion, expression normalization, and formula-grounded validation.
 
-Finally, we outline a lightweight \emph{audited evolution loop}. The loop starts from a runnable baseline, compiles a protocol-preserving experiment specification, executes the run, audits the resulting artifacts, and only then proposes limited follow-up modifications. The emphasis is disciplined iteration under fixed benchmark semantics rather than unconstrained autonomous search.
+Finally, we outline a lightweight \emph{audited evolution loop}. The loop starts from a runnable baseline, compiles a protocol-preserving experiment specification, executes the run, reviews the resulting artifacts, and only then proposes limited follow-up modifications. The emphasis is disciplined iteration under fixed benchmark semantics rather than unconstrained autonomous search. The key design choice is \emph{review before evolve}: evolution is driven by structured feedback over logs, equations, metrics, and audit flags, not by unchecked score chasing.
 
 The main contributions of this work are as follows:
 \begin{itemize}[leftmargin=1.5em]
     \item We build a unified symbolic regression platform that integrates ten heterogeneous SR tools under a common wrapper interface with isolated execution environments.
     \item We propose a lightweight canonical dataset schema with explicit train/validation/ID-test/OOD-test splits, metadata, and optional ground-truth formulas.
     \item We develop a modular skill layer for repository onboarding, dataset homogenization, and formula-aware validation.
-    \item We introduce a lightweight audited evolution loop that supports reproducible baseline execution and bounded iterative improvement without changing benchmark semantics.
+    \item We introduce a review-first audited evolution loop that turns run artifacts into bounded next-step proposals without changing benchmark semantics.
 \end{itemize}

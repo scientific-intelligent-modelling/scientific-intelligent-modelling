@@ -2,7 +2,7 @@
 
 \subsection{Experimental Scope}
 
-Since SREvoLab is positioned as a research substrate rather than a new symbolic regression algorithm, the experiments validate three properties: method coverage, dataset-schema validity, and end-to-end execution on a manageable pilot slice. We therefore do not treat the current results as a final leaderboard claim.
+Since SREvoLab is positioned as a research substrate rather than a new symbolic regression algorithm, the experiments validate three properties: method coverage, dataset-schema validity, and end-to-end execution on a manageable pilot slice. We therefore do not treat the current results as a final leaderboard claim. In particular, this version validates the infrastructure required for auto-review and bounded evolution rather than claiming autonomous discovery gains.
 
 At the method level, the current registry integrates $10$ symbolic regression tools mapped to $8$ conda environments, reflecting the fact that SR repositories often require incompatible dependency stacks.
 
@@ -46,4 +46,4 @@ The pilot slice also shows why an audited research substrate is valuable. On som
 
 \subsection{Limitations of the Current Evaluation}
 
-The present experiments are intentionally narrow. The pilot slice covers only a subset of integrated methods and tasks, does not yet enforce a globally frozen cross-method compute budget for every backend, and does not fully exploit expression-level normalization or complexity-aware ranking. We therefore view the current experiments as proof that the platform is already usable, while the next stage will scale the protocol and strengthen fairness guarantees.
+The present experiments are intentionally narrow. The pilot slice covers only a subset of integrated methods and tasks, does not yet enforce a globally frozen cross-method compute budget for every backend, and does not fully exploit expression-level normalization or complexity-aware ranking. Full closed-loop auto-review and evolution studies remain future work. We therefore view the current experiments as proof that the platform is already usable, while the next stage will scale the protocol and strengthen fairness guarantees.
