@@ -1,0 +1,74 @@
+\section{System Overview and Method}
+
+\subsection{Problem Setting and Design Goals}
+
+SR-Workbench targets a practical research setting in which symbolic regression progress is hindered by heterogeneous repositories, heterogeneous datasets, and inconsistent execution protocols. Our goal is therefore not to replace existing symbolic regression methods with a new unified model, but to provide a common operating layer on which existing methods can be reproduced, compared, and extended with substantially less integration overhead. This leads to four design goals:
+\begin{enumerate}[leftmargin=1.5em]
+    \item \textbf{Method-level unification}: heterogeneous symbolic regression repositories should expose a shared execution interface for training, prediction, and equation extraction.
+    \item \textbf{Data-level unification}: heterogeneous benchmark families should be converted into a shared schema with explicit validation and OOD evaluation slots.
+    \item \textbf{Operational modularity}: recurring research operations should be surfaced as reusable skills rather than remaining as ad hoc manual steps.
+    \item \textbf{Protocol preservation}: any iterative improvement mechanism must respect fixed benchmark semantics, split usage rules, and evaluation procedures.
+\end{enumerate}
+
+At a high level, the architecture is organized into four layers: a method substrate, a dataset substrate, a skill layer, and a lightweight audited evolution loop.
+
+\subsection{Unified Method Substrate}
+
+At the core of SR-Workbench is a unified method interface exposed through a single entry point, \texttt{SymbolicRegressor}. Each symbolic regression backend is wrapped as a tool-specific adapter that implements a common contract consisting of four primary operations: \texttt{fit}, \texttt{predict}, \texttt{get\_optimal\_equation}, and \texttt{get\_total\_equations}. The adapters hide tool-specific details such as repository layout, model initialization, expression extraction conventions, and serialization choices.
+
+Method registration is configuration-driven. A toolbox registry maps each tool identifier to a wrapper class and an isolated runtime environment. In the current version, the platform integrates more than ten heterogeneous backends, including classical symbolic regression systems, search-based methods, and LLM-assisted approaches. This registry decouples the front-end experiment specification from the back-end implementation details and allows users to swap methods without rewriting dataset or evaluation code.
+
+Execution is handled through a subprocess boundary. Instead of importing and running all methods directly in the main Python process, SR-Workbench serializes a command containing the action type, data payload, tool identifier, and runtime parameters, and dispatches it to a tool-specific subprocess runner. This design has two advantages. First, it isolates dependency conflicts across heterogeneous symbolic regression stacks. Second, it improves runtime robustness by separating method crashes, incompatible packages, or backend-specific state from the orchestration layer. To support reproducibility and downstream auditing, each run also writes minimal experiment metadata such as the tool name, problem name, seed, configuration, and execution status.
+
+The method substrate is paired with explicit environment management. Each backend is associated with a dedicated or shared conda environment, allowing the platform to support tools with incompatible Python versions or mutually conflicting dependencies. In practice, this is essential for symbolic regression, where different repositories may rely on incompatible search engines, deep learning stacks, or external scientific packages.
+
+\subsection{Canonical Dataset Substrate}
+
+The dataset substrate standardizes heterogeneous SR benchmarks into a lightweight directory-based schema:
+\begin{center}
+\texttt{train.csv, valid.csv, id\_test.csv, ood\_test.csv, metadata.yaml, formula.py (optional)}.
+\end{center}
+All CSV files are required to share a consistent header, with metadata providing the target name, feature names, split information, and optional semantic descriptions. This design is intentionally minimal, but it is rich enough to support training, validation, in-distribution evaluation, out-of-distribution evaluation, and metadata-conditioned prompting for LLM-based methods.
+
+This schema addresses three recurring sources of friction in SR experimentation. First, it removes repository-specific assumptions about file names and split layout. Second, it makes OOD evaluation explicit rather than optional. Third, it provides a stable location for dataset-level semantics, such as feature descriptions and target descriptions, which are especially useful for language-model-based symbolic regression systems.
+
+When ground-truth formulas are available, SR-Workbench stores them explicitly and validates them against the dataset rather than treating them as passive annotations. In particular, the current dataset validation pipeline can import a declared formula file, align the callable signature with the feature ordering specified in metadata, and verify that the resulting outputs match the stored target column up to configurable numerical tolerance. This allows the platform to distinguish datasets with trusted analytical ground truth from those that only provide observational input-output pairs. Importantly, ground-truth formulas are treated as evaluation and validation artifacts, not as privileged information that can be injected into the method search loop.
+
+\subsection{Skill Layer}
+
+SR-Workbench elevates recurring research operations into explicit skills. In the current system, two SR-specific skills form the main operational backbone.
+
+The first skill, \texttt{sr-tool-onboarder}, standardizes the integration of new symbolic regression repositories. It treats repository onboarding as a structured process with a manifest, wrapper scaffold generation, environment registration, and runtime validation. This directly reduces the manual burden of turning a standalone symbolic regression repository into a reusable backend under the common method interface.
+
+The second skill, \texttt{heterogeneous-data-to-examples}, standardizes the conversion of heterogeneous source data into the canonical dataset schema. It supports the creation of split-aware dataset directories, metadata templates, and formula-aware validation. This is particularly important because symbolic regression datasets often originate from incompatible sources, including synthetic benchmarks, curated repositories, and domain-specific scientific exports.
+
+Conceptually, the skill layer serves two roles. Operationally, it reduces repetitive engineering work. Methodologically, it makes the research workflow explicit enough to be audited and partially automated. Rather than scattering onboarding, schema conversion, and validation logic across undocumented scripts, SR-Workbench turns them into named, inspectable, and reusable procedures.
+
+\subsection{Lightweight Audited Evolution Loop}
+
+On top of the unified method and dataset substrates, we define a lightweight audited evolution loop. The loop is designed for bounded, protocol-preserving iteration rather than unconstrained autonomous optimization. Its canonical trajectory is:
+\begin{center}
+\texttt{Adapt $\rightarrow$ Compile $\rightarrow$ Execute $\rightarrow$ Normalize $\rightarrow$ Audit $\rightarrow$ Review $\rightarrow$ Archive}.
+\end{center}
+
+\paragraph{Adapt.}
+Starting from a candidate symbolic regression repository, the system integrates the method through the wrapper interface and records its executable configuration.
+
+\paragraph{Compile.}
+Given a canonical dataset and a method configuration, the system produces an experiment specification that fixes the tool, dataset, parameter bundle, seed, and evaluation targets. At this stage, benchmark semantics are frozen.
+
+\paragraph{Execute.}
+The configured backend is run under the unified execution substrate. The result is a reproducible artifact bundle including logs, equation outputs, runtime metadata, and evaluation summaries.
+
+\paragraph{Normalize.}
+Method outputs are normalized into a common representation, including equation strings and candidate equation sets when available. This step is the natural insertion point for future expression normalization and post-processing components such as symbolic simplification or constant refinement.
+
+\paragraph{Audit.}
+The loop performs explicit validity checks before accepting any reported improvement. In the current design, the audit layer is intended to prevent benchmark drift and protocol violations, including changes to evaluation scripts, silent redefinition of splits, inconsistent metric usage, and misuse of ground-truth formulas. The audit perspective is central: a candidate result is only meaningful if it is obtained under the same executable protocol as the baseline.
+
+\paragraph{Review and Archive.}
+Finally, the loop summarizes the run, records the observed failure modes or candidate improvements, and stores the resulting artifact state for future continuation. The current implementation should be understood as a lightweight scaffold for bounded iteration rather than a full autonomous scientific agent. This choice is deliberate. In symbolic regression, result quality depends not only on predictive error, but also on expression validity, complexity, stability across seeds, and OOD behavior. A lighter, auditable loop is therefore preferable to an aggressive but opaque optimization process.
+
+\subsection{Discussion}
+
+The resulting system should be understood as an infrastructure layer for symbolic regression research. Its main contribution is not a new search algorithm, but a reduction in the engineering entropy that currently separates symbolic regression methods, datasets, and workflows. By making repository onboarding, dataset canonicalization, execution isolation, and formula-aware validation explicit, SR-Workbench creates a foundation on which more ambitious automated research loops can later be built without sacrificing protocol integrity.
