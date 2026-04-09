@@ -53,9 +53,9 @@
         "selection_protocol": "use validation geometric / relative error to choose best model, then compute symbolic metrics",
         "metrics": [
           {
-            "name": "r2_gt_0_999",
+            "name": "legacy_accuracy_proxy",
             "direction": "maximize",
-            "toolkit_field": "r2_accuracy_0_999"
+            "toolkit_field": "legacy_accuracy_proxy"
           },
           {
             "name": "solution_rate",

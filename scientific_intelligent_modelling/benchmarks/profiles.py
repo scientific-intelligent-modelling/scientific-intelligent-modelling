@@ -71,10 +71,10 @@ BENCHMARK_PROFILES = {
                 "selection_protocol": "use validation geometric / relative error to choose best model, then compute symbolic metrics",
                 "metrics": [
                     {
-                        "name": "r2_gt_0_999",
+                        "name": "legacy_accuracy_proxy",
                         "direction": "maximize",
-                        "toolkit_field": "r2_accuracy_0_999",
-                        "note": "沿用 SRBench 风格 accuracy 视角",
+                        "toolkit_field": "legacy_accuracy_proxy",
+                        "note": "用于兼容旧式 error / binary 视角；SRSD 真正强调的是 NED",
                     },
                     {
                         "name": "solution_rate",
