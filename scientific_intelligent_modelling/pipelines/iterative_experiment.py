@@ -4,9 +4,9 @@ import pandas as pd
 import yaml
 from pathlib import Path
 import numpy as np
-from sklearn.metrics import mean_squared_error, r2_score
 
 # Assuming SymbolicRegressor is accessible
+from scientific_intelligent_modelling.benchmarks.metrics import regression_metrics
 from scientific_intelligent_modelling.srkit.regressor import SymbolicRegressor
 
 class DatasetLoader:
@@ -104,14 +104,16 @@ class IterativeExperimentPipeline:
     def _evaluate_model(self, X: np.ndarray, y_true: np.ndarray) -> dict:
         """Evaluates the current model on given data."""
         if len(y_true) == 0:
-            return {"rmse": np.nan, "r2": np.nan}
+            return {"rmse": np.nan, "r2": np.nan, "nmse": np.nan, "acc_0_1": np.nan}
             
         y_pred = self.regressor.predict(X)
-        
-        rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-        r2 = r2_score(y_true, y_pred)
-        
-        return {"rmse": rmse, "r2": r2}
+        metrics = regression_metrics(y_true, y_pred, acc_threshold=0.1)
+        return {
+            "rmse": metrics["rmse"],
+            "r2": metrics["r2"],
+            "nmse": metrics["nmse"],
+            "acc_0_1": metrics["acc_tau"],
+        }
 
     def run(self, num_iterations: int = 1):
         """Runs the iterative experiment."""

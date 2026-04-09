@@ -7,6 +7,7 @@ import time
 import numpy as np
 import pandas as pd
 
+from scientific_intelligent_modelling.benchmarks.metrics import regression_metrics
 from scientific_intelligent_modelling.srkit.regressor import SymbolicRegressor
 
 
@@ -24,19 +25,12 @@ def safe_float(value):
 
 def evaluate(reg, X, y):
     pred = np.asarray(reg.predict(X)).reshape(-1)
-    residual = pred - y
-    mse = float(np.mean(np.square(residual)))
-    rmse = math.sqrt(mse)
-    y_mean = float(np.mean(y))
-    ss_res = float(np.sum(np.square(residual)))
-    ss_tot = float(np.sum(np.square(y - y_mean)))
-    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else float("nan")
-    denom = float(np.mean(np.square(y))) if len(y) else float("nan")
-    nmse = float(mse / denom) if denom and not math.isnan(denom) else float("nan")
+    metrics = regression_metrics(y, pred, acc_threshold=0.1)
     return {
-        "rmse": safe_float(rmse),
-        "r2": safe_float(r2),
-        "nmse": safe_float(nmse),
+        "rmse": safe_float(metrics["rmse"]),
+        "r2": safe_float(metrics["r2"]),
+        "nmse": safe_float(metrics["nmse"]),
+        "acc_0_1": safe_float(metrics["acc_tau"]),
     }
 
 

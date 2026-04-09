@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
+from scientific_intelligent_modelling.benchmarks.metrics import regression_metrics
 from scientific_intelligent_modelling.srkit.regressor import SymbolicRegressor
 
 
@@ -28,15 +29,13 @@ def load_dataset(dataset_dir: Path):
 
 def metrics(reg, X, y):
     pred = np.asarray(reg.predict(X)).reshape(-1)
-    mse = float(np.mean((pred - y) ** 2))
-    rmse = math.sqrt(mse)
-    y_mean = float(np.mean(y))
-    ss_res = float(np.sum((pred - y) ** 2))
-    ss_tot = float(np.sum((y - y_mean) ** 2))
-    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else float("nan")
-    denom = float(np.mean(y ** 2))
-    nmse = float(mse / denom) if denom else float("nan")
-    return {"rmse": rmse, "r2": r2, "nmse": nmse}
+    result = regression_metrics(y, pred, acc_threshold=0.1)
+    return {
+        "rmse": result["rmse"],
+        "r2": result["r2"],
+        "nmse": result["nmse"],
+        "acc_0_1": result["acc_tau"],
+    }
 
 
 def main():
