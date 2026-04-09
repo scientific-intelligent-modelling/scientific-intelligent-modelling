@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -78,11 +79,18 @@ def validate_generated_files(manifest: dict, errors: list[str]) -> None:
 
 def run_runtime_check(manifest: dict, python_executable: str, errors: list[str]) -> None:
     check_file = repo_root() / manifest["derived_paths"]["check_file"]
+    env = dict(os.environ)
+    root_str = str(repo_root())
+    existing_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = (
+        root_str if not existing_pythonpath else f"{root_str}:{existing_pythonpath}"
+    )
     result = subprocess.run(
         [python_executable, str(check_file)],
         cwd=repo_root(),
         text=True,
         capture_output=True,
+        env=env,
     )
     if result.returncode != 0:
         errors.append(
