@@ -50,6 +50,62 @@ def acc_within_threshold(
     return safe_float(np.mean(np.abs(y_true - y_pred) <= float(threshold)))
 
 
+def llm_srbench_acc_tau(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    tau: float,
+    *,
+    eps: float = 1e-12,
+) -> float | None:
+    """LLM-SRBench 原生的 Acc_tau。
+
+    论文定义采用：
+        1( max_i |(y_hat_i - y_i) / y_i| <= tau )
+    即对整条测试轨迹给出 0/1 判定，而不是逐点取平均。
+    """
+    y_true = np.asarray(y_true, dtype=float).reshape(-1)
+    y_pred = np.asarray(y_pred, dtype=float).reshape(-1)
+    if y_true.shape != y_pred.shape or y_true.size == 0:
+        return None
+    denom = np.maximum(np.abs(y_true), float(eps))
+    max_rel_err = float(np.max(np.abs(y_pred - y_true) / denom))
+    return safe_float(1.0 if max_rel_err <= float(tau) else 0.0)
+
+
+def llm_srbench_nmse(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+) -> float | None:
+    """LLM-SRBench 原生 NMSE。
+
+    根据论文附录 B.1：
+        sum_i (y_hat_i - y_i)^2 / sum_i (y_i - y_bar)^2
+    这与当前工具集里常用的 `mse / mean(y^2)` 不是同一口径。
+    """
+    y_true = np.asarray(y_true, dtype=float).reshape(-1)
+    y_pred = np.asarray(y_pred, dtype=float).reshape(-1)
+    if y_true.shape != y_pred.shape or y_true.size == 0:
+        return None
+    numerator = float(np.sum(np.square(y_pred - y_true)))
+    denominator = float(np.sum(np.square(y_true - np.mean(y_true))))
+    if denominator <= 0 or math.isnan(denominator):
+        return None
+    return safe_float(numerator / denominator)
+
+
+def llm_srbench_numeric_metrics(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    *,
+    tau: float = 0.1,
+) -> dict[str, float | None]:
+    """LLM-SRBench 数值指标组合。"""
+    return {
+        "nmse": llm_srbench_nmse(y_true, y_pred),
+        "acc_tau": llm_srbench_acc_tau(y_true, y_pred, tau=tau),
+    }
+
+
 def regression_metrics(
     y_true: np.ndarray,
     y_pred: np.ndarray,

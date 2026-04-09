@@ -5,6 +5,9 @@ import numpy as np
 
 from scientific_intelligent_modelling.benchmarks.metrics import (
     acc_within_threshold,
+    llm_srbench_acc_tau,
+    llm_srbench_nmse,
+    llm_srbench_numeric_metrics,
     normalized_tree_edit_distance,
     regression_metrics,
     srbench_model_size,
@@ -69,6 +72,26 @@ class BenchmarkMetricsTest(unittest.TestCase):
         y_pred = np.array([0.05, 1.02, 1.85, 3.2])
         score = acc_within_threshold(y_true, y_pred, threshold=0.1)
         self.assertAlmostEqual(score, 0.5)
+
+    def test_llm_srbench_acc_tau_is_sequence_level(self):
+        y_true = np.array([1.0, 2.0, 4.0])
+        y_pred = np.array([1.01, 2.02, 4.03])
+        self.assertEqual(llm_srbench_acc_tau(y_true, y_pred, tau=0.1), 1.0)
+        y_pred_bad = np.array([1.01, 2.02, 5.0])
+        self.assertEqual(llm_srbench_acc_tau(y_true, y_pred_bad, tau=0.1), 0.0)
+
+    def test_llm_srbench_nmse_matches_variance_normalization(self):
+        y_true = np.array([1.0, 2.0, 3.0])
+        y_pred = np.array([1.0, 2.0, 4.0])
+        expected = 1.0 / 2.0
+        self.assertAlmostEqual(llm_srbench_nmse(y_true, y_pred), expected)
+
+    def test_llm_srbench_numeric_metrics_bundle(self):
+        y_true = np.array([1.0, 2.0, 3.0])
+        y_pred = np.array([1.0, 2.0, 3.0])
+        metrics = llm_srbench_numeric_metrics(y_true, y_pred, tau=0.1)
+        self.assertEqual(metrics["acc_tau"], 1.0)
+        self.assertEqual(metrics["nmse"], 0.0)
 
 
 if __name__ == "__main__":
