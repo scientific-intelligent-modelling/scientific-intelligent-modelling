@@ -2,7 +2,7 @@
 
 ## Goal
 
-This figure should communicate, in one glance, why SR-Workbench is needed and what it contributes beyond a collection of wrappers.
+This figure should communicate, in one glance, why SREvoLab is needed and what it contributes beyond a collection of wrappers.
 
 ## Recommended Layout
 
@@ -10,7 +10,7 @@ Use a left-to-right 3-panel figure.
 
 ### Panel A: Fragmented SR Research Workflow
 
-Show the current pain points before SR-Workbench.
+Show the current pain points before SREvoLab.
 
 Visual elements:
 - Multiple heterogeneous method repositories:
@@ -37,9 +37,9 @@ Existing symbolic regression research is fragmented across repositories,
 runtime stacks, data schemas, and evaluation conventions.
 ```
 
-### Panel B: SR-Workbench Core Architecture
+### Panel B: SREvoLab Core Architecture
 
-Show SR-Workbench as a layered middle substrate.
+Show SREvoLab as a layered middle substrate.
 
 Recommended stack:
 1. Unified Method Substrate
@@ -65,7 +65,7 @@ Recommended stack:
 
 Message:
 ```
-SR-Workbench turns heterogeneous methods and datasets into a common,
+SREvoLab turns heterogeneous methods and datasets into a common,
 auditable research operating layer.
 ```
 
@@ -95,7 +95,7 @@ and provides a foundation for future automated improvement.
 ## Caption Draft
 
 ```text
-From fragmented symbolic regression repositories and heterogeneous benchmark formats to a unified, auditable research substrate. SR-Workbench standardizes method execution, dataset structure, and recurring research operations, then places a lightweight audited evolution loop on top of this substrate. The figure highlights the paper's central claim: the main contribution is not a new symbolic regression model, but a research operating layer that reduces engineering entropy and enables reproducible, extensible SR experimentation.
+From fragmented symbolic regression repositories and heterogeneous benchmark formats to a unified, auditable research substrate. SREvoLab standardizes method execution, dataset structure, and recurring research operations, then places a lightweight audited evolution loop on top of this substrate. The figure highlights the paper's central claim: the main contribution is not a new symbolic regression model, but a research operating layer that reduces engineering entropy and enables reproducible, extensible SR experimentation.
 ```
 
 ## Design Notes

@@ -2,7 +2,7 @@
 
 \subsection{Problem Setting and Design Goals}
 
-SR-Workbench targets a practical research setting in which symbolic regression progress is hindered by heterogeneous repositories, heterogeneous datasets, and inconsistent execution protocols. Our goal is not to replace existing SR methods with a new unified model, but to provide a common operating layer on which they can be reproduced, compared, and extended with much lower integration overhead. This leads to four design goals:
+SREvoLab targets a practical research setting in which symbolic regression progress is hindered by heterogeneous repositories, heterogeneous datasets, and inconsistent execution protocols. Our goal is not to replace existing SR methods with a new unified model, but to provide a common operating layer on which they can be reproduced, compared, and extended with much lower integration overhead. This leads to four design goals:
 \begin{enumerate}[leftmargin=1.5em]
     \item \textbf{Method-level unification}: heterogeneous symbolic regression repositories should expose a shared execution interface for training, prediction, and equation extraction.
     \item \textbf{Data-level unification}: heterogeneous benchmark families should be converted into a shared schema with explicit validation and OOD evaluation slots.
@@ -14,7 +14,7 @@ At a high level, the architecture consists of a method substrate, a dataset subs
 
 \subsection{Unified Method Substrate}
 
-At the core of SR-Workbench is a unified method interface exposed through the \texttt{SymbolicRegressor} entry point. Each backend is wrapped as a tool-specific adapter that implements four primary operations: \texttt{fit}, \texttt{predict}, \texttt{get\_optimal\_equation}, and \texttt{get\_total\_equations}. The adapters hide tool-specific details such as repository layout, model initialization, expression extraction conventions, and serialization choices.
+At the core of SREvoLab is a unified method interface exposed through the \texttt{SymbolicRegressor} entry point. Each backend is wrapped as a tool-specific adapter that implements four primary operations: \texttt{fit}, \texttt{predict}, \texttt{get\_optimal\_equation}, and \texttt{get\_total\_equations}. The adapters hide tool-specific details such as repository layout, model initialization, expression extraction conventions, and serialization choices.
 
 Method registration is configuration-driven. A toolbox registry maps each tool identifier to a wrapper class and an isolated runtime environment. The current registry covers ten heterogeneous backends, including practical software-oriented engines such as PySR \citep{cranmer2023pysr}, reinforcement-learning and neural-guided families related to DSO/uDSR \citep{petersen2021deep,mundhenk2021seeding,landajuela2022udsr}, transformer-based families such as NeSymReS/E2E/TPSR \citep{biggio2021nsr,kamienny2022end,tpsr2023}, and recent LLM-assisted systems \citep{shojaee2024llm,wang2025drsr}. Table~\ref{tab:method-coverage} summarizes the present method substrate.
 
@@ -37,11 +37,11 @@ Method & Wrapper Class & Env & Registry Status \\
 \texttt{tpsr} & \texttt{TPSRRegressor} & \texttt{sim\_tpsr} & Integrated \\
 \bottomrule
 \end{tabular}
-\caption{Current method coverage in the SR-Workbench registry. Each tool is exposed through the shared symbolic regression interface and mapped to a controlled execution environment.}
+\caption{Current method coverage in the SREvoLab registry. Each tool is exposed through the shared symbolic regression interface and mapped to a controlled execution environment.}
 \label{tab:method-coverage}
 \end{table}
 
-Execution is handled through a subprocess boundary. SR-Workbench serializes the action type, data payload, tool identifier, and runtime parameters, then dispatches them to a tool-specific subprocess runner. This isolates dependency conflicts across heterogeneous SR stacks and improves robustness by separating backend-specific crashes from the orchestration layer. Each run also writes minimal experiment metadata such as tool name, problem name, seed, configuration, and execution status.
+Execution is handled through a subprocess boundary. SREvoLab serializes the action type, data payload, tool identifier, and runtime parameters, then dispatches them to a tool-specific subprocess runner. This isolates dependency conflicts across heterogeneous SR stacks and improves robustness by separating backend-specific crashes from the orchestration layer. Each run also writes minimal experiment metadata such as tool name, problem name, seed, configuration, and execution status.
 
 Each backend is associated with a dedicated or shared conda environment, allowing the platform to support tools with incompatible Python versions or conflicting dependencies.
 
@@ -68,17 +68,17 @@ Artifact & Required & Role & Validator Check \\
 \texttt{formula.py} & Optional & analytical ground truth & callable + numerical match \\
 \bottomrule
 \end{tabular}
-\caption{Canonical dataset schema used by SR-Workbench. The validator enforces split consistency and can additionally verify analytical formulas when available.}
+\caption{Canonical dataset schema used by SREvoLab. The validator enforces split consistency and can additionally verify analytical formulas when available.}
 \label{tab:dataset-schema}
 \end{table}
 
 This schema addresses three recurring sources of friction in SR experimentation: it removes repository-specific assumptions about file names and split layout, makes OOD evaluation explicit, and provides a stable location for dataset-level semantics.
 
-When ground-truth formulas are available, SR-Workbench stores them explicitly and validates them against the dataset rather than treating them as passive annotations. The current validator imports the declared formula, aligns its callable signature with the feature ordering in metadata, and checks that the resulting outputs match the stored target column up to numerical tolerance. Ground-truth formulas are treated as validation artifacts, not as privileged information for the search loop.
+When ground-truth formulas are available, SREvoLab stores them explicitly and validates them against the dataset rather than treating them as passive annotations. The current validator imports the declared formula, aligns its callable signature with the feature ordering in metadata, and checks that the resulting outputs match the stored target column up to numerical tolerance. Ground-truth formulas are treated as validation artifacts, not as privileged information for the search loop.
 
 \subsection{Skill Layer}
 
-SR-Workbench elevates recurring research operations into explicit skills. In the current system, two SR-specific skills form the main operational backbone.
+SREvoLab elevates recurring research operations into explicit skills. In the current system, two SR-specific skills form the main operational backbone.
 
 The first skill, \texttt{sr-tool-onboarder}, standardizes the integration of new symbolic regression repositories through a manifest, wrapper scaffold generation, environment registration, and runtime validation.
 

@@ -3,7 +3,7 @@
 ## Figures
 
 ### Figure 1. Problem Definition and Contributions Overview
-- Purpose: one-glance explanation of fragmentation -> SR-Workbench substrate -> audited loop
+- Purpose: one-glance explanation of fragmentation -> SREvoLab substrate -> audited loop
 - Source note: see `paper/figures/problem_definition_contributions_figure.md`
 - Suggested placement: end of Introduction or beginning of System Overview
 
@@ -57,4 +57,4 @@
 
 ## Formal Caption for Figure 1
 
-From fragmented symbolic regression repositories and heterogeneous benchmark formats to a unified, auditable research substrate. SR-Workbench standardizes method execution, dataset structure, and recurring research operations, then places a lightweight audited evolution loop on top of this substrate. The figure highlights the central claim of the paper: the main contribution is not a new symbolic regression model, but a research operating layer that reduces engineering entropy and enables reproducible, extensible symbolic regression experimentation.
+From fragmented symbolic regression repositories and heterogeneous benchmark formats to a unified, auditable research substrate. SREvoLab standardizes method execution, dataset structure, and recurring research operations, then places a lightweight audited evolution loop on top of this substrate. The figure highlights the central claim of the paper: the main contribution is not a new symbolic regression model, but a research operating layer that reduces engineering entropy and enables reproducible, extensible symbolic regression experimentation.

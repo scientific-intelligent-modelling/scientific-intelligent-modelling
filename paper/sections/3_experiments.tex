@@ -2,7 +2,7 @@
 
 \subsection{Experimental Scope}
 
-Since SR-Workbench is positioned as a research substrate rather than a new symbolic regression algorithm, the experiments validate three properties: method coverage, dataset-schema validity, and end-to-end execution on a manageable pilot slice. We therefore do not treat the current results as a final leaderboard claim.
+Since SREvoLab is positioned as a research substrate rather than a new symbolic regression algorithm, the experiments validate three properties: method coverage, dataset-schema validity, and end-to-end execution on a manageable pilot slice. We therefore do not treat the current results as a final leaderboard claim.
 
 At the method level, the current registry integrates $10$ symbolic regression tools mapped to $8$ conda environments, reflecting the fact that SR repositories often require incompatible dependency stacks.
 
@@ -14,7 +14,7 @@ For datasets with known analytical formulas, the validator imports the declared 
 
 \subsection{Pilot End-to-End Slice}
 
-To assess the executable side of the platform, we report a pilot slice over three representative datasets already archived in the repository: \texttt{oscillator1}, \texttt{oscillator2}, and \texttt{stressstrain}. We use three methods that currently expose stable end-to-end execution paths through SR-Workbench: \texttt{pysr}, \texttt{llmsr}, and \texttt{drsr}. The reported results are taken from repository-archived \texttt{result.json} files generated through the unified execution path.
+To assess the executable side of the platform, we report a pilot slice over three representative datasets already archived in the repository: \texttt{oscillator1}, \texttt{oscillator2}, and \texttt{stressstrain}. We use three methods that currently expose stable end-to-end execution paths through SREvoLab: \texttt{pysr}, \texttt{llmsr}, and \texttt{drsr}. The reported results are taken from repository-archived \texttt{result.json} files generated through the unified execution path.
 
 These runs should be interpreted as \emph{substrate-validation case studies} rather than a definitive benchmark comparison. Their purpose is to show that the platform can execute multiple heterogeneous methods under canonicalized datasets and produce aligned ID/OOD summaries.
 
@@ -38,7 +38,7 @@ Method & Dataset & ID RMSE & OOD RMSE & ID NMSE & OOD NMSE \\
 \texttt{pysr} & \texttt{stressstrain} & $5.23\times 10^{-2}$ & $4.88\times 10^{-2}$ & $7.00\times 10^{-3}$ & $8.13\times 10^{-3}$ \\
 \bottomrule
 \end{tabular}
-\caption{Pilot end-to-end results from repository-archived runs executed through SR-Workbench. The current table is intended as a systems-validation slice rather than a final leaderboard.}
+\caption{Pilot end-to-end results from repository-archived runs executed through SREvoLab. The current table is intended as a systems-validation slice rather than a final leaderboard.}
 \label{tab:pilot-slice}
 \end{table}
 

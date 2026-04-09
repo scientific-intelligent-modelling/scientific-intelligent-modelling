@@ -61,7 +61,7 @@ def main():
     ]
     titles = [
         "A. Fragmented SR Research Workflow",
-        "B. SR-Workbench Core Architecture",
+        "B. SREvoLab Core Architecture",
         "C. What the Platform Enables",
     ]
     title_colors = ["#9c5b1a", "#2f6b45", "#355d8c"]
