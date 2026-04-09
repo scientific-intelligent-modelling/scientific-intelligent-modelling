@@ -16,7 +16,7 @@ At a high level, the architecture consists of a method substrate, a dataset subs
 
 At the core of SR-Workbench is a unified method interface exposed through the \texttt{SymbolicRegressor} entry point. Each backend is wrapped as a tool-specific adapter that implements four primary operations: \texttt{fit}, \texttt{predict}, \texttt{get\_optimal\_equation}, and \texttt{get\_total\_equations}. The adapters hide tool-specific details such as repository layout, model initialization, expression extraction conventions, and serialization choices.
 
-Method registration is configuration-driven. A toolbox registry maps each tool identifier to a wrapper class and an isolated runtime environment. The current registry covers ten heterogeneous backends. Table~\ref{tab:method-coverage} summarizes the present method substrate.
+Method registration is configuration-driven. A toolbox registry maps each tool identifier to a wrapper class and an isolated runtime environment. The current registry covers ten heterogeneous backends, including practical software-oriented engines such as PySR \citep{cranmer2023pysr}, reinforcement-learning and neural-guided families related to DSO/uDSR \citep{petersen2021deep,mundhenk2021seeding,landajuela2022udsr}, transformer-based families such as NeSymReS/E2E/TPSR \citep{biggio2021nsr,kamienny2022end,tpsr2023}, and recent LLM-assisted systems \citep{shojaee2024llm,wang2025drsr}. Table~\ref{tab:method-coverage} summarizes the present method substrate.
 
 \begin{table}[t]
 \centering
