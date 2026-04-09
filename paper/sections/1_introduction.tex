@@ -17,12 +17,12 @@ SREvoLab is built around two normalization layers. The first is a \emph{unified 
 
 On top of this substrate, we introduce a modular \emph{skill layer}. Rather than leaving repository integration, data conversion, protocol checking, and expression processing as ad hoc chores, SREvoLab packages them into reusable operations such as repository onboarding, heterogeneous-data conversion, expression normalization, and formula-grounded validation.
 
-Finally, we outline a lightweight \emph{audited evolution loop}. The loop starts from a runnable baseline, compiles a protocol-preserving experiment specification, executes the run, reviews the resulting artifacts, and only then proposes limited follow-up modifications. The emphasis is disciplined iteration under fixed benchmark semantics rather than unconstrained autonomous search. The key design choice is \emph{review before evolve}: evolution is driven by structured feedback over logs, equations, metrics, and audit flags, not by unchecked score chasing.
+Finally, we outline a lightweight \emph{audited evolution loop}. The loop starts from a runnable baseline, compiles a protocol-preserving experiment specification, executes the run, reviews the resulting artifacts, and only then proposes limited follow-up modifications. The emphasis is disciplined iteration under fixed benchmark semantics rather than unconstrained autonomous search. The key design choice is \emph{review before evolve}: evolution is driven by structured feedback over logs, equations, metrics, and audit flags, not by unchecked score chasing. In the current draft, this claim is supported by three concrete assets: a $10$-tool/$8$-environment method substrate, formula-grounded dataset validation with NMSEs down to $10^{-15}$ on canonicalized examples, and a pilot slice that exposes materially different ID/OOD behavior under one result format.
 
 The main contributions of this work are as follows:
 \begin{itemize}[leftmargin=1.5em]
-    \item We build a unified symbolic regression platform that integrates ten heterogeneous SR tools under a common wrapper interface with isolated execution environments.
-    \item We propose a lightweight canonical dataset schema with explicit train/validation/ID-test/OOD-test splits, metadata, and optional ground-truth formulas.
-    \item We develop a modular skill layer for repository onboarding, dataset homogenization, and formula-aware validation.
-    \item We introduce a review-first audited evolution loop that turns run artifacts into bounded next-step proposals without changing benchmark semantics.
+    \item We build a unified symbolic regression substrate that integrates ten heterogeneous SR tools across eight controlled execution environments under one wrapper interface.
+    \item We propose a lightweight canonical dataset schema with explicit train/validation/ID-test/OOD-test splits, metadata, and optional ground-truth formulas, and we verify formula consistency numerically when analytical targets are available.
+    \item We develop a modular skill layer for repository onboarding, dataset homogenization, and formula-aware validation, turning recurring SR engineering work into explicit, reusable operations.
+    \item We introduce a review-first audited evolution loop that maps run artifacts into bounded next-step proposals while preserving benchmark semantics and evaluator integrity.
 \end{itemize}

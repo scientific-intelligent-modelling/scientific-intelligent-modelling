@@ -4,13 +4,15 @@
 
 Since SREvoLab is positioned as a research substrate rather than a new symbolic regression algorithm, the experiments validate three properties: method coverage, dataset-schema validity, and end-to-end execution on a manageable pilot slice. We therefore do not treat the current results as a final leaderboard claim. In particular, this version validates the infrastructure required for auto-review and bounded evolution rather than claiming autonomous discovery gains.
 
+More specifically, the experiments are designed to support three claims. \textbf{C1}: heterogeneous SR methods can be made executable under a shared operating layer. \textbf{C2}: heterogeneous datasets can be canonicalized into one schema with verifiable split and formula semantics. \textbf{C3}: once methods and datasets are normalized, the resulting system can surface aligned ID/OOD behavior that is useful for later review-gated evolution.
+
 At the method level, the current registry integrates $10$ symbolic regression tools mapped to $8$ conda environments, reflecting the fact that SR repositories often require incompatible dependency stacks.
 
 \subsection{Dataset-Schema and Formula Validation}
 
 We first validate the canonical dataset substrate itself. The current examples-style schema requires four aligned split files together with \texttt{metadata.yaml}, and optionally \texttt{formula.py} when analytical ground truth is available. Our validation script checks split presence, header consistency, target-feature alignment, declared sample counts, and optional formula consistency.
 
-For datasets with known analytical formulas, the validator imports the declared formula callable, aligns its arguments with the feature ordering recorded in metadata, and compares formula outputs against stored target values. As a sanity check, the current implementation validates the ground-truth formulas of \texttt{BPG0} and \texttt{BPG1} from the examples directory. On \texttt{BPG0}, the formula check yields split-level NMSEs on the order of $10^{-13}$ on train/validation/ID data and $10^{-9}$ on OOD data. On \texttt{BPG1}, the corresponding NMSEs are on the order of $10^{-15}$.
+For datasets with known analytical formulas, the validator imports the declared formula callable, aligns its arguments with the feature ordering recorded in metadata, and compares formula outputs against stored target values. As a sanity check, the current implementation validates the ground-truth formulas of \texttt{BPG0} and \texttt{BPG1} from the examples directory. On \texttt{BPG0}, the formula check yields split-level NMSEs on the order of $10^{-13}$ on train/validation/ID data and $10^{-9}$ on OOD data. On \texttt{BPG1}, the corresponding NMSEs are on the order of $10^{-15}$. This directly supports \textbf{C2}: the schema does not merely store metadata and formulas, but preserves numerically checkable semantics.
 
 \subsection{Pilot End-to-End Slice}
 
@@ -18,7 +20,7 @@ To assess the executable side of the platform, we report a pilot slice over thre
 
 These runs should be interpreted as \emph{substrate-validation case studies} rather than a definitive benchmark comparison. Their purpose is to show that the platform can execute multiple heterogeneous methods under canonicalized datasets and produce aligned ID/OOD summaries.
 
-Table~\ref{tab:pilot-slice} summarizes the current pilot results. Three patterns already emerge: the platform reports both ID and OOD behavior under a common result structure; OOD behavior is more discriminative than ID behavior on the oscillator tasks; and LLM-assisted and classical methods can now be compared within the same execution substrate.
+Table~\ref{tab:pilot-slice} summarizes the current pilot results. Three patterns already emerge: the platform reports both ID and OOD behavior under a common result structure; OOD behavior is more discriminative than ID behavior on the oscillator tasks; and LLM-assisted and classical methods can now be compared within the same execution substrate. Together with the registry statistics above, this supports \textbf{C1} and \textbf{C3}.
 
 \begin{table}[t]
 \centering
@@ -42,7 +44,7 @@ Method & Dataset & ID RMSE & OOD RMSE & ID NMSE & OOD NMSE \\
 \label{tab:pilot-slice}
 \end{table}
 
-The pilot slice also shows why an audited research substrate is valuable. On some tasks, especially \texttt{oscillator2}, the gap between ID and OOD behavior is large enough that purely ID-focused reporting would be misleading. On \texttt{stressstrain}, multiple methods appear reasonably competitive on both ID and OOD splits, suggesting that later comparisons should include complexity and stability rather than predictive error alone.
+The pilot slice also shows why an audited research substrate is valuable. On some tasks, especially \texttt{oscillator2}, the gap between ID and OOD behavior is large enough that purely ID-focused reporting would be misleading: for example, \texttt{drsr} reaches OOD NMSE $1.33\times 10^{-6}$ while \texttt{pysr} rises to $1.28$. On \texttt{stressstrain}, by contrast, all three methods occupy a much narrower OOD band around $5\times 10^{-3}$ to $9\times 10^{-3}$, suggesting that later comparisons should include complexity and stability rather than predictive error alone. This is precisely the kind of evidence a review module should consume before proposing the next bounded change.
 
 \subsection{Limitations of the Current Evaluation}
 

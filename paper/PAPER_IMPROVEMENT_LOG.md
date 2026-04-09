@@ -6,6 +6,7 @@
 |-------|-------|---------|-------------|
 | Round 0 (baseline) | 6.0/10 | Almost | 题目已成型，但 `Auto-Review` 叙事弱于标题，方法中的 review 机制不够具体 |
 | Round 1 | 7.0/10 | Almost | 强化 review-before-evolve 主线，补充 review 动作边界，并在实验与结论中明确当前验证范围 |
+| Round 2 | 7.8/10 | Yes | 压实贡献表述，建立 claim-evidence 对应关系，并提升实验段落的定量说服力 |
 
 ## Round 1 Review
 
@@ -36,5 +37,35 @@
 
 ## Notes
 
-- 本轮按用户要求只做了 **1 轮** 自动进化，没有继续执行第 2 轮。
+- 本日志现已包含 **2 轮** 自动进化结果。
 - `paper/main_round0_original.pdf` 已保留为本轮修改前的基线快照。
+- `paper/main_round1.pdf` 已保留为第 1 轮后的快照。
+
+## Round 2 Review
+
+### Summary
+
+经过第 1 轮修正后，论文已经在系统定位上更加稳定，但仍有两个会影响说服力的问题。第一，贡献列表仍偏“功能列举”，缺少更强的可验证口径。第二，实验虽然真实，但还没有明确告诉读者每组实验到底支持哪条 claim，导致读者需要自己做归纳，削弱了主文的说服效率。
+
+### Strengths
+
+1. 系统定位、标题与方法主线已经一致。
+2. 真实数据、真实工具表和真实 pilot runs 让论文有明显落地感。
+3. 页数仍可控，适合继续强化论证而不是继续压缩。
+
+### Weaknesses
+
+1. `CRITICAL`: 贡献表述还不够“可证伪/可验证”，更像功能清单而不是论文 claim。
+2. `MAJOR`: 实验缺少 claim-evidence mapping，导致说服链条不够直接。
+3. `MAJOR`: 摘要缺少一处最强定量结果，不利于快速建立可信度。
+4. `MINOR`: 结论可以更明确地点出“这些实验已经支持了本文三条核心 claim”。
+
+## Round 2 Fixes Implemented
+
+1. 将引言中的 contribution bullets 改写为更可验证的 claim 口径，加入 `$10$ tools / $8$ environments` 与 formula verification 的明确描述。
+2. 在引言中加入一条总括句，明确当前稿件由三类证据支撑。
+3. 在实验开头显式定义 `C1/C2/C3` 三条 claim，并在后续段落中逐一回扣。
+4. 在 formula validation 小节中明确说明其直接支持 `C2`。
+5. 在 pilot slice 中加入更直接的定量对比，突出 `oscillator2` 上显著的 OOD 差异与 `stressstrain` 上更接近的行为分布。
+6. 在摘要中加入最强定量事实之一，即公式校验可达 `$10^{-15}$` 量级 NMSE。
+7. 在结论中明确三项实证能力与核心 claims 的对应关系。
