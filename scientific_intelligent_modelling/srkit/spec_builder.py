@@ -89,6 +89,11 @@ def equation({feature_sig}, params: np.ndarray) -> np.ndarray:
 
     Parameters:
     - params (np.ndarray): Trainable coefficients used by the equation skeleton.
+
+    Output requirement:
+    - Write the final formula as a single-line return statement.
+    - Do not split the final formula across multiple lines.
+    - Example: return {linear_seed}
     """
     return {linear_seed}
 '''
