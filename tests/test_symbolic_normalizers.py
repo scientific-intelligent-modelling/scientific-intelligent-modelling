@@ -23,6 +23,7 @@ from scientific_intelligent_modelling.algorithms.drsr_wrapper.wrapper import DRS
 from scientific_intelligent_modelling.algorithms.e2esr_wrapper.wrapper import E2ESRRegressor
 from scientific_intelligent_modelling.algorithms.gplearn_wrapper.wrapper import GPLearnRegressor
 from scientific_intelligent_modelling.algorithms.llmsr_wrapper.wrapper import LLMSRRegressor
+from scientific_intelligent_modelling.algorithms.llmsr_wrapper.wrapper import _infer_n_features_from_function_signature
 from scientific_intelligent_modelling.algorithms.operon_wrapper.wrapper import OperonRegressor
 from scientific_intelligent_modelling.algorithms.pysr_wrapper.wrapper import PySRRegressor
 from scientific_intelligent_modelling.algorithms.QLattice_wrapper.wrapper import QLatticeRegressor
@@ -82,6 +83,13 @@ class SymbolicNormalizersTest(unittest.TestCase):
         self.assertEqual(artifact["normalized_expression"], "c0 + c1*x0 + c2*x1")
         self.assertEqual(artifact["parameter_symbols"], ["c0", "c1", "c2"])
         self.assertTrue(artifact["sympy_parse_ok"])
+
+    def test_infer_llmsr_n_features_from_signature(self):
+        raw = (
+            "def equation(x0, x1, params):\n"
+            "    return params[0] + params[1] * x0 + params[2] * x1\n"
+        )
+        self.assertEqual(_infer_n_features_from_function_signature(raw), 2)
 
     def test_normalize_drsr_artifact(self):
         raw = (
@@ -167,6 +175,21 @@ class SymbolicNormalizersTest(unittest.TestCase):
         }
         artifact = model.export_canonical_symbolic_program()
         self.assertEqual(artifact["normalized_expression"], "c0 + c1*x0 + c2*x1")
+        self.assertTrue(artifact["artifact_valid"])
+
+    def test_wrapper_export_llmsr_marks_variable_mismatch(self):
+        model = LLMSRRegressor()
+        model._n_features = 2
+        model._load_best_sample = lambda: {
+            "function": (
+                "def equation(x0, x1, params):\n"
+                "    return params[0] + params[1] * x0 + params[2] * x2\n"
+            ),
+            "params": [1.0, 2.0, 3.0],
+        }
+        artifact = model.export_canonical_symbolic_program()
+        self.assertFalse(artifact["artifact_valid"])
+        self.assertTrue(artifact["validation_errors"])
 
     def test_wrapper_export_drsr(self):
         model = DRSRRegressor()

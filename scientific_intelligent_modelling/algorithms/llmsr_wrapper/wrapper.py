@@ -99,6 +99,23 @@ def _is_single_line_formula_function(func_source: Any) -> bool:
     return lineno is not None and end_lineno == lineno
 
 
+def _infer_n_features_from_function_signature(func_source: Any) -> int | None:
+    """从 equation 函数签名推断输入特征数。"""
+    if not isinstance(func_source, str) or not func_source.strip():
+        return None
+    try:
+        tree = ast.parse(func_source)
+    except Exception:
+        return None
+
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "equation":
+            arg_names = [arg.arg for arg in node.args.args]
+            feature_names = [name for name in arg_names if name != "params"]
+            return len(feature_names)
+    return None
+
+
 class LLMSRRegressor(BaseWrapper):
     """
     面向 SIM 的 LLMSR 封装器。
@@ -131,6 +148,7 @@ class LLMSRRegressor(BaseWrapper):
         # 实验相关元信息
         self._exp_dir: Optional[str] = self.params.pop("existing_exp_dir", None) or self.params.pop("exp_dir", None)
         self._problem_name: Optional[str] = self.params.get("problem_name")
+        self._n_features: Optional[int] = self.params.pop("n_features", None)
 
     # ------------------------------------------------------------------
     # 序列化 / 反序列化：只记录元信息与实验目录
@@ -148,6 +166,7 @@ class LLMSRRegressor(BaseWrapper):
             "params": self.params,
             "exp_dir": self._exp_dir,
             "problem_name": self._problem_name,
+            "n_features": self._n_features,
         }
         return json.dumps(state, ensure_ascii=False)
 
@@ -164,6 +183,7 @@ class LLMSRRegressor(BaseWrapper):
         inst = cls(**obj.get("params", {}))
         inst._exp_dir = obj.get("exp_dir")
         inst._problem_name = obj.get("problem_name") or inst.params.get("problem_name")
+        inst._n_features = obj.get("n_features")
         return inst
 
     # ------------------------------------------------------------------
@@ -195,6 +215,7 @@ class LLMSRRegressor(BaseWrapper):
         tmp_dir = tempfile.mkdtemp(prefix="llmsr_data_")
         try:
             n_features = X_arr.shape[1]
+            self._n_features = int(n_features)
             feature_names = [f"x{i}" for i in range(n_features)]
             columns = feature_names + ["y"]
             data = np.column_stack([X_arr, y_arr])
@@ -461,4 +482,11 @@ class LLMSRRegressor(BaseWrapper):
         params = best.get("params")
         if not isinstance(params, list):
             params = None
-        return normalize_llmsr_artifact(str(func), parameter_values=params)
+        expected_n_features = self._n_features
+        if expected_n_features is None:
+            expected_n_features = _infer_n_features_from_function_signature(func)
+        return normalize_llmsr_artifact(
+            str(func),
+            parameter_values=params,
+            expected_n_features=expected_n_features,
+        )
