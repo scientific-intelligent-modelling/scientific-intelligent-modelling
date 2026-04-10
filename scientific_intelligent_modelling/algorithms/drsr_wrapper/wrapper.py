@@ -840,7 +840,7 @@ class DRSRRegressor(BaseWrapper):
 
         for old_name, new_name in alias_map.items():
             if old_name in names and old_name not in ("col" + new_name[3:] if new_name.startswith("col") else ""):
-                aliases.append(f"    {old_name} = {new_name}")
+                aliases.append(f"{old_name} = {new_name}")
         # 去重，保持固定注入顺序
         aliases = list(dict.fromkeys(aliases))
         if not aliases:
