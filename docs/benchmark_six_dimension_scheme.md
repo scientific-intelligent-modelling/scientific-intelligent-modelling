@@ -41,23 +41,9 @@
 
 ### 2.2 建议使用的标准归一化函数
 
-#### 下降型指标的归一化
+#### 有界指标的归一化
 
-用于“越小越好”的量：
-
-```text
-down(x; τ) = 1 / (1 + x / τ)
-```
-
-性质：
-
-- `x = 0` 时得分为 `1`
-- `x` 增大时分数单调下降
-- 不会因为极端异常值而数值爆炸
-
-#### 上升型指标的归一化
-
-用于已经位于 `[0, 1]` 区间的量：
+用于已经天然位于 `[0, 1]` 区间，或可以稳定裁剪到 `[0, 1]` 的量：
 
 ```text
 up01(x) = clip(x, 0, 1)
@@ -74,21 +60,54 @@ r2_score = clip(r2, 0, 1)
 - 负 `r2` 统一视为 `0`
 - `r2 > 1` 统一截断到 `1`
 
-### 2.3 关于参考尺度 τ
+#### 无界下降型指标的归一化
 
-`down(x; τ)` 里的 `τ` 需要按 benchmark family 固定。
+用于“越小越好”且没有天然上界的量，例如：
 
-推荐做法：
+- `train_time_seconds`
+- `nmse`
+- `complexity_*`
+- 稳定性里的各类波动量
 
-- `τ_time`：该 benchmark 家族中基线方法训练时间的中位数
-- `τ_nmse`：该 benchmark 家族中可接受误差阈值，例如 `0.1`
-- `τ_complexity`：复杂度参考上限，例如 `20`
-- `τ_stability`：波动容忍阈值，例如 `0.2`
+推荐使用同一比较切片内的分位数/排名归一化：
+
+```text
+rank_down(x) = 1 - percentile_rank(x)
+```
+
+其中：
+
+- `percentile_rank(x)` 取值位于 `[0, 1]`
+- 同一切片内最小值的分数接近 `1`
+- 同一切片内最大值的分数接近 `0`
+
+为了避免歧义，建议实现为平均名次版本：
+
+```text
+rank_down(x_i) = 1 - (avg_rank_asc(x_i) - 1) / max(n - 1, 1)
+```
+
+这里：
+
+- `avg_rank_asc` 表示按升序排名后的平均名次
+- `n` 是当前比较切片内的方法数
+
+### 2.3 关于比较切片
+
+所有 `rank_down(*)` 都必须在同一比较切片内计算。
+
+推荐的比较切片定义为：
+
+- 同一个 benchmark family
+- 同一批任务
+- 同一预算约束
+- 同一评测协议
 
 重要：
 
-- 同一个 benchmark family 内必须固定 `τ`
-- 不能每个方法单独选自己的 `τ`
+- 不能把不同 benchmark family 混在一个切片里算排名分
+- 不能把不同预算设置混在一个切片里算排名分
+- 如果当前切片里只有 1 个方法，则该维度只报告 raw，不报告 score
 
 ## 3. 六个维度
 
@@ -111,7 +130,7 @@ r2_score = clip(r2, 0, 1)
 ### 推荐量化
 
 ```text
-time_cost_score = down(train_time_seconds; τ_time)
+time_cost_score = rank_down(train_time_seconds)
 ```
 
 ### 报告建议
@@ -146,7 +165,7 @@ time_cost_score = down(train_time_seconds; τ_time)
 
 ```text
 id_quality_score =
-    0.40 * down(id_test.nmse; τ_nmse_id)
+    0.40 * rank_down(id_test.nmse)
   + 0.35 * up01(id_test.acc_0_1)
   + 0.25 * clip(id_test.r2, 0, 1)
 ```
@@ -173,7 +192,7 @@ id_quality_score =
 
 ```text
 ood_generalization_score =
-    0.40 * down(ood_test.nmse; τ_nmse_ood)
+    0.40 * rank_down(ood_test.nmse)
   + 0.35 * up01(ood_test.acc_0_1)
   + 0.25 * clip(ood_test.r2, 0, 1)
 ```
@@ -243,8 +262,8 @@ avg_deg_acc  = mean_σ deg_acc(σ)
 
 ```text
 noise_robustness_score =
-    0.60 * down(avg_deg_nmse; τ_noise_nmse)
-  + 0.40 * down(avg_deg_acc; τ_noise_acc)
+    0.60 * rank_down(avg_deg_nmse)
+  + 0.40 * rank_down(avg_deg_acc)
 ```
 
 若有 GT，可增加符号项并重新分配权重。
@@ -288,9 +307,9 @@ cv_ood_nmse = ood_test.nmse_std / max(abs(ood_test.nmse_mean), ε)
 
 ```text
 stability_score =
-    0.35 * down(cv_id_nmse; τ_stab_id)
-  + 0.35 * down(cv_ood_nmse; τ_stab_ood)
-  + 0.15 * down(complexity_simplified_std; τ_stab_complexity)
+    0.35 * rank_down(cv_id_nmse)
+  + 0.35 * rank_down(cv_ood_nmse)
+  + 0.15 * rank_down(complexity_simplified_std)
   + 0.15 * up01(valid_run_rate)
 ```
 
@@ -330,7 +349,7 @@ stability_score =
 先定义复杂度分数：
 
 ```text
-complexity_score = down(complexity_simplified; τ_complexity)
+complexity_score = rank_down(complexity_simplified)
 ```
 
 然后定义第 6 维分数：
