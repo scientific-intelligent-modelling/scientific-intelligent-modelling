@@ -72,6 +72,20 @@ def infer_parameter_symbols(parameter_values: list[float] | None) -> list[str]:
     return [f"c{i}" for i in range(len(parameter_values))]
 
 
+def infer_variable_indices(variables: list[str] | None) -> list[int]:
+    """从变量名列表中提取 x{i} 的索引。"""
+    if not isinstance(variables, list):
+        return []
+    indices: set[int] = set()
+    for name in variables:
+        if not isinstance(name, str):
+            continue
+        match = re.fullmatch(r"x(\d+)", name.strip())
+        if match:
+            indices.add(int(match.group(1)))
+    return sorted(indices)
+
+
 def extract_return_expression_from_python_function(source: str | None) -> str | None:
     """从 def equation(...) 代码中抽取第一条 return 表达式。"""
     if not isinstance(source, str) or not source.strip():
@@ -97,6 +111,7 @@ def build_canonical_symbolic_program(
     tool_name: str,
     raw_equation: Any,
     parameter_values: list[float] | tuple[float, ...] | None = None,
+    expected_n_features: int | None = None,
     python_function_source: str | None = None,
     return_expression_source: str | None = None,
     normalized_expression: str | None = None,
@@ -151,11 +166,14 @@ def build_canonical_symbolic_program(
         "variables": derived_variables,
         "parameter_symbols": derived_param_symbols,
         "parameter_values": normalized_params,
+        "expected_n_features": int(expected_n_features) if expected_n_features is not None else None,
         "operator_set": list(operator_set) if operator_set else [],
         "ast_node_count": int(ast_node_count) if ast_node_count is not None else None,
         "tree_depth": int(tree_depth) if tree_depth is not None else None,
         "normalization_mode": str(normalization_mode),
         "normalization_notes": list(normalization_notes or []),
+        "artifact_valid": True,
+        "validation_errors": [],
         "fidelity_check": dict(fidelity_check or {}),
     }
     return validate_canonical_symbolic_program(artifact)
@@ -180,6 +198,8 @@ def validate_canonical_symbolic_program(
         "variables": list,
         "parameter_symbols": list,
         "operator_set": list,
+        "artifact_valid": bool,
+        "validation_errors": list,
         "fidelity_check": dict,
     }
     for field_name, field_type in required_fields.items():
@@ -202,5 +222,26 @@ def validate_canonical_symbolic_program(
             raise ValueError("完整工件要求 python_function_source 非空")
         if not artifact["normalized_expression"]:
             raise ValueError("完整工件要求 normalized_expression 非空")
+
+    validation_errors = list(artifact.get("validation_errors") or [])
+    expected_n_features = artifact.get("expected_n_features")
+    if expected_n_features is not None:
+        try:
+            expected_n_features = int(expected_n_features)
+        except Exception as err:
+            raise TypeError(f"expected_n_features 类型错误: {err}") from err
+        if expected_n_features < 0:
+            raise ValueError("expected_n_features 不能小于 0")
+        variable_indices = infer_variable_indices(artifact.get("variables"))
+        overflow = [idx for idx in variable_indices if idx >= expected_n_features]
+        if overflow:
+            validation_errors.append(
+                "变量索引超出输入维度: "
+                f"expected_n_features={expected_n_features}, "
+                f"found={artifact.get('variables')}"
+            )
+
+    artifact["validation_errors"] = validation_errors
+    artifact["artifact_valid"] = len(validation_errors) == 0
 
     return artifact

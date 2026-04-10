@@ -137,7 +137,10 @@ class PySRRegressor(BaseWrapper):
     def export_canonical_symbolic_program(self):
         if self.model is None:
             raise ValueError("模型尚未训练，请先调用fit方法")
-        return normalize_pysr_artifact(self.get_optimal_equation())
+        return normalize_pysr_artifact(
+            self.get_optimal_equation(),
+            expected_n_features=getattr(self.model, "n_features_in_", None),
+        )
   
 
 

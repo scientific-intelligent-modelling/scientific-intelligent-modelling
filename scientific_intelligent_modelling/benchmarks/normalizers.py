@@ -158,12 +158,13 @@ def _build_function_source(normalized_expression: str, variables: list[str]) -> 
     return f"def equation({sig}):\n    return {normalized_expression}\n"
 
 
-def normalize_pysr_artifact(raw_equation: str) -> dict[str, Any]:
+def normalize_pysr_artifact(raw_equation: str, *, expected_n_features: int | None = None) -> dict[str, Any]:
     normalized_expression, parsed = _normalize_common_expression(raw_equation)
     variables = sorted({str(sym) for sym in getattr(parsed, "free_symbols", set())}) if parsed is not None else []
     artifact = build_canonical_symbolic_program(
         tool_name="pysr",
         raw_equation=raw_equation,
+        expected_n_features=expected_n_features,
         python_function_source=_build_function_source(normalized_expression, variables),
         return_expression_source=normalized_expression,
         normalized_expression=normalized_expression,
@@ -178,12 +179,13 @@ def normalize_pysr_artifact(raw_equation: str) -> dict[str, Any]:
     return validate_canonical_symbolic_program(artifact)
 
 
-def normalize_qlattice_artifact(raw_equation: str) -> dict[str, Any]:
+def normalize_qlattice_artifact(raw_equation: str, *, expected_n_features: int | None = None) -> dict[str, Any]:
     normalized_expression, parsed = _normalize_common_expression(raw_equation)
     variables = sorted({str(sym) for sym in getattr(parsed, "free_symbols", set())}) if parsed is not None else []
     artifact = build_canonical_symbolic_program(
         tool_name="QLattice",
         raw_equation=raw_equation,
+        expected_n_features=expected_n_features,
         python_function_source=_build_function_source(normalized_expression, variables),
         return_expression_source=normalized_expression,
         normalized_expression=normalized_expression,
@@ -235,7 +237,7 @@ def _gplearn_ast_to_infix(node: ast.AST) -> str:
     raise ValueError(f"不支持的 gplearn 表达式节点: {ast.dump(node)}")
 
 
-def normalize_gplearn_artifact(raw_equation: str) -> dict[str, Any]:
+def normalize_gplearn_artifact(raw_equation: str, *, expected_n_features: int | None = None) -> dict[str, Any]:
     tree = ast.parse(str(raw_equation), mode="eval")
     infix = _gplearn_ast_to_infix(tree.body)
     normalized_expression, parsed = _normalize_common_expression(infix)
@@ -243,6 +245,7 @@ def normalize_gplearn_artifact(raw_equation: str) -> dict[str, Any]:
     artifact = build_canonical_symbolic_program(
         tool_name="gplearn",
         raw_equation=raw_equation,
+        expected_n_features=expected_n_features,
         python_function_source=_build_function_source(normalized_expression, variables),
         return_expression_source=normalized_expression,
         normalized_expression=normalized_expression,
@@ -257,13 +260,14 @@ def normalize_gplearn_artifact(raw_equation: str) -> dict[str, Any]:
     return validate_canonical_symbolic_program(artifact)
 
 
-def normalize_e2esr_artifact(raw_equation: str) -> dict[str, Any]:
+def normalize_e2esr_artifact(raw_equation: str, *, expected_n_features: int | None = None) -> dict[str, Any]:
     expr = _replace_symbolic_tokens(str(raw_equation))
     normalized_expression, parsed = _normalize_common_expression(expr)
     variables = sorted({str(sym) for sym in getattr(parsed, "free_symbols", set())}) if parsed is not None else []
     artifact = build_canonical_symbolic_program(
         tool_name="e2esr",
         raw_equation=raw_equation,
+        expected_n_features=expected_n_features,
         python_function_source=_build_function_source(normalized_expression, variables),
         return_expression_source=normalized_expression,
         normalized_expression=normalized_expression,
@@ -278,13 +282,14 @@ def normalize_e2esr_artifact(raw_equation: str) -> dict[str, Any]:
     return validate_canonical_symbolic_program(artifact)
 
 
-def normalize_tpsr_artifact(raw_equation: str) -> dict[str, Any]:
+def normalize_tpsr_artifact(raw_equation: str, *, expected_n_features: int | None = None) -> dict[str, Any]:
     expr = _replace_symbolic_tokens(str(raw_equation))
     normalized_expression, parsed = _normalize_common_expression(expr)
     variables = sorted({str(sym) for sym in getattr(parsed, "free_symbols", set())}) if parsed is not None else []
     artifact = build_canonical_symbolic_program(
         tool_name="tpsr",
         raw_equation=raw_equation,
+        expected_n_features=expected_n_features,
         python_function_source=_build_function_source(normalized_expression, variables),
         return_expression_source=normalized_expression,
         normalized_expression=normalized_expression,
@@ -299,13 +304,14 @@ def normalize_tpsr_artifact(raw_equation: str) -> dict[str, Any]:
     return validate_canonical_symbolic_program(artifact)
 
 
-def normalize_operon_artifact(raw_equation: str) -> dict[str, Any]:
+def normalize_operon_artifact(raw_equation: str, *, expected_n_features: int | None = None) -> dict[str, Any]:
     expr = _replace_operon_tokens(str(raw_equation))
     normalized_expression, parsed = _normalize_common_expression(expr)
     variables = sorted({str(sym) for sym in getattr(parsed, "free_symbols", set())}) if parsed is not None else []
     artifact = build_canonical_symbolic_program(
         tool_name="pyoperon",
         raw_equation=raw_equation,
+        expected_n_features=expected_n_features,
         python_function_source=_build_function_source(normalized_expression, variables),
         return_expression_source=normalized_expression,
         normalized_expression=normalized_expression,
@@ -325,6 +331,7 @@ def _normalize_python_function_artifact(
     tool_name: str,
     raw_equation: str,
     parameter_values: list[float] | None = None,
+    expected_n_features: int | None = None,
     rename_cols: bool = False,
 ) -> dict[str, Any]:
     function_source = str(raw_equation)
@@ -344,6 +351,7 @@ def _normalize_python_function_artifact(
         tool_name=tool_name,
         raw_equation=raw_equation,
         parameter_values=parameter_values,
+        expected_n_features=expected_n_features,
         python_function_source=function_source,
         return_expression_source=return_expr,
         normalized_expression=normalized_expression,
@@ -363,11 +371,13 @@ def normalize_llmsr_artifact(
     raw_equation: str,
     *,
     parameter_values: list[float] | None = None,
+    expected_n_features: int | None = None,
 ) -> dict[str, Any]:
     return _normalize_python_function_artifact(
         tool_name="llmsr",
         raw_equation=raw_equation,
         parameter_values=parameter_values,
+        expected_n_features=expected_n_features,
         rename_cols=False,
     )
 
@@ -376,11 +386,13 @@ def normalize_drsr_artifact(
     raw_equation: str,
     *,
     parameter_values: list[float] | None = None,
+    expected_n_features: int | None = None,
 ) -> dict[str, Any]:
     artifact = _normalize_python_function_artifact(
         tool_name="drsr",
         raw_equation=raw_equation,
         parameter_values=parameter_values,
+        expected_n_features=expected_n_features,
         rename_cols=True,
     )
     normalized_expression = artifact.get("normalized_expression")

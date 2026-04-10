@@ -692,7 +692,10 @@ class TPSRRegressor(BaseWrapper):
     def export_canonical_symbolic_program(self):
         if self.best_tree is None:
             raise ValueError("未找到可用方程")
-        return normalize_tpsr_artifact(self.get_optimal_equation())
+        return normalize_tpsr_artifact(
+            self.get_optimal_equation(),
+            expected_n_features=self._n_features,
+        )
 
 
 if __name__ == "__main__":

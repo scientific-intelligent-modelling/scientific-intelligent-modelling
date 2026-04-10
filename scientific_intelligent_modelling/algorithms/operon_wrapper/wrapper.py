@@ -223,7 +223,10 @@ class OperonRegressor(BaseWrapper):
 
     def export_canonical_symbolic_program(self):
         equation = self.get_optimal_equation()
-        return normalize_operon_artifact(equation)
+        return normalize_operon_artifact(
+            equation,
+            expected_n_features=getattr(self, "n_features_", None),
+        )
   
 if __name__ == "__main__":
     # 测试代码

@@ -60,6 +60,12 @@ class SymbolicNormalizersTest(unittest.TestCase):
         self.assertEqual(artifact["normalized_expression"], "x0 + x1**2")
         self.assertTrue(artifact["sympy_parse_ok"])
 
+    def test_normalize_tpsr_artifact_marks_variable_mismatch(self):
+        artifact = normalize_tpsr_artifact("x_0 + x_2**2", expected_n_features=2)
+        self.assertTrue(artifact["sympy_parse_ok"])
+        self.assertFalse(artifact["artifact_valid"])
+        self.assertTrue(artifact["validation_errors"])
+
     def test_normalize_operon_artifact(self):
         artifact = normalize_operon_artifact("X1 + X2^2")
         self.assertEqual(artifact["tool_name"], "pyoperon")
@@ -129,9 +135,19 @@ class SymbolicNormalizersTest(unittest.TestCase):
     def test_wrapper_export_tpsr(self):
         model = TPSRRegressor()
         model.best_tree = "x_0 + x_1**2"
+        model._n_features = 2
         model.get_optimal_equation = lambda: "x_0 + x_1**2"
         artifact = model.export_canonical_symbolic_program()
         self.assertEqual(artifact["normalized_expression"], "x0 + x1**2")
+
+    def test_wrapper_export_tpsr_marks_variable_mismatch(self):
+        model = TPSRRegressor()
+        model.best_tree = "x_0 + x_2**2"
+        model._n_features = 2
+        model.get_optimal_equation = lambda: "x_0 + x_2**2"
+        artifact = model.export_canonical_symbolic_program()
+        self.assertFalse(artifact["artifact_valid"])
+        self.assertTrue(artifact["validation_errors"])
 
     def test_wrapper_export_operon(self):
         model = OperonRegressor()

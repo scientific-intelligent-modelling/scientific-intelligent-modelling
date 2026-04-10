@@ -738,6 +738,7 @@ class DRSRRegressor(BaseWrapper):
         return normalize_drsr_artifact(
             eq_str,
             parameter_values=self.get_fitted_params(),
+            expected_n_features=self._n_features,
         )
 
     def __str__(self) -> str:

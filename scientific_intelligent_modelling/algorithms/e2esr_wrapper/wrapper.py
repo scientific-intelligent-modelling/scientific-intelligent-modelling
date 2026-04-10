@@ -51,6 +51,7 @@ class E2ESRRegressor(BaseWrapper):
         self.model = None
         self.regressor = None
         self.best_tree = None
+        self.n_features_ = None
         
         # 获取e2esr模块的路径，添加到系统路径中
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -121,6 +122,7 @@ class E2ESRRegressor(BaseWrapper):
         否则创建一个新模型
         """
         try:
+            self.n_features_ = int(np.asarray(X).shape[1]) if np.asarray(X).ndim == 2 else 1
             # 导入E2ESR相关模块
             from symbolicregression.model import SymbolicTransformerRegressor
             
@@ -210,7 +212,10 @@ class E2ESRRegressor(BaseWrapper):
     def export_canonical_symbolic_program(self):
         if self.best_tree is None:
             raise ValueError("模型尚未训练，请先调用fit方法")
-        return normalize_e2esr_artifact(self.get_optimal_equation())
+        return normalize_e2esr_artifact(
+            self.get_optimal_equation(),
+            expected_n_features=getattr(self, "n_features_", None),
+        )
 
 
 if __name__ == "__main__":

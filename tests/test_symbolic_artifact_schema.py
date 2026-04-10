@@ -46,6 +46,7 @@ class SymbolicArtifactSchemaTest(unittest.TestCase):
         artifact = build_canonical_symbolic_program(
             tool_name="pysr",
             raw_equation="x0 + 2*x1",
+            expected_n_features=2,
             normalization_mode="direct",
         )
         self.assertEqual(artifact["version"], CSP_VERSION)
@@ -53,6 +54,17 @@ class SymbolicArtifactSchemaTest(unittest.TestCase):
         self.assertEqual(artifact["raw_equation_kind"], "plain_expression")
         self.assertEqual(artifact["normalized_expression"], "x0 + 2*x1")
         self.assertEqual(artifact["variables"], ["x0", "x1"])
+        self.assertTrue(artifact["artifact_valid"])
+
+    def test_build_canonical_symbolic_program_marks_variable_mismatch(self):
+        artifact = build_canonical_symbolic_program(
+            tool_name="tpsr",
+            raw_equation="x0 + x2",
+            expected_n_features=2,
+            normalization_mode="direct",
+        )
+        self.assertFalse(artifact["artifact_valid"])
+        self.assertTrue(artifact["validation_errors"])
 
     def test_base_wrapper_default_export(self):
         wrapper = _DummyWrapper()

@@ -169,7 +169,10 @@ class QLatticeRegressor(BaseWrapper):
     def export_canonical_symbolic_program(self):
         if self.model is None:
             raise ValueError('模型尚未训练，请先调用 fit 方法。')
-        return normalize_qlattice_artifact(self.get_optimal_equation())
+        return normalize_qlattice_artifact(
+            self.get_optimal_equation(),
+            expected_n_features=len(self._input_vars or []),
+        )
 
     # ---------------- 序列化/反序列化 ----------------
     def serialize(self):
