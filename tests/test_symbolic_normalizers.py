@@ -4,19 +4,29 @@ import unittest
 
 from scientific_intelligent_modelling.benchmarks.normalizers import (
     normalize_drsr_artifact,
+    normalize_e2esr_artifact,
     normalize_gplearn_artifact,
     normalize_llmsr_artifact,
+    normalize_operon_artifact,
     normalize_pysr_artifact,
+    normalize_qlattice_artifact,
+    normalize_tpsr_artifact,
 )
 
 
 if "pandas" not in sys.modules:
     sys.modules["pandas"] = types.ModuleType("pandas")
+if "torch" not in sys.modules:
+    sys.modules["torch"] = types.ModuleType("torch")
 
 from scientific_intelligent_modelling.algorithms.drsr_wrapper.wrapper import DRSRRegressor
+from scientific_intelligent_modelling.algorithms.e2esr_wrapper.wrapper import E2ESRRegressor
 from scientific_intelligent_modelling.algorithms.gplearn_wrapper.wrapper import GPLearnRegressor
 from scientific_intelligent_modelling.algorithms.llmsr_wrapper.wrapper import LLMSRRegressor
+from scientific_intelligent_modelling.algorithms.operon_wrapper.wrapper import OperonRegressor
 from scientific_intelligent_modelling.algorithms.pysr_wrapper.wrapper import PySRRegressor
+from scientific_intelligent_modelling.algorithms.QLattice_wrapper.wrapper import QLatticeRegressor
+from scientific_intelligent_modelling.algorithms.tpsr_wrapper.wrapper import TPSRRegressor
 
 
 class SymbolicNormalizersTest(unittest.TestCase):
@@ -26,9 +36,33 @@ class SymbolicNormalizersTest(unittest.TestCase):
         self.assertEqual(artifact["normalized_expression"], "x0 + 2*x1")
         self.assertTrue(artifact["sympy_parse_ok"])
 
+    def test_normalize_qlattice_artifact(self):
+        artifact = normalize_qlattice_artifact("x0 + 2*x1")
+        self.assertEqual(artifact["tool_name"], "QLattice")
+        self.assertEqual(artifact["normalized_expression"], "x0 + 2*x1")
+        self.assertTrue(artifact["sympy_parse_ok"])
+
     def test_normalize_gplearn_artifact(self):
         artifact = normalize_gplearn_artifact("add(X0, mul(X1, X1))")
         self.assertEqual(artifact["tool_name"], "gplearn")
+        self.assertEqual(artifact["normalized_expression"], "x0 + x1**2")
+        self.assertTrue(artifact["sympy_parse_ok"])
+
+    def test_normalize_e2esr_artifact(self):
+        artifact = normalize_e2esr_artifact("x_0 + x_1**2")
+        self.assertEqual(artifact["tool_name"], "e2esr")
+        self.assertEqual(artifact["normalized_expression"], "x0 + x1**2")
+        self.assertTrue(artifact["sympy_parse_ok"])
+
+    def test_normalize_tpsr_artifact(self):
+        artifact = normalize_tpsr_artifact("x_0 + x_1**2")
+        self.assertEqual(artifact["tool_name"], "tpsr")
+        self.assertEqual(artifact["normalized_expression"], "x0 + x1**2")
+        self.assertTrue(artifact["sympy_parse_ok"])
+
+    def test_normalize_operon_artifact(self):
+        artifact = normalize_operon_artifact("X1 + X2^2")
+        self.assertEqual(artifact["tool_name"], "pyoperon")
         self.assertEqual(artifact["normalized_expression"], "x0 + x1**2")
         self.assertTrue(artifact["sympy_parse_ok"])
 
@@ -70,10 +104,39 @@ class SymbolicNormalizersTest(unittest.TestCase):
         self.assertEqual(artifact["tool_name"], "pysr")
         self.assertTrue(artifact["sympy_parse_ok"])
 
+    def test_wrapper_export_qlattice(self):
+        model = QLatticeRegressor()
+        model.model = True
+        model.get_optimal_equation = lambda: "x0 + 2*x1"
+        artifact = model.export_canonical_symbolic_program()
+        self.assertEqual(artifact["tool_name"], "QLattice")
+        self.assertTrue(artifact["sympy_parse_ok"])
+
     def test_wrapper_export_gplearn(self):
         model = GPLearnRegressor()
         model.model = object()
         model.get_optimal_equation = lambda: "add(X0, mul(X1, X1))"
+        artifact = model.export_canonical_symbolic_program()
+        self.assertEqual(artifact["normalized_expression"], "x0 + x1**2")
+
+    def test_wrapper_export_e2esr(self):
+        model = E2ESRRegressor.__new__(E2ESRRegressor)
+        model.best_tree = object()
+        model.get_optimal_equation = lambda: "x_0 + x_1**2"
+        artifact = model.export_canonical_symbolic_program()
+        self.assertEqual(artifact["normalized_expression"], "x0 + x1**2")
+
+    def test_wrapper_export_tpsr(self):
+        model = TPSRRegressor()
+        model.best_tree = "x_0 + x_1**2"
+        model.get_optimal_equation = lambda: "x_0 + x_1**2"
+        artifact = model.export_canonical_symbolic_program()
+        self.assertEqual(artifact["normalized_expression"], "x0 + x1**2")
+
+    def test_wrapper_export_operon(self):
+        model = OperonRegressor()
+        model.best_model_str = "X1 + X2^2"
+        model.model = None
         artifact = model.export_canonical_symbolic_program()
         self.assertEqual(artifact["normalized_expression"], "x0 + x1**2")
 

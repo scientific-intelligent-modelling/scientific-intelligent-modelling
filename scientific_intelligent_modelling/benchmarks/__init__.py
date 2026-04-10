@@ -9,9 +9,13 @@ from .artifact_schema import (
 )
 from .normalizers import (
     normalize_drsr_artifact,
+    normalize_e2esr_artifact,
     normalize_gplearn_artifact,
     normalize_llmsr_artifact,
+    normalize_operon_artifact,
     normalize_pysr_artifact,
+    normalize_qlattice_artifact,
+    normalize_tpsr_artifact,
 )
 from .metrics import (
     acc_within_threshold,
@@ -40,9 +44,13 @@ __all__ = [
     "extract_return_expression_from_python_function",
     "infer_raw_equation_kind",
     "normalize_drsr_artifact",
+    "normalize_e2esr_artifact",
     "normalize_gplearn_artifact",
     "normalize_llmsr_artifact",
+    "normalize_operon_artifact",
     "normalize_pysr_artifact",
+    "normalize_qlattice_artifact",
+    "normalize_tpsr_artifact",
     "llm_srbench_acc_tau",
     "llm_srbench_nmse",
     "llm_srbench_numeric_metrics",

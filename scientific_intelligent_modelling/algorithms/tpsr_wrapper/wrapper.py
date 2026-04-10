@@ -11,6 +11,7 @@ import numpy as np
 import shutil
 
 from ..base_wrapper import BaseWrapper
+from scientific_intelligent_modelling.benchmarks.normalizers import normalize_tpsr_artifact
 
 
 class TPSRRegressor(BaseWrapper):
@@ -687,6 +688,11 @@ class TPSRRegressor(BaseWrapper):
         if self.best_tree is None and not self.all_trees:
             raise ValueError("模型尚未训练，请先调用fit方法")
         return list(self.all_trees or [])
+
+    def export_canonical_symbolic_program(self):
+        if self.best_tree is None:
+            raise ValueError("未找到可用方程")
+        return normalize_tpsr_artifact(self.get_optimal_equation())
 
 
 if __name__ == "__main__":

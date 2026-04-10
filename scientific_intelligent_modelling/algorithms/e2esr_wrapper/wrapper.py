@@ -8,6 +8,7 @@ import sympy as sp
 import torch
 
 from ..base_wrapper import BaseWrapper 
+from scientific_intelligent_modelling.benchmarks.normalizers import normalize_e2esr_artifact
 
 class E2ESRRegressor(BaseWrapper):
     @staticmethod
@@ -205,6 +206,11 @@ class E2ESRRegressor(BaseWrapper):
         # E2ESR可能没有提供获取多个方程的方法，这里返回最优方程作为单元素列表
         self._cached_total_equations = [self.get_optimal_equation()]
         return self._cached_total_equations
+
+    def export_canonical_symbolic_program(self):
+        if self.best_tree is None:
+            raise ValueError("模型尚未训练，请先调用fit方法")
+        return normalize_e2esr_artifact(self.get_optimal_equation())
 
 
 if __name__ == "__main__":

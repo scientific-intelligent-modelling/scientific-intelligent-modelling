@@ -27,6 +27,33 @@ def _replace_col_tokens(expr: str) -> str:
     return re.sub(r"\bcol(\d+)\b", lambda m: f"x{m.group(1)}", expr)
 
 
+def _replace_x_underscore_tokens(expr: str) -> str:
+    return re.sub(r"\bx_(\d+)\b", lambda m: f"x{m.group(1)}", expr)
+
+
+def _replace_operon_tokens(expr: str) -> str:
+    text = re.sub(r"\bX(\d+)\b", lambda m: f"x{int(m.group(1)) - 1}", expr)
+    text = text.replace("^", "**")
+    return text
+
+
+def _replace_symbolic_tokens(expr: str) -> str:
+    replacements = {
+        "add": "+",
+        "mul": "*",
+        "sub": "-",
+        "pow": "**",
+        "inv": "1/",
+    }
+    text = expr
+    for op, target in replacements.items():
+        text = re.sub(rf"\b{op}\b", target, text)
+    text = re.sub(r"\bpow2\b", "**2", text)
+    text = re.sub(r"\bpow3\b", "**3", text)
+    text = re.sub(r"\bpow4\b", "**4", text)
+    return text
+
+
 def _replace_legacy_drsr_tokens(expr: str) -> str:
     replacements = {
         r"\bx\b": "x0",
@@ -49,6 +76,7 @@ def _strip_numpy_prefix(expr: str) -> str:
 def _sanitize_expression(expr: str) -> str:
     text = str(expr).strip()
     text = _strip_numpy_prefix(text)
+    text = _replace_x_underscore_tokens(text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
@@ -150,6 +178,26 @@ def normalize_pysr_artifact(raw_equation: str) -> dict[str, Any]:
     return validate_canonical_symbolic_program(artifact)
 
 
+def normalize_qlattice_artifact(raw_equation: str) -> dict[str, Any]:
+    normalized_expression, parsed = _normalize_common_expression(raw_equation)
+    variables = sorted({str(sym) for sym in getattr(parsed, "free_symbols", set())}) if parsed is not None else []
+    artifact = build_canonical_symbolic_program(
+        tool_name="QLattice",
+        raw_equation=raw_equation,
+        python_function_source=_build_function_source(normalized_expression, variables),
+        return_expression_source=normalized_expression,
+        normalized_expression=normalized_expression,
+        variables=variables,
+        operator_set=_collect_operator_set(parsed),
+        ast_node_count=_count_sympy_nodes(parsed),
+        tree_depth=_sympy_tree_depth(parsed),
+        normalization_mode="qlattice_direct",
+    )
+    artifact["sympy_parse_ok"] = parsed is not None
+    artifact["sympy_expression"] = normalized_expression if parsed is not None else None
+    return validate_canonical_symbolic_program(artifact)
+
+
 def _gplearn_ast_to_infix(node: ast.AST) -> str:
     if isinstance(node, ast.Name):
         if re.fullmatch(r"X\d+", node.id):
@@ -203,6 +251,69 @@ def normalize_gplearn_artifact(raw_equation: str) -> dict[str, Any]:
         ast_node_count=_count_sympy_nodes(parsed),
         tree_depth=_sympy_tree_depth(parsed),
         normalization_mode="gplearn_prefix_to_infix",
+    )
+    artifact["sympy_parse_ok"] = parsed is not None
+    artifact["sympy_expression"] = normalized_expression if parsed is not None else None
+    return validate_canonical_symbolic_program(artifact)
+
+
+def normalize_e2esr_artifact(raw_equation: str) -> dict[str, Any]:
+    expr = _replace_symbolic_tokens(str(raw_equation))
+    normalized_expression, parsed = _normalize_common_expression(expr)
+    variables = sorted({str(sym) for sym in getattr(parsed, "free_symbols", set())}) if parsed is not None else []
+    artifact = build_canonical_symbolic_program(
+        tool_name="e2esr",
+        raw_equation=raw_equation,
+        python_function_source=_build_function_source(normalized_expression, variables),
+        return_expression_source=normalized_expression,
+        normalized_expression=normalized_expression,
+        variables=variables,
+        operator_set=_collect_operator_set(parsed),
+        ast_node_count=_count_sympy_nodes(parsed),
+        tree_depth=_sympy_tree_depth(parsed),
+        normalization_mode="e2esr_infix",
+    )
+    artifact["sympy_parse_ok"] = parsed is not None
+    artifact["sympy_expression"] = normalized_expression if parsed is not None else None
+    return validate_canonical_symbolic_program(artifact)
+
+
+def normalize_tpsr_artifact(raw_equation: str) -> dict[str, Any]:
+    expr = _replace_symbolic_tokens(str(raw_equation))
+    normalized_expression, parsed = _normalize_common_expression(expr)
+    variables = sorted({str(sym) for sym in getattr(parsed, "free_symbols", set())}) if parsed is not None else []
+    artifact = build_canonical_symbolic_program(
+        tool_name="tpsr",
+        raw_equation=raw_equation,
+        python_function_source=_build_function_source(normalized_expression, variables),
+        return_expression_source=normalized_expression,
+        normalized_expression=normalized_expression,
+        variables=variables,
+        operator_set=_collect_operator_set(parsed),
+        ast_node_count=_count_sympy_nodes(parsed),
+        tree_depth=_sympy_tree_depth(parsed),
+        normalization_mode="tpsr_infix",
+    )
+    artifact["sympy_parse_ok"] = parsed is not None
+    artifact["sympy_expression"] = normalized_expression if parsed is not None else None
+    return validate_canonical_symbolic_program(artifact)
+
+
+def normalize_operon_artifact(raw_equation: str) -> dict[str, Any]:
+    expr = _replace_operon_tokens(str(raw_equation))
+    normalized_expression, parsed = _normalize_common_expression(expr)
+    variables = sorted({str(sym) for sym in getattr(parsed, "free_symbols", set())}) if parsed is not None else []
+    artifact = build_canonical_symbolic_program(
+        tool_name="pyoperon",
+        raw_equation=raw_equation,
+        python_function_source=_build_function_source(normalized_expression, variables),
+        return_expression_source=normalized_expression,
+        normalized_expression=normalized_expression,
+        variables=variables,
+        operator_set=_collect_operator_set(parsed),
+        ast_node_count=_count_sympy_nodes(parsed),
+        tree_depth=_sympy_tree_depth(parsed),
+        normalization_mode="operon_infix",
     )
     artifact["sympy_parse_ok"] = parsed is not None
     artifact["sympy_expression"] = normalized_expression if parsed is not None else None

@@ -14,6 +14,7 @@ import pandas as pd
 from typing import List, Optional
 
 from ..base_wrapper import BaseWrapper
+from scientific_intelligent_modelling.benchmarks.normalizers import normalize_qlattice_artifact
 
 
 class QLatticeRegressor(BaseWrapper):
@@ -164,6 +165,11 @@ class QLatticeRegressor(BaseWrapper):
         if isinstance(n, int) and n > 0:
             return results[:n]
         return results
+
+    def export_canonical_symbolic_program(self):
+        if self.model is None:
+            raise ValueError('模型尚未训练，请先调用 fit 方法。')
+        return normalize_qlattice_artifact(self.get_optimal_equation())
 
     # ---------------- 序列化/反序列化 ----------------
     def serialize(self):

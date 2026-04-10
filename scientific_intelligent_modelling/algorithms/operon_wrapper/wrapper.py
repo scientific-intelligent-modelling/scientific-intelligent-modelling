@@ -3,6 +3,7 @@ import pickle
 import base64
 import numpy as np
 from ..base_wrapper import BaseWrapper 
+from scientific_intelligent_modelling.benchmarks.normalizers import normalize_operon_artifact
 
 class OperonRegressor(BaseWrapper):
     _META_PARAMS = {"exp_name", "exp_path", "problem_name", "seed"}
@@ -219,6 +220,10 @@ class OperonRegressor(BaseWrapper):
         inst.n_features_ = payload.get("n_features_")
         inst.model = None
         return inst
+
+    def export_canonical_symbolic_program(self):
+        equation = self.get_optimal_equation()
+        return normalize_operon_artifact(equation)
   
 if __name__ == "__main__":
     # 测试代码
