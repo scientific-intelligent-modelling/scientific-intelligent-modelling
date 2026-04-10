@@ -23,8 +23,13 @@ from .metrics import (
     srbench_model_size,
     srbench_symbolic_solution,
 )
-from .judges import LLMSymbolicJudge, llm_srbench_symbolic_accuracy
 from .profiles import BENCHMARK_PROFILES
+
+try:
+    from .judges import LLMSymbolicJudge, llm_srbench_symbolic_accuracy
+except ModuleNotFoundError:  # pragma: no cover - 非 LLM 环境允许跳过 judge 依赖
+    LLMSymbolicJudge = None  # type: ignore
+    llm_srbench_symbolic_accuracy = None  # type: ignore
 
 __all__ = [
     "BENCHMARK_PROFILES",
