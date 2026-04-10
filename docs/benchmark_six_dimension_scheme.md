@@ -15,7 +15,7 @@
 clip01(x) = clip(x, 0, 1)
 inv_pos(x) = 1 / (1 + max(x, 0))
 count_score(c) = 1 / (1 + log(1 + max(c, 0)))
-time_budget_score(t, B) = clip(1 - t / B, 0, 1)
+hit_score(t, B) = clip(1 - t / B, 0, 1)
 ```
 
 说明：
@@ -23,7 +23,7 @@ time_budget_score(t, B) = clip(1 - t / B, 0, 1)
 - `clip01(x)` 用于本来就在 `[0, 1]` 的指标
 - `inv_pos(x)` 用于非负、无界、且无量纲的下降型指标，例如 `nmse`、退化率、变异系数
 - `count_score(c)` 用于复杂度这类计数型指标
-- `time_budget_score(t, B)` 用于时间成本，其中 `B` 是 benchmark 协议中固定的时间预算
+- `hit_score(t, B)` 用于固定预算下的达成速度，其中 `B` 是 benchmark 协议中固定的 wall-clock 预算
 
 ### 2.2 比较切片
 
@@ -33,35 +33,55 @@ time_budget_score(t, B) = clip(1 - t / B, 0, 1)
 
 - 同一个 `raw` 输入必须映射到同一个 `score`
 - 新方法接入后，旧结果分数不能变化
-- 唯一允许依赖外部协议字段的是时间预算 `time_budget_seconds`
+- 唯一允许依赖外部协议字段的是固定预算 `wall_clock_budget_seconds`
 
 ### 2.3 时间预算
 
 时间维度要想做成绝对分，必须引入 benchmark 协议中的固定预算：
 
-- `time_budget_seconds`
+- `wall_clock_budget_seconds`
 
-这不是调参阈值，而是 benchmark 本身的运行约束。
+这不是调参阈值，而是 benchmark 本身的运行约束。时间维度不再比较“总耗时”，而比较“在同样预算内推进得有多快”。
 
 如果某个 benchmark family 还没有固定预算：
 
-- 时间维度先只报 `train_time_seconds`
-- 不计算 `time_cost_score`
+- 第 1 维先只报过程日志
+- 不计算 `search_efficiency_score`
 
 ## 3. 六个维度
 
-## 3.1 时间成本
+## 3.1 搜索效率
 
 ### raw
 
-- `train_time_seconds`
-- `time_budget_seconds`
+- `wall_clock_budget_seconds`
+- `time_to_first_valid_seconds`
+- `time_to_target_seconds`
+- `anytime_best_score_auc`
+
+说明：
+
+- `time_to_first_valid_seconds`：第一次得到合法公式的时间；没有则记为 `B`
+- `time_to_target_seconds`：第一次达到目标质量阈值的时间；没有则记为 `B`
+- `anytime_best_score_auc`：固定预算内 best-so-far 质量曲线面积，要求先归一到 `[0, 1]`
 
 ### 汇总
 
 ```text
-time_cost_score = time_budget_score(train_time_seconds, time_budget_seconds)
+first_valid_score  = hit_score(time_to_first_valid_seconds, wall_clock_budget_seconds)
+target_reach_score = hit_score(time_to_target_seconds, wall_clock_budget_seconds)
+anytime_score      = clip01(anytime_best_score_auc)
+
+search_efficiency_score =
+    0.35 * first_valid_score
+  + 0.35 * target_reach_score
+  + 0.30 * anytime_score
 ```
+
+备注：
+
+- 若当前任务没有定义 target 阈值，则去掉 `target_reach_score`，其余权重按比例重分配
+- `train_time_seconds` 可以继续保留为附加展示值，但不进入第 1 维聚合
 
 ## 3.2 ID 数值质量
 
@@ -230,8 +250,13 @@ symbolic_interpretability_score =
 
 ```json
 {
-  "time_cost": {
-    "raw": {"train_time_seconds": 12.3},
+  "search_efficiency": {
+    "raw": {
+      "wall_clock_budget_seconds": 300.0,
+      "time_to_first_valid_seconds": 18.0,
+      "time_to_target_seconds": 96.0,
+      "anytime_best_score_auc": 0.81
+    },
     "score": 0.62
   },
   "id_quality": {
