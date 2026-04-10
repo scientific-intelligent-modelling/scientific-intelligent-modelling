@@ -12,6 +12,7 @@ import numpy as np
 import yaml
 
 from ..base_wrapper import BaseWrapper
+from scientific_intelligent_modelling.benchmarks.normalizers import normalize_drsr_artifact
 from scientific_intelligent_modelling.srkit.llm import ClientFactory, parse_provider_model
 from scientific_intelligent_modelling.srkit.spec_builder import build_specification as build_shared_specification
 from typing import Tuple
@@ -729,6 +730,15 @@ class DRSRRegressor(BaseWrapper):
             p = self._equation_entries[0].get('params')
             return p
         return None
+
+    def export_canonical_symbolic_program(self):
+        eq_str = self.get_optimal_equation()
+        if not eq_str:
+            raise ValueError("DRSR 当前没有可导出的最优方程")
+        return normalize_drsr_artifact(
+            eq_str,
+            parameter_values=self.get_fitted_params(),
+        )
 
     def __str__(self) -> str:
         lines = [f"DRSRRegressor(tool='drsr')"]

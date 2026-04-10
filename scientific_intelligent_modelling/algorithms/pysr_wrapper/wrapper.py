@@ -5,6 +5,7 @@ import base64
 import numpy as np
 
 from ..base_wrapper import BaseWrapper 
+from scientific_intelligent_modelling.benchmarks.normalizers import normalize_pysr_artifact
 
 class PySRRegressor(BaseWrapper):
     _META_PARAMS = {"exp_name", "exp_path", "problem_name", "seed"}
@@ -132,6 +133,11 @@ class PySRRegressor(BaseWrapper):
         if isinstance(equations, list):
             return [str(eq) for eq in equations]
         return [str(equations)]
+
+    def export_canonical_symbolic_program(self):
+        if self.model is None:
+            raise ValueError("模型尚未训练，请先调用fit方法")
+        return normalize_pysr_artifact(self.get_optimal_equation())
   
 
 

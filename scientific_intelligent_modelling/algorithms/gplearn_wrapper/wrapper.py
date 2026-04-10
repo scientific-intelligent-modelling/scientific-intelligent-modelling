@@ -9,6 +9,7 @@ import numpy as np
 from typing import Any, Dict, Tuple
 
 from ..base_wrapper import BaseWrapper
+from scientific_intelligent_modelling.benchmarks.normalizers import normalize_gplearn_artifact
 
 
 class GPLearnRegressor(BaseWrapper):
@@ -300,4 +301,9 @@ class GPLearnRegressor(BaseWrapper):
         if self.model is None:
             raise ValueError("模型尚未训练，请先调用fit方法")
         return [str(self.model)]
+
+    def export_canonical_symbolic_program(self):
+        if self.model is None:
+            raise ValueError("模型尚未训练，请先调用fit方法")
+        return normalize_gplearn_artifact(self.get_optimal_equation())
     

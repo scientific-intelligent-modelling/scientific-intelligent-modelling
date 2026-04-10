@@ -27,6 +27,7 @@ import numpy as np
 import pandas as pd
 
 from ..base_wrapper import BaseWrapper
+from scientific_intelligent_modelling.benchmarks.normalizers import normalize_llmsr_artifact
 
 
 def _llmsr_root_dir() -> str:
@@ -449,3 +450,15 @@ class LLMSRRegressor(BaseWrapper):
             if _is_single_line_formula_function(func):
                 eqs.append(func)
         return eqs
+
+    def export_canonical_symbolic_program(self):
+        best = self._load_best_sample()
+        if not best:
+            raise ValueError("未找到可用的 LLMSR 候选样本")
+        func = best.get("function") or ""
+        if not _is_single_line_formula_function(func):
+            raise ValueError("LLMSR 当前最优候选不是单行公式函数")
+        params = best.get("params")
+        if not isinstance(params, list):
+            params = None
+        return normalize_llmsr_artifact(str(func), parameter_values=params)

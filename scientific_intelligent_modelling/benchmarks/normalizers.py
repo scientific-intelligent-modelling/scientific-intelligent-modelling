@@ -1,0 +1,288 @@
+"""将不同算法的公式输出归一化到 sympy 友好的统一表示。"""
+
+from __future__ import annotations
+
+import ast
+import re
+from typing import Any
+
+from .artifact_schema import (
+    build_canonical_symbolic_program,
+    extract_return_expression_from_python_function,
+    infer_parameter_symbols,
+    validate_canonical_symbolic_program,
+)
+
+try:
+    import sympy as sp
+except ModuleNotFoundError:  # pragma: no cover
+    sp = None
+
+
+def _replace_param_tokens(expr: str) -> str:
+    return re.sub(r"\bparams\[(\d+)\]", lambda m: f"c{m.group(1)}", expr)
+
+
+def _replace_col_tokens(expr: str) -> str:
+    return re.sub(r"\bcol(\d+)\b", lambda m: f"x{m.group(1)}", expr)
+
+
+def _replace_legacy_drsr_tokens(expr: str) -> str:
+    replacements = {
+        r"\bx\b": "x0",
+        r"\bv\b": "x1",
+        r"\bt\b": "x0",
+    }
+    out = expr
+    for pattern, repl in replacements.items():
+        out = re.sub(pattern, repl, out)
+    return out
+
+
+def _strip_numpy_prefix(expr: str) -> str:
+    expr = expr.replace("numpy.", "")
+    expr = expr.replace("np.", "")
+    expr = expr.replace("math.", "")
+    return expr
+
+
+def _sanitize_expression(expr: str) -> str:
+    text = str(expr).strip()
+    text = _strip_numpy_prefix(text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _sympy_locals() -> dict[str, Any]:
+    locals_map: dict[str, Any] = {}
+    if sp is None:
+        return locals_map
+    for i in range(64):
+        locals_map[f"x{i}"] = sp.Symbol(f"x{i}")
+        locals_map[f"c{i}"] = sp.Symbol(f"c{i}")
+        locals_map[f"X{i}"] = sp.Symbol(f"x{i}")
+        locals_map[f"col{i}"] = sp.Symbol(f"x{i}")
+    locals_map.update(
+        {
+            "Abs": sp.Abs,
+            "Max": sp.Max,
+            "Min": sp.Min,
+            "sqrt": sp.sqrt,
+            "log": sp.log,
+            "exp": sp.exp,
+            "sin": sp.sin,
+            "cos": sp.cos,
+            "tan": sp.tan,
+            "asin": sp.asin,
+            "acos": sp.acos,
+            "atan": sp.atan,
+        }
+    )
+    return locals_map
+
+
+def _parse_sympy_expr(expr: str):
+    if sp is None:
+        return None
+    return sp.sympify(expr, locals=_sympy_locals())
+
+
+def _count_sympy_nodes(expr) -> int | None:
+    if sp is None or expr is None:
+        return None
+    return int(sum(1 for _ in sp.preorder_traversal(expr)))
+
+
+def _sympy_tree_depth(expr) -> int | None:
+    if sp is None or expr is None:
+        return None
+    if not getattr(expr, "args", ()):
+        return 1
+    return 1 + max(_sympy_tree_depth(arg) or 0 for arg in expr.args)
+
+
+def _collect_operator_set(expr) -> list[str]:
+    if sp is None or expr is None:
+        return []
+    ops: set[str] = set()
+    for node in sp.preorder_traversal(expr):
+        if getattr(node, "is_Symbol", False) or getattr(node, "is_Number", False):
+            continue
+        func_name = getattr(getattr(node, "func", None), "__name__", None)
+        if not func_name:
+            continue
+        ops.add(func_name.lower())
+    return sorted(ops)
+
+
+def _normalize_common_expression(expr: str) -> tuple[str, Any | None]:
+    sanitized = _sanitize_expression(expr)
+    parsed = None
+    if sp is not None:
+        parsed = _parse_sympy_expr(sanitized)
+        sanitized = str(parsed)
+    return sanitized, parsed
+
+
+def _build_function_source(normalized_expression: str, variables: list[str]) -> str:
+    ordered_vars = sorted(variables, key=lambda name: (len(name), name)) if variables else ["x0"]
+    sig = ", ".join(ordered_vars + ["params"])
+    return f"def equation({sig}):\n    return {normalized_expression}\n"
+
+
+def normalize_pysr_artifact(raw_equation: str) -> dict[str, Any]:
+    normalized_expression, parsed = _normalize_common_expression(raw_equation)
+    variables = sorted({str(sym) for sym in getattr(parsed, "free_symbols", set())}) if parsed is not None else []
+    artifact = build_canonical_symbolic_program(
+        tool_name="pysr",
+        raw_equation=raw_equation,
+        python_function_source=_build_function_source(normalized_expression, variables),
+        return_expression_source=normalized_expression,
+        normalized_expression=normalized_expression,
+        variables=variables,
+        operator_set=_collect_operator_set(parsed),
+        ast_node_count=_count_sympy_nodes(parsed),
+        tree_depth=_sympy_tree_depth(parsed),
+        normalization_mode="pysr_direct",
+    )
+    artifact["sympy_parse_ok"] = parsed is not None
+    artifact["sympy_expression"] = normalized_expression if parsed is not None else None
+    return validate_canonical_symbolic_program(artifact)
+
+
+def _gplearn_ast_to_infix(node: ast.AST) -> str:
+    if isinstance(node, ast.Name):
+        if re.fullmatch(r"X\d+", node.id):
+            return f"x{node.id[1:]}"
+        return node.id
+    if isinstance(node, ast.Constant):
+        return repr(node.value)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+        return f"(-{_gplearn_ast_to_infix(node.operand)})"
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        fname = node.func.id
+        args = [_gplearn_ast_to_infix(arg) for arg in node.args]
+        if fname == "add" and len(args) == 2:
+            return f"({args[0]} + {args[1]})"
+        if fname == "sub" and len(args) == 2:
+            return f"({args[0]} - {args[1]})"
+        if fname == "mul" and len(args) == 2:
+            return f"({args[0]} * {args[1]})"
+        if fname == "div" and len(args) == 2:
+            return f"({args[0]} / {args[1]})"
+        if fname == "pow" and len(args) == 2:
+            return f"({args[0]} ** {args[1]})"
+        if fname == "max" and len(args) == 2:
+            return f"Max({args[0]}, {args[1]})"
+        if fname == "min" and len(args) == 2:
+            return f"Min({args[0]}, {args[1]})"
+        if fname == "neg" and len(args) == 1:
+            return f"(-{args[0]})"
+        if fname == "inv" and len(args) == 1:
+            return f"(1 / {args[0]})"
+        if fname == "abs" and len(args) == 1:
+            return f"Abs({args[0]})"
+        if fname in {"sqrt", "log", "exp", "sin", "cos", "tan"} and len(args) == 1:
+            return f"{fname}({args[0]})"
+    raise ValueError(f"不支持的 gplearn 表达式节点: {ast.dump(node)}")
+
+
+def normalize_gplearn_artifact(raw_equation: str) -> dict[str, Any]:
+    tree = ast.parse(str(raw_equation), mode="eval")
+    infix = _gplearn_ast_to_infix(tree.body)
+    normalized_expression, parsed = _normalize_common_expression(infix)
+    variables = sorted({str(sym) for sym in getattr(parsed, "free_symbols", set())}) if parsed is not None else []
+    artifact = build_canonical_symbolic_program(
+        tool_name="gplearn",
+        raw_equation=raw_equation,
+        python_function_source=_build_function_source(normalized_expression, variables),
+        return_expression_source=normalized_expression,
+        normalized_expression=normalized_expression,
+        variables=variables,
+        operator_set=_collect_operator_set(parsed),
+        ast_node_count=_count_sympy_nodes(parsed),
+        tree_depth=_sympy_tree_depth(parsed),
+        normalization_mode="gplearn_prefix_to_infix",
+    )
+    artifact["sympy_parse_ok"] = parsed is not None
+    artifact["sympy_expression"] = normalized_expression if parsed is not None else None
+    return validate_canonical_symbolic_program(artifact)
+
+
+def _normalize_python_function_artifact(
+    *,
+    tool_name: str,
+    raw_equation: str,
+    parameter_values: list[float] | None = None,
+    rename_cols: bool = False,
+) -> dict[str, Any]:
+    function_source = str(raw_equation)
+    return_expr = extract_return_expression_from_python_function(function_source)
+    if not return_expr:
+        raise ValueError(f"{tool_name} 原始函数中未找到 return 表达式")
+
+    expr = _sanitize_expression(return_expr)
+    if rename_cols:
+        expr = _replace_col_tokens(expr)
+    expr = _replace_param_tokens(expr)
+
+    normalized_expression, parsed = _normalize_common_expression(expr)
+    variables = sorted({str(sym) for sym in getattr(parsed, "free_symbols", set()) if str(sym).startswith("x")}) if parsed is not None else []
+    parameter_symbols = infer_parameter_symbols(parameter_values)
+    artifact = build_canonical_symbolic_program(
+        tool_name=tool_name,
+        raw_equation=raw_equation,
+        parameter_values=parameter_values,
+        python_function_source=function_source,
+        return_expression_source=return_expr,
+        normalized_expression=normalized_expression,
+        variables=variables,
+        parameter_symbols=parameter_symbols,
+        operator_set=_collect_operator_set(parsed),
+        ast_node_count=_count_sympy_nodes(parsed),
+        tree_depth=_sympy_tree_depth(parsed),
+        normalization_mode=f"{tool_name}_python_return",
+    )
+    artifact["sympy_parse_ok"] = parsed is not None
+    artifact["sympy_expression"] = normalized_expression if parsed is not None else None
+    return validate_canonical_symbolic_program(artifact)
+
+
+def normalize_llmsr_artifact(
+    raw_equation: str,
+    *,
+    parameter_values: list[float] | None = None,
+) -> dict[str, Any]:
+    return _normalize_python_function_artifact(
+        tool_name="llmsr",
+        raw_equation=raw_equation,
+        parameter_values=parameter_values,
+        rename_cols=False,
+    )
+
+
+def normalize_drsr_artifact(
+    raw_equation: str,
+    *,
+    parameter_values: list[float] | None = None,
+) -> dict[str, Any]:
+    artifact = _normalize_python_function_artifact(
+        tool_name="drsr",
+        raw_equation=raw_equation,
+        parameter_values=parameter_values,
+        rename_cols=True,
+    )
+    normalized_expression = artifact.get("normalized_expression")
+    if isinstance(normalized_expression, str):
+        expr = _replace_legacy_drsr_tokens(normalized_expression)
+        normalized_expression, parsed = _normalize_common_expression(expr)
+        artifact["normalized_expression"] = normalized_expression
+        artifact["sympy_parse_ok"] = parsed is not None
+        artifact["sympy_expression"] = normalized_expression if parsed is not None else None
+        artifact["variables"] = sorted(
+            {str(sym) for sym in getattr(parsed, "free_symbols", set()) if str(sym).startswith("x")}
+        ) if parsed is not None else artifact.get("variables", [])
+        artifact["operator_set"] = _collect_operator_set(parsed)
+        artifact["ast_node_count"] = _count_sympy_nodes(parsed)
+        artifact["tree_depth"] = _sympy_tree_depth(parsed)
+    return validate_canonical_symbolic_program(artifact)
