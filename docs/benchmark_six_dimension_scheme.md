@@ -12,30 +12,41 @@
 ### 2.1 基本记号
 
 ```text
-up01(x) = clip(x, 0, 1)
-r2_score = clip(r2, 0, 1)
-rank_down(x_i) = 1 - (avg_rank_asc(x_i) - 1) / max(n - 1, 1)
+clip01(x) = clip(x, 0, 1)
+inv_pos(x) = 1 / (1 + max(x, 0))
+count_score(c) = 1 / (1 + log(1 + max(c, 0)))
+time_budget_score(t, B) = clip(1 - t / B, 0, 1)
 ```
 
 说明：
 
-- `up01(x)` 用于本来就在 `[0, 1]` 的指标
-- `rank_down(x)` 用于“越小越好”的无界指标
-- `rank_down(x)` 必须在同一个比较切片内计算
+- `clip01(x)` 用于本来就在 `[0, 1]` 的指标
+- `inv_pos(x)` 用于非负、无界、且无量纲的下降型指标，例如 `nmse`、退化率、变异系数
+- `count_score(c)` 用于复杂度这类计数型指标
+- `time_budget_score(t, B)` 用于时间成本，其中 `B` 是 benchmark 协议中固定的时间预算
 
 ### 2.2 比较切片
 
-`rank_down(*)` 的比较切片固定为：
+本方案不再使用相对排名分。
 
-- 同一个 benchmark family
-- 同一批任务
-- 同一预算约束
-- 同一评测协议
+所有分数都必须是绝对分：
 
-如果当前切片只有 1 个方法：
+- 同一个 `raw` 输入必须映射到同一个 `score`
+- 新方法接入后，旧结果分数不能变化
+- 唯一允许依赖外部协议字段的是时间预算 `time_budget_seconds`
 
-- 只报 `raw`
-- 不报 `score`
+### 2.3 时间预算
+
+时间维度要想做成绝对分，必须引入 benchmark 协议中的固定预算：
+
+- `time_budget_seconds`
+
+这不是调参阈值，而是 benchmark 本身的运行约束。
+
+如果某个 benchmark family 还没有固定预算：
+
+- 时间维度先只报 `train_time_seconds`
+- 不计算 `time_cost_score`
 
 ## 3. 六个维度
 
@@ -44,11 +55,12 @@ rank_down(x_i) = 1 - (avg_rank_asc(x_i) - 1) / max(n - 1, 1)
 ### raw
 
 - `train_time_seconds`
+- `time_budget_seconds`
 
 ### 汇总
 
 ```text
-time_cost_score = rank_down(train_time_seconds)
+time_cost_score = time_budget_score(train_time_seconds, time_budget_seconds)
 ```
 
 ## 3.2 ID 数值质量
@@ -63,9 +75,9 @@ time_cost_score = rank_down(train_time_seconds)
 ### 预处理
 
 ```text
-id_nmse_score = rank_down(id_test.nmse)
-id_r2_score   = clip(id_test.r2, 0, 1)
-id_acc_score  = clip(id_test.acc_0_1, 0, 1)
+id_nmse_score = inv_pos(id_test.nmse)
+id_r2_score   = clip01(id_test.r2)
+id_acc_score  = clip01(id_test.acc_0_1)
 ```
 
 ### 汇总
@@ -94,9 +106,9 @@ id_quality_score =
 ### 预处理
 
 ```text
-ood_nmse_score = rank_down(ood_test.nmse)
-ood_r2_score   = clip(ood_test.r2, 0, 1)
-ood_acc_score  = clip(ood_test.acc_0_1, 0, 1)
+ood_nmse_score = inv_pos(ood_test.nmse)
+ood_r2_score   = clip01(ood_test.r2)
+ood_acc_score  = clip01(ood_test.acc_0_1)
 ```
 
 ### 汇总
@@ -134,8 +146,8 @@ deg_acc(σ)  = max(0, (acc_clean - acc_σ) / max(acc_clean, ε))
 avg_deg_nmse = mean_σ deg_nmse(σ)
 avg_deg_acc  = mean_σ deg_acc(σ)
 
-noise_nmse_score = rank_down(avg_deg_nmse)
-noise_acc_score  = rank_down(avg_deg_acc)
+noise_nmse_score = inv_pos(avg_deg_nmse)
+noise_acc_score  = inv_pos(avg_deg_acc)
 ```
 
 ### 汇总
@@ -163,10 +175,10 @@ noise_robustness_score =
 cv_id_nmse  = id_test.nmse_std  / max(abs(id_test.nmse_mean), ε)
 cv_ood_nmse = ood_test.nmse_std / max(abs(ood_test.nmse_mean), ε)
 
-stab_id_score         = rank_down(cv_id_nmse)
-stab_ood_score        = rank_down(cv_ood_nmse)
-stab_complexity_score = rank_down(complexity_simplified_std)
-stab_valid_score      = clip(valid_run_rate, 0, 1)
+stab_id_score         = inv_pos(cv_id_nmse)
+stab_ood_score        = inv_pos(cv_ood_nmse)
+stab_complexity_score = count_score(complexity_simplified_std)
+stab_valid_score      = clip01(valid_run_rate)
 ```
 
 ### 汇总
@@ -193,10 +205,10 @@ stability_score =
 ### 预处理
 
 ```text
-symbolic_acc_score = clip(symbolic_accuracy, 0, 1)
-solution_rate_score = clip(solution_rate, 0, 1)
-ned_score = 1 - clip(ned, 0, 1)
-complexity_score = rank_down(complexity_simplified)
+symbolic_acc_score  = clip01(symbolic_accuracy)
+solution_rate_score = clip01(solution_rate)
+ned_score           = 1 - clip01(ned)
+complexity_score    = count_score(complexity_simplified)
 ```
 
 ### 汇总
