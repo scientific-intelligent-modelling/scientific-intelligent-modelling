@@ -7,6 +7,7 @@ from scientific_intelligent_modelling.benchmarks.normalizers import (
     normalize_dso_artifact,
     normalize_e2esr_artifact,
     normalize_gplearn_artifact,
+    normalize_imcts_artifact,
     normalize_llmsr_artifact,
     normalize_operon_artifact,
     normalize_pysr_artifact,
@@ -24,6 +25,7 @@ from scientific_intelligent_modelling.algorithms.drsr_wrapper.wrapper import DRS
 from scientific_intelligent_modelling.algorithms.dso_wrapper.wrapper import DSORegressor
 from scientific_intelligent_modelling.algorithms.e2esr_wrapper.wrapper import E2ESRRegressor
 from scientific_intelligent_modelling.algorithms.gplearn_wrapper.wrapper import GPLearnRegressor
+from scientific_intelligent_modelling.algorithms.iMCTS_wrapper.wrapper import iMCTSRegressor
 from scientific_intelligent_modelling.algorithms.llmsr_wrapper.wrapper import LLMSRRegressor
 from scientific_intelligent_modelling.algorithms.llmsr_wrapper.wrapper import _infer_n_features_from_function_signature
 from scientific_intelligent_modelling.algorithms.operon_wrapper.wrapper import OperonRegressor
@@ -50,6 +52,16 @@ class SymbolicNormalizersTest(unittest.TestCase):
         self.assertEqual(artifact["tool_name"], "gplearn")
         self.assertEqual(artifact["normalized_expression"], "x0 + x1**2")
         self.assertTrue(artifact["sympy_parse_ok"])
+
+    def test_normalize_imcts_artifact(self):
+        artifact = normalize_imcts_artifact(
+            "lambda x: np.log(x[0] + 1) + np.log(x[0]**2 + 1)",
+            expected_n_features=1,
+        )
+        self.assertEqual(artifact["tool_name"], "iMCTS")
+        self.assertEqual(artifact["normalized_expression"], "log(x0 + 1) + log(x0**2 + 1)")
+        self.assertTrue(artifact["sympy_parse_ok"])
+        self.assertTrue(artifact["artifact_valid"])
 
     def test_normalize_e2esr_artifact(self):
         artifact = normalize_e2esr_artifact("x_0 + x_1**2")
@@ -141,6 +153,14 @@ class SymbolicNormalizersTest(unittest.TestCase):
         model.get_optimal_equation = lambda: "add(X0, mul(X1, X1))"
         artifact = model.export_canonical_symbolic_program()
         self.assertEqual(artifact["normalized_expression"], "x0 + x1**2")
+
+    def test_wrapper_export_imcts(self):
+        model = iMCTSRegressor()
+        model._best_expr_simplified = "np.log(x[0] + 1) + np.log(x[0]**2 + 1)"
+        model._n_features = 1
+        artifact = model.export_canonical_symbolic_program()
+        self.assertEqual(artifact["normalized_expression"], "log(x0 + 1) + log(x0**2 + 1)")
+        self.assertTrue(artifact["artifact_valid"])
 
     def test_wrapper_export_e2esr(self):
         model = E2ESRRegressor.__new__(E2ESRRegressor)

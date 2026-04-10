@@ -31,6 +31,10 @@ def _replace_x_underscore_tokens(expr: str) -> str:
     return re.sub(r"\bx_(\d+)\b", lambda m: f"x{m.group(1)}", expr)
 
 
+def _replace_x_bracket_tokens(expr: str) -> str:
+    return re.sub(r"\bx\[(\d+)\]", lambda m: f"x{m.group(1)}", expr)
+
+
 def _replace_operon_tokens(expr: str) -> str:
     text = re.sub(r"\bX(\d+)\b", lambda m: f"x{int(m.group(1)) - 1}", expr)
     text = text.replace("^", "**")
@@ -83,7 +87,10 @@ def _strip_numpy_prefix(expr: str) -> str:
 
 def _sanitize_expression(expr: str) -> str:
     text = str(expr).strip()
+    if text.startswith("lambda x:"):
+        text = text.split(":", 1)[1].strip()
     text = _strip_numpy_prefix(text)
+    text = _replace_x_bracket_tokens(text)
     text = _replace_x_underscore_tokens(text)
     text = _shift_one_based_x_tokens(text)
     text = re.sub(r"\s+", " ", text).strip()
@@ -351,6 +358,27 @@ def normalize_dso_artifact(raw_equation: str, *, expected_n_features: int | None
         ast_node_count=_count_sympy_nodes(parsed),
         tree_depth=_sympy_tree_depth(parsed),
         normalization_mode="dso_sympy_expr",
+    )
+    artifact["sympy_parse_ok"] = parsed is not None
+    artifact["sympy_expression"] = normalized_expression if parsed is not None else None
+    return validate_canonical_symbolic_program(artifact)
+
+
+def normalize_imcts_artifact(raw_equation: str, *, expected_n_features: int | None = None) -> dict[str, Any]:
+    normalized_expression, parsed = _normalize_common_expression(raw_equation)
+    variables = sorted({str(sym) for sym in getattr(parsed, "free_symbols", set())}) if parsed is not None else []
+    artifact = build_canonical_symbolic_program(
+        tool_name="iMCTS",
+        raw_equation=raw_equation,
+        expected_n_features=expected_n_features,
+        python_function_source=_build_function_source(normalized_expression, variables),
+        return_expression_source=normalized_expression,
+        normalized_expression=normalized_expression,
+        variables=variables,
+        operator_set=_collect_operator_set(parsed),
+        ast_node_count=_count_sympy_nodes(parsed),
+        tree_depth=_sympy_tree_depth(parsed),
+        normalization_mode="imcts_simplified_expr",
     )
     artifact["sympy_parse_ok"] = parsed is not None
     artifact["sympy_expression"] = normalized_expression if parsed is not None else None

@@ -22,6 +22,7 @@ from typing import Any, Dict, Optional, List
 import numpy as np
 
 from ..base_wrapper import BaseWrapper
+from scientific_intelligent_modelling.benchmarks.normalizers import normalize_imcts_artifact
 
 
 def _default_eval_context(user_ctx: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -53,6 +54,7 @@ class iMCTSRegressor(BaseWrapper):
         self._best_expr_vector: Optional[str] = None
         self._eval_count: Optional[int] = None
         self._best_path: Optional[int] = None
+        self._n_features: Optional[int] = None
 
         # 预测时的上下文（可由用户覆盖）
         self._eval_context: Dict[str, Any] = _default_eval_context(self.params.get('context'))
@@ -66,6 +68,7 @@ class iMCTSRegressor(BaseWrapper):
         y = np.asarray(y).reshape(-1)
         if X.ndim != 2:
             raise ValueError("iMCTS 训练需要二维输入数组 (n_samples, n_features)")
+        self._n_features = int(X.shape[1])
 
         # 导入第三方代码：将子仓库加入 sys.path
         base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -144,6 +147,7 @@ class iMCTSRegressor(BaseWrapper):
             'expr_vector': self._best_expr_vector,
             'eval_count': self._eval_count,
             'best_path': self._best_path,
+            'n_features': self._n_features,
             # 仅持久化上下文的键名，值用默认可重建（避免不可序列化对象）
             'context_keys': list((self.params.get('context') or {}).keys())
         }
@@ -157,9 +161,19 @@ class iMCTSRegressor(BaseWrapper):
         inst._best_expr_vector = obj.get('expr_vector')
         inst._eval_count = obj.get('eval_count')
         inst._best_path = obj.get('best_path')
+        inst._n_features = obj.get('n_features')
         # 运行时回归器不可恢复；预测走表达式+上下文路径
         inst._runtime_regressor = None
         return inst
+
+    def export_canonical_symbolic_program(self):
+        equation = self.get_optimal_equation()
+        if not equation:
+            raise ValueError("iMCTS 当前没有可导出的最优方程")
+        return normalize_imcts_artifact(
+            equation,
+            expected_n_features=self._n_features,
+        )
 
     def __str__(self) -> str:
         lines: List[str] = ["iMCTSRegressor(tool='iMCTS')"]
