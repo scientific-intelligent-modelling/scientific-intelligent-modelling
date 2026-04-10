@@ -15,6 +15,7 @@ LLMSR 的 SIM 封装：
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import tempfile
@@ -58,6 +59,43 @@ def _import_core_regressor():
     from llmsr_regressor import LLMSRRegressor as CoreLLMSRRegressor  # type: ignore
 
     return CoreLLMSRRegressor
+
+
+def _is_single_line_formula_function(func_source: Any) -> bool:
+    """只接受单行 return 的 equation 函数。"""
+    if not isinstance(func_source, str) or not func_source.strip():
+        return False
+    try:
+        tree = ast.parse(func_source)
+    except Exception:
+        return False
+
+    equation_func = None
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "equation":
+            equation_func = node
+            break
+    if equation_func is None:
+        return False
+
+    body = list(equation_func.body)
+    if (
+        body
+        and isinstance(body[0], ast.Expr)
+        and isinstance(getattr(body[0], "value", None), ast.Constant)
+        and isinstance(body[0].value.value, str)
+    ):
+        body = body[1:]
+
+    if len(body) != 1:
+        return False
+    stmt = body[0]
+    if not isinstance(stmt, ast.Return) or stmt.value is None:
+        return False
+
+    lineno = getattr(stmt, "lineno", None)
+    end_lineno = getattr(stmt, "end_lineno", lineno)
+    return lineno is not None and end_lineno == lineno
 
 
 class LLMSRRegressor(BaseWrapper):
@@ -325,6 +363,10 @@ class LLMSRRegressor(BaseWrapper):
             except Exception:
                 continue
 
+            func = d.get("function")
+            if not _is_single_line_formula_function(func):
+                continue
+
             key_val: Optional[float] = None
             nmse = d.get("nmse")
             mse = d.get("mse")
@@ -404,6 +446,6 @@ class LLMSRRegressor(BaseWrapper):
         eqs: List[str] = []
         for d in items:
             func = d.get("function")
-            if isinstance(func, str) and func.strip():
+            if _is_single_line_formula_function(func):
                 eqs.append(func)
         return eqs

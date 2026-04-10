@@ -779,66 +779,34 @@ class DRSRRegressor(BaseWrapper):
     @staticmethod
     def _clean_equation_body(body: str) -> str:
         """
-        清理方程体，移除 LLM 可能生成的测试代码或注释。
-        支持多行 return，保留到第一段示例代码前。
+        清理方程体，只接受“单行 return 公式”。
+
+        约束：
+        - 仅允许一个有效语句；
+        - 该语句必须是单行 `return ...`；
+        - 多行 return、赋值后再 return、示例代码等一律拒绝。
         """
+        if not isinstance(body, str):
+            return ""
+
         lines = body.split('\n')
         cleaned_lines = []
-        found_return = False
-        open_balance = 0
-        stop_tokens = (
-            "equation_v",
-            "predictions",
-            "np.random",
-            "col0 =",
-            "col1 =",
-            "col2 =",
-            "col3 =",
-            "col4 =",
-            "print(",
-            "```",
-            "Example usage",
-            "# Example",
-            '# Examples',
-            'if __name__ == "__main__"',
-            "return None",
-        )
-        
         for line in lines:
-            # 跳过空行和纯注释行（在函数体之外）
             stripped = line.strip()
-            if not stripped or (stripped.startswith('#') and not cleaned_lines):
+            if not stripped or stripped.startswith('#'):
                 continue
-
-            if found_return and open_balance <= 0:
-                if any(token in stripped for token in stop_tokens):
-                    break
-                if "=" in stripped and not stripped.startswith(("==", ">=", "<=", "!=", "=>", "=<")):
-                    break
-                if stripped.startswith('#'):
-                    break
-            
-            # 保留有效行
             cleaned_lines.append(line)
-            
-            # 找到 return 语句后，继续保留多行返回表达式，直到闭合
-            if stripped.startswith('return ') or stripped == 'return':
-                found_return = True
-                open_balance += line.count('(') - line.count(')')
-                open_balance += line.count('[') - line.count(']')
-                open_balance += line.count('{') - line.count('}')
-                continue
-            if found_return:
-                open_balance += line.count('(') - line.count(')')
-                open_balance += line.count('[') - line.count(']')
-                open_balance += line.count('{') - line.count('}')
-        
-        if not found_return:
-            # 如果没有找到 return，可能是不完整的函数，尝试添加
-            # 但这通常表示有问题，先返回原始内容
-            return body
-        
-        return '\n'.join(cleaned_lines) + '\n'
+
+        if len(cleaned_lines) != 1:
+            return ""
+
+        only_line = cleaned_lines[0].strip()
+        if not only_line.startswith("return "):
+            return ""
+        if only_line == "return" or only_line == "return None":
+            return ""
+
+        return only_line + '\n'
 
     @staticmethod
     def _inject_feature_aliases(body: str, n_features: Optional[int] = None) -> str:
