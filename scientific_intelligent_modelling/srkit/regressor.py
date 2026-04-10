@@ -309,6 +309,24 @@ class SymbolicRegressor:
             raise RuntimeError(f"获取方程与参数失败: {result['message']}\n{result.get('traceback', '')}")
         return result.get('items', [])
 
+    def export_canonical_symbolic_program(self):
+        """导出统一符号工件。
+
+        当前返回 Phase 1 的最小 CanonicalSymbolicProgram，供后续 benchmark
+        runner 与 normalizer 继续加工。
+        """
+        if self.serialized_model is None:
+            raise ValueError("模型尚未训练，请先调用fit方法")
+        command = {
+            'action': 'export_canonical_symbolic_program',
+            'serialized_model': self.serialized_model,
+            'tool_name': self.tool_name,
+        }
+        result = self._execute_subprocess(command)
+        if 'error' in result:
+            raise RuntimeError(f"导出统一符号工件失败: {result['message']}\n{result.get('traceback', '')}")
+        return result.get('artifact', {})
+
 
     def _execute_subprocess(self, command):
         """执行子进程命令"""

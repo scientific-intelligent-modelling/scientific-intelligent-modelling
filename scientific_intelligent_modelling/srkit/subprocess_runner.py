@@ -74,6 +74,8 @@ def execute_command(module, command):
         return handle_get_fitted_params(regressor_class, command)
     elif action == 'get_total_equations_with_params':
         return handle_get_total_equations_with_params(regressor_class, command)
+    elif action == 'export_canonical_symbolic_program':
+        return handle_export_canonical_symbolic_program(regressor_class, command)
     else:
         raise ValueError(f"未知操作: {action}")
 
@@ -191,6 +193,28 @@ def handle_get_total_equations_with_params(regressor_class, command):
     return {
         'success': True,
         'items': items
+    }
+
+
+def handle_export_canonical_symbolic_program(regressor_class, command):
+    """导出统一符号工件。"""
+    from scientific_intelligent_modelling.benchmarks.artifact_schema import (
+        validate_canonical_symbolic_program,
+    )
+
+    serialized_model = command['serialized_model']
+    regressor = regressor_class()
+    if hasattr(regressor, 'deserialize'):
+        regressor = regressor.deserialize(serialized_model)
+
+    if not hasattr(regressor, 'export_canonical_symbolic_program'):
+        raise ValueError("包装器未实现 export_canonical_symbolic_program")
+
+    artifact = regressor.export_canonical_symbolic_program()
+    artifact = validate_canonical_symbolic_program(artifact)
+    return {
+        'success': True,
+        'artifact': artifact,
     }
 
 # 从配置管理器获取工具映射

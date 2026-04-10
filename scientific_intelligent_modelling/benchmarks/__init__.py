@@ -1,5 +1,12 @@
 """符号回归 benchmark 指标工具集。"""
 
+from .artifact_schema import (
+    CSP_VERSION,
+    build_canonical_symbolic_program,
+    extract_return_expression_from_python_function,
+    infer_raw_equation_kind,
+    validate_canonical_symbolic_program,
+)
 from .metrics import (
     acc_within_threshold,
     llm_srbench_acc_tau,
@@ -15,8 +22,12 @@ from .profiles import BENCHMARK_PROFILES
 
 __all__ = [
     "BENCHMARK_PROFILES",
+    "CSP_VERSION",
     "LLMSymbolicJudge",
     "acc_within_threshold",
+    "build_canonical_symbolic_program",
+    "extract_return_expression_from_python_function",
+    "infer_raw_equation_kind",
     "llm_srbench_acc_tau",
     "llm_srbench_nmse",
     "llm_srbench_numeric_metrics",
@@ -25,4 +36,5 @@ __all__ = [
     "regression_metrics",
     "srbench_model_size",
     "srbench_symbolic_solution",
+    "validate_canonical_symbolic_program",
 ]

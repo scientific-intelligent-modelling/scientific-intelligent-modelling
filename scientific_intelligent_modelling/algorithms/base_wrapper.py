@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import pickle
 import base64
 
+
 class BaseWrapper(ABC):
     """所有估计器的基类"""
     
@@ -24,6 +25,42 @@ class BaseWrapper(ABC):
     def get_total_equations(self):
         """获得所有方程"""
         pass
+
+    def _infer_tool_name(self):
+        """从模块路径推断工具名。"""
+        module_name = getattr(self.__class__, "__module__", "") or ""
+        marker = ".algorithms."
+        if marker in module_name and "_wrapper" in module_name:
+            try:
+                suffix = module_name.split(marker, 1)[1]
+                return suffix.split("_wrapper", 1)[0]
+            except Exception:
+                pass
+        return self.__class__.__name__
+
+    def export_canonical_symbolic_program(self):
+        """导出统一符号工件的默认实现。
+
+        Phase 1 只保证导出最小工件，不在这里做重度归一化。
+        具体算法可在各自 wrapper 中覆写该方法，补更高保真度的信息。
+        """
+        from scientific_intelligent_modelling.benchmarks.artifact_schema import (
+            build_canonical_symbolic_program,
+        )
+
+        raw_equation = self.get_optimal_equation()
+        parameter_values = None
+        if hasattr(self, "get_fitted_params"):
+            try:
+                parameter_values = self.get_fitted_params()
+            except Exception:
+                parameter_values = None
+        return build_canonical_symbolic_program(
+            tool_name=self._infer_tool_name(),
+            raw_equation=raw_equation,
+            parameter_values=parameter_values,
+            normalization_mode="wrapper_raw",
+        )
 
     def serialize(self):
         """将整个类实例序列化为字符串"""
