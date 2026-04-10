@@ -8,6 +8,7 @@ from sympy import sympify, lambdify
 from sympy.core.sympify import SympifyError
 
 from ..base_wrapper import BaseWrapper
+from scientific_intelligent_modelling.benchmarks.normalizers import normalize_dso_artifact
 
 class DSORegressor(BaseWrapper):
     _DEFAULT_EXPERIMENT = {
@@ -39,6 +40,7 @@ class DSORegressor(BaseWrapper):
         self._dso_pred_fn = None
         self._dso_var_count = 0
         self._dso_input_indices = []
+        self._dso_n_features = None
 
     @classmethod
     def _build_config(cls, raw_kwargs):
@@ -106,6 +108,8 @@ class DSORegressor(BaseWrapper):
         # 创建并训练模型
         self.model = DeepSymbolicRegressor(config=self.params)
         self.model.fit(X, y)
+        x_arr = np.asarray(X)
+        self._dso_n_features = int(x_arr.shape[1]) if x_arr.ndim == 2 else 1
         self._cache_post_fit_state()
         return self
 
@@ -237,4 +241,21 @@ class DSORegressor(BaseWrapper):
         if not self._dso_expression:
             return
         self._build_predict_fn_from_equation(self._dso_expression)
+
+    def export_canonical_symbolic_program(self):
+        raw_equation = self._dso_expression
+        if raw_equation is None and self.model is not None and hasattr(self.model, "program_"):
+            try:
+                raw_equation = str(self.model.program_.sympy_expr)
+            except Exception:
+                raw_equation = None
+        if raw_equation is None:
+            raise ValueError("DSO 当前没有可导出的标准表达式")
+        expected_n_features = self._dso_n_features
+        if expected_n_features is None and self._dso_var_count:
+            expected_n_features = int(self._dso_var_count)
+        return normalize_dso_artifact(
+            raw_equation,
+            expected_n_features=expected_n_features,
+        )
     

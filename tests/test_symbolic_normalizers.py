@@ -4,6 +4,7 @@ import unittest
 
 from scientific_intelligent_modelling.benchmarks.normalizers import (
     normalize_drsr_artifact,
+    normalize_dso_artifact,
     normalize_e2esr_artifact,
     normalize_gplearn_artifact,
     normalize_llmsr_artifact,
@@ -20,6 +21,7 @@ if "torch" not in sys.modules:
     sys.modules["torch"] = types.ModuleType("torch")
 
 from scientific_intelligent_modelling.algorithms.drsr_wrapper.wrapper import DRSRRegressor
+from scientific_intelligent_modelling.algorithms.dso_wrapper.wrapper import DSORegressor
 from scientific_intelligent_modelling.algorithms.e2esr_wrapper.wrapper import E2ESRRegressor
 from scientific_intelligent_modelling.algorithms.gplearn_wrapper.wrapper import GPLearnRegressor
 from scientific_intelligent_modelling.algorithms.llmsr_wrapper.wrapper import LLMSRRegressor
@@ -109,6 +111,13 @@ class SymbolicNormalizersTest(unittest.TestCase):
         artifact = normalize_drsr_artifact(raw, parameter_values=[1.0, 2.0, 3.0])
         self.assertEqual(artifact["normalized_expression"], "c0*x0 + c1*x1 + c2")
         self.assertTrue(artifact["sympy_parse_ok"])
+
+    def test_normalize_dso_artifact(self):
+        artifact = normalize_dso_artifact("x1 + x2**2", expected_n_features=2)
+        self.assertEqual(artifact["tool_name"], "dso")
+        self.assertEqual(artifact["normalized_expression"], "x0 + x1**2")
+        self.assertTrue(artifact["sympy_parse_ok"])
+        self.assertTrue(artifact["artifact_valid"])
 
     def test_wrapper_export_pysr(self):
         model = PySRRegressor()
@@ -200,6 +209,14 @@ class SymbolicNormalizersTest(unittest.TestCase):
         model.get_fitted_params = lambda: [1.0, 2.0, 3.0]
         artifact = model.export_canonical_symbolic_program()
         self.assertEqual(artifact["normalized_expression"], "c0 + c1*x0 + c2*x1")
+
+    def test_wrapper_export_dso(self):
+        model = DSORegressor()
+        model._dso_expression = "x1 + x2**2"
+        model._dso_n_features = 2
+        artifact = model.export_canonical_symbolic_program()
+        self.assertEqual(artifact["normalized_expression"], "x0 + x1**2")
+        self.assertTrue(artifact["artifact_valid"])
 
 
 if __name__ == "__main__":
