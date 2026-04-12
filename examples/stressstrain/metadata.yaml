@@ -1,0 +1,53 @@
+dataset:
+  name: sim__stressstrain
+  description: Calculate Stress given Strain and Temperature
+  splits:
+    train:
+      file: train.csv
+      samples: 1945
+      notes: Derived from the original train.csv after a deterministic 90/10 split
+        with seed=1314.
+    valid:
+      file: valid.csv
+      samples: 216
+      notes: Held out from the original train.csv using the same deterministic split.
+    id_test:
+      file: id_test.csv
+      samples: 1442
+      notes: Copied from the original test_id.csv.
+    ood_test:
+      file: ood_test.csv
+      samples: 738
+      notes: Copied from the original test_ood.csv.
+  features:
+  - name: strain
+    type: continuous
+    description: Strain
+    train_range:
+    - -0.00191139
+    - 0.963565395
+    ood_range:
+    - 0.000144
+    - 0.779162765
+  - name: temp
+    type: continuous
+    description: Temperature
+    train_range:
+    - 0.066666667
+    - 1.0
+    ood_range:
+    - 0.666666667
+    - 0.666666667
+  target:
+    name: stress
+    type: continuous
+    description: Stress
+    train_range:
+    - -0.005506879
+    - 0.910599881
+    ood_range:
+    - -0.000759813
+    - 0.62141408
+  license: unknown
+  resources:
+  - scientific_intelligent_modelling/algorithms/drsr_wrapper/drsr/data

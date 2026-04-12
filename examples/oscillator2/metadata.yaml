@@ -1,0 +1,63 @@
+dataset:
+  name: sim__oscillator2
+  description: Calculate Acceleration in Nonl-linear Harmonic Oscillator given Time,
+    Position at time t and Velocity at time t
+  splits:
+    train:
+      file: train.csv
+      samples: 9000
+      notes: Derived from the original train.csv after a deterministic 90/10 split
+        with seed=1314.
+    valid:
+      file: valid.csv
+      samples: 1000
+      notes: Held out from the original train.csv using the same deterministic split.
+    id_test:
+      file: id_test.csv
+      samples: 10000
+      notes: Copied from the original test_id.csv.
+    ood_test:
+      file: ood_test.csv
+      samples: 10000
+      notes: Copied from the original test_ood.csv.
+  features:
+  - name: t
+    type: continuous
+    description: Time
+    train_range:
+    - 30.00160003200064
+    - 50.0
+    ood_range:
+    - 0.0
+    - 19.99839996799936
+  - name: x
+    type: continuous
+    description: Position at time t
+    train_range:
+    - -0.2056328732515513
+    - 0.1749391166018568
+    ood_range:
+    - -0.4032301364402191
+    - 0.5353545302974986
+  - name: v
+    type: continuous
+    description: Velocity at time t
+    train_range:
+    - -0.3391165812841139
+    - 0.3624103069862505
+    ood_range:
+    - -1.0159473431616397
+    - 0.8810256878360984
+  target:
+    name: a
+    type: continuous
+    description: Acceleration
+    train_range:
+    - -0.7108292985644729
+    - 0.6603835083233243
+    ood_range:
+    - -3.54689196836611
+    - 1.9083219119520936
+  license: unknown
+  resources:
+  - scientific_intelligent_modelling/algorithms/drsr_wrapper/drsr/data
