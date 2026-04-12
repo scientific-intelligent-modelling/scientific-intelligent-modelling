@@ -36,6 +36,8 @@ class PySRRegressor(BaseWrapper):
         "random_state",
         "procs",
         "n_jobs",
+        "run_id",
+        "output_directory",
         "verbosity",
         "progress",
     }
@@ -51,6 +53,8 @@ class PySRRegressor(BaseWrapper):
         raw_params = dict(raw_params)
         # 先保存元参数，便于后续复现性映射
         seed = raw_params.get("seed")
+        exp_name = raw_params.get("exp_name")
+        exp_path = raw_params.get("exp_path")
         # 剥离系统参数
         for key in cls._META_PARAMS:
             raw_params.pop(key, None)
@@ -58,6 +62,11 @@ class PySRRegressor(BaseWrapper):
         # 复现性参数透传映射
         if "random_state" not in raw_params and seed is not None:
             params["random_state"] = int(seed)
+        # 将框架统一实验目录映射为 PySR 原生输出目录。
+        if "run_id" not in raw_params and isinstance(exp_name, str) and exp_name.strip():
+            params["run_id"] = exp_name.strip()
+        if "output_directory" not in raw_params and isinstance(exp_path, str) and exp_path.strip():
+            params["output_directory"] = os.path.abspath(exp_path.strip())
 
         unknown = sorted(set(raw_params) - cls._ALLOWED_PARAMS)
         if unknown:

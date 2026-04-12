@@ -88,7 +88,7 @@ class DRSRRegressor(BaseWrapper):
         problem = str(self.params.get("problem_name") or "problem").strip()
         ts = time.strftime('%Y%m%d-%H%M%S')
         resolved_exp_name = f"drsr_{problem}_{ts}"
-        experiments_root = os.path.join(default_base, "outputs")
+        experiments_root = os.path.join(default_base, "experiments")
         workdir = os.path.join(experiments_root, resolved_exp_name)
         return experiments_root, resolved_exp_name, workdir
 

@@ -16,3 +16,15 @@ def test_pysr_explicit_progress_and_verbosity_override_defaults():
     )
     assert reg.params["progress"] is False
     assert reg.params["verbosity"] == 0
+
+
+def test_pysr_maps_exp_layout_to_native_output_directory(tmp_path):
+    reg = PySRRegressor(
+        niterations=5,
+        population_size=32,
+        exp_path=str(tmp_path / "experiments"),
+        exp_name="demo_run",
+    )
+
+    assert reg.params["output_directory"] == str((tmp_path / "experiments").resolve())
+    assert reg.params["run_id"] == "demo_run"
