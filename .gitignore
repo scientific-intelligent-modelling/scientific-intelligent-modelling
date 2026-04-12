@@ -1,5 +1,6 @@
 build/
 scientific_intelligent_modelling.egg-info/
+sim_toolkit.egg-info/
 __pycache__/
 *.pyc
 .git

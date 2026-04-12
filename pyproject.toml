@@ -9,6 +9,7 @@ description = "A comprehensive scientific modeling framework that provides a uni
 readme = "README.md"
 authors = [
     {name = "Ziwen Zhang", email = "244824379@qq.com"},
+    {name = "Xiju Wu", email = "3495302215@qq.com"},
     {name = "Kai Li", email = "kai.li@ia.ac.cn"}
 ]
 license = {text = "GPL-3.0-or-later"}
