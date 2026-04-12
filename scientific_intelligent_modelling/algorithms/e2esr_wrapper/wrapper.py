@@ -13,14 +13,15 @@ from scientific_intelligent_modelling.benchmarks.normalizers import normalize_e2
 class E2ESRRegressor(BaseWrapper):
     @staticmethod
     def _resolve_default_model_path(current_dir):
+        shared_path = os.environ.get("SIM_SYMBOLICREGRESSION_MODEL_PATH")
         candidates = [
+            shared_path,
             os.path.join(current_dir, "model.pt"),
-            os.path.join(current_dir, "e2esr", "model1.pt"),
         ]
         for candidate in candidates:
-            if os.path.isfile(candidate):
+            if candidate and os.path.isfile(candidate):
                 return candidate
-        return candidates[0]
+        return os.path.join(current_dir, "model.pt")
 
     def __init__(self, 
                  model_path=None, 
@@ -77,9 +78,9 @@ class E2ESRRegressor(BaseWrapper):
             return
             
         try:
-            fallback_model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "e2esr", "model1.pt")
-            if not os.path.isfile(self.model_path) and os.path.isfile(fallback_model_path):
-                self.model_path = fallback_model_path
+            shared_model_path = os.environ.get("SIM_SYMBOLICREGRESSION_MODEL_PATH")
+            if not os.path.isfile(self.model_path) and shared_model_path and os.path.isfile(shared_model_path):
+                self.model_path = shared_model_path
             # 检查模型文件是否存在，不存在则从URL下载
             if not os.path.isfile(self.model_path):
                 print(f"从 {self.model_url} 下载模型...")

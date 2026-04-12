@@ -50,8 +50,13 @@ class TPSRRegressor(BaseWrapper):
         self.params.setdefault("nesymres_eq_setting_path", os.path.join("nesymres", "jupyter", "100M", "eq_setting.json"))
         self.params.setdefault("nesymres_cfg_path", os.path.join("nesymres", "jupyter", "100M", "config.yaml"))
         self.params.setdefault("nesymres_model_path", None)
-        self.params.setdefault("symbolicregression_model_path", os.path.join("symbolicregression", "weights", "model.pt"))
+        self.params.setdefault("symbolicregression_model_path", self._shared_symbolic_model_path())
         self.params.setdefault("symbolicregression_model_url", "https://dl.fbaipublicfiles.com/symbolicregression/model1.pt")
+
+    @staticmethod
+    def _shared_symbolic_model_path():
+        root_dir = os.path.dirname(os.path.abspath(__file__))
+        return os.path.abspath(os.path.join(root_dir, "..", "e2esr_wrapper", "model.pt"))
 
     def _runtime_import_paths(self):
         root_dir = os.path.dirname(os.path.abspath(__file__))
@@ -100,6 +105,7 @@ class TPSRRegressor(BaseWrapper):
 
     def _ensure_e2e_model(self):
         requested_path = self._resolve_tpsr_path(self.params.get("symbolicregression_model_path"))
+        shared_path = self._shared_symbolic_model_path()
         target_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
             "tpsr",
@@ -107,22 +113,24 @@ class TPSRRegressor(BaseWrapper):
             "weights",
             "model.pt",
         )
-        if requested_path and os.path.isfile(requested_path):
-            if os.path.abspath(requested_path) != os.path.abspath(target_path):
-                os.makedirs(os.path.dirname(target_path), exist_ok=True)
-                shutil.copy2(requested_path, target_path)
-            return target_path
+        for candidate in (requested_path, shared_path, target_path):
+            if candidate and os.path.isfile(candidate):
+                resolved = os.path.abspath(candidate)
+                os.environ["SIM_SYMBOLICREGRESSION_MODEL_PATH"] = resolved
+                self.params["symbolicregression_model_path"] = resolved
+                return resolved
 
         download_url = self.params.get("symbolicregression_model_url")
-        if not os.path.isfile(target_path):
+        if not os.path.isfile(shared_path):
             if not download_url:
                 raise FileNotFoundError(
                     "未找到 e2e 预训练权重，且未配置 symbolicregression_model_url"
                 )
-            self._download_if_absent(download_url, target_path)
-            return target_path
-
-        return target_path
+            self._download_if_absent(download_url, shared_path)
+        resolved = os.path.abspath(shared_path)
+        os.environ["SIM_SYMBOLICREGRESSION_MODEL_PATH"] = resolved
+        self.params["symbolicregression_model_path"] = resolved
+        return resolved
 
     def _resolve_nesymres_weights(self, cfg):
         model_path = self.params.get("nesymres_model_path")

@@ -12,6 +12,13 @@ TPSR_ROOT = os.path.join(
     "tpsr_wrapper",
     "tpsr",
 )
+SHARED_E2E_MODEL = os.path.join(
+    REPO_ROOT,
+    "scientific_intelligent_modelling",
+    "algorithms",
+    "e2esr_wrapper",
+    "model.pt",
+)
 
 
 def assert_ok(condition: bool, message: str):
@@ -29,7 +36,7 @@ def _resolve_path(rel_path: str):
 
 def _model_file(backbone: str):
     if backbone == "e2e":
-        return _resolve_path(os.path.join("symbolicregression", "weights", "model.pt"))
+        return SHARED_E2E_MODEL
     if backbone == "nesymres":
         default_candidates = [
             _resolve_path(os.path.join("nesymres", "weights", "10MCompleted.ckpt")),
