@@ -66,3 +66,15 @@ def test_spec_injects_feature_and_target_descriptions():
         assert "  - x2: Velocity at time t" in text
         assert "- Dependent:" in text
         assert "  - y: Acceleration in Nonl-linear Harmonic Oscillator" in text
+
+
+def test_llmsr_prompt_default_max_params_is_10():
+    spec = prompts.build_specification(
+        background="demo background",
+        features=["x0", "x1"],
+        target="y",
+        problem="demo_problem",
+    )
+
+    assert "MAX_NPARAMS = 10" in spec
+    assert "MAX_NPARAMS = 12" not in spec

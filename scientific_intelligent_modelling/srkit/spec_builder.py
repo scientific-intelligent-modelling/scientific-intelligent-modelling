@@ -103,7 +103,7 @@ def build_specification(
     background: str,
     features: List[str],
     target: str,
-    max_params: int = 12,
+    max_params: int = 10,
     problem: Optional[str] = None,
     evaluate_style: Literal["llmsr", "drsr"] = "llmsr",
     feature_descriptions: Optional[List[Optional[str]]] = None,
