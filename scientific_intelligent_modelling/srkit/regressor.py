@@ -4,6 +4,8 @@ import re
 import json
 import tempfile
 import subprocess
+import signal
+import threading
 import time
 from pathlib import Path
 from datetime import datetime, timezone
@@ -127,6 +129,15 @@ class SymbolicRegressor:
         # 执行命令并获取结果
         try:
             result = self._execute_subprocess(command)
+        except TimeoutError:
+            try:
+                self._update_manifest(
+                    status="timed_out",
+                    timeout_in_seconds=self._resolve_fit_timeout_seconds(command),
+                )
+            except Exception:
+                pass
+            raise
         except Exception:
             # 失败状态落盘后再抛出
             try:
@@ -364,42 +375,42 @@ class SymbolicRegressor:
             )
             # 如果工具不依赖 julia，此注入不会产生副作用
             env.setdefault('PYTHONUNBUFFERED', '1')
+            timeout_seconds = self._resolve_subprocess_timeout_seconds(command)
             proc = subprocess.Popen(
                 [python_path, '-u', runner_script, '--input', cmd_path, '--output', result_path],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
-                env=env
+                env=env,
+                start_new_session=(os.name != "nt"),
             )
-            # 实时并发读取 stdout/stderr，避免管道阻塞
+            # 使用后台线程实时转发 stdout/stderr，避免管道阻塞。
             assert proc.stdout is not None and proc.stderr is not None
+            stdout_thread = threading.Thread(
+                target=self._forward_subprocess_stream,
+                args=(proc.stdout,),
+                daemon=True,
+            )
+            stderr_thread = threading.Thread(
+                target=self._forward_subprocess_stream,
+                args=(proc.stderr,),
+                daemon=True,
+            )
+            stdout_thread.start()
+            stderr_thread.start()
             try:
-                import selectors
-                sel = selectors.DefaultSelector()
-                sel.register(proc.stdout, selectors.EVENT_READ)
-                sel.register(proc.stderr, selectors.EVENT_READ)
-                while True:
-                    if proc.poll() is not None and not sel.get_map():
-                        break
-                    events = sel.select(timeout=0.1)
-                    if not events and proc.poll() is not None:
-                        break
-                    for key, _ in events:
-                        line = key.fileobj.readline()
-                        if line:
-                            print(line, end='')
-                        else:
-                            # EOF: 取消注册
-                            sel.unregister(key.fileobj)
-                ret = proc.wait()
-            except Exception:
-                # 兜底：逐流读取
-                for line in proc.stdout:
-                    print(line, end='')
-                for line in proc.stderr:
-                    print(line, end='')
-                ret = proc.wait()
+                ret = proc.wait(timeout=timeout_seconds)
+            except subprocess.TimeoutExpired as exc:
+                self._terminate_subprocess_tree(proc)
+                stdout_thread.join(timeout=1.0)
+                stderr_thread.join(timeout=1.0)
+                raise TimeoutError(
+                    f"算法 '{self.tool_name}' 的子进程执行超时："
+                    f"action={command.get('action')}, timeout_in_seconds={timeout_seconds}"
+                ) from exc
+            stdout_thread.join(timeout=1.0)
+            stderr_thread.join(timeout=1.0)
             if ret != 0:
                 raise subprocess.CalledProcessError(ret, proc.args)
 
@@ -407,21 +418,93 @@ class SymbolicRegressor:
             with open(result_path, 'r') as f:
                 result = json.load(f)
 
-            # 清理临时文件
-            os.unlink(cmd_path)
-            os.unlink(result_path)
-
             return result
         except subprocess.CalledProcessError as e:
-            # 读取结果
-            with open(result_path, 'r') as f:
-                result = json.load(f)
+            result = self._safe_load_result_file(result_path)
             raise RuntimeError(f"子进程执行失败: {e}\n{result.get('traceback', '')}")
         except Exception as e:
-            # 读取结果
-            with open(result_path, 'r') as f:
-                result = json.load(f)
+            result = self._safe_load_result_file(result_path)
+            if isinstance(e, TimeoutError):
+                raise
             raise RuntimeError(f"执行命令时发生错误: {e}\n{result.get('traceback', '')}")
+        finally:
+            for path in (cmd_path, result_path):
+                try:
+                    if os.path.exists(path):
+                        os.unlink(path)
+                except Exception:
+                    pass
+
+    def _resolve_fit_timeout_seconds(self, command: dict) -> Optional[int]:
+        """解析 fit 阶段的总时长上限。"""
+        if command.get("action") != "fit":
+            return None
+        raw = command.get("timeout_in_seconds")
+        if raw is None:
+            raw = (command.get("params") or {}).get("timeout_in_seconds")
+        try:
+            raw = int(raw)
+        except Exception:
+            return None
+        return raw if raw > 0 else None
+
+    def _resolve_subprocess_timeout_seconds(self, command: dict) -> Optional[int]:
+        """解析当前子进程命令的超时时间。"""
+        requested = self._resolve_fit_timeout_seconds(command)
+        if requested is not None:
+            return requested
+
+        toolbox_config = config_manager.get_config("toolbox_config") or {}
+        fallback = toolbox_config.get("subprocess_timeout")
+        try:
+            fallback = int(fallback)
+        except Exception:
+            return None
+        return fallback if fallback > 0 else None
+
+    @staticmethod
+    def _forward_subprocess_stream(stream):
+        try:
+            for line in stream:
+                print(line, end="")
+        except Exception:
+            pass
+
+    @staticmethod
+    def _terminate_subprocess_tree(proc):
+        if proc.poll() is not None:
+            return
+        try:
+            if os.name != "nt":
+                os.killpg(proc.pid, signal.SIGTERM)
+            else:
+                proc.terminate()
+            proc.wait(timeout=3)
+            return
+        except Exception:
+            pass
+
+        try:
+            if os.name != "nt":
+                os.killpg(proc.pid, signal.SIGKILL)
+            else:
+                proc.kill()
+        except Exception:
+            pass
+        try:
+            proc.wait(timeout=1)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _safe_load_result_file(result_path: str) -> dict:
+        if not result_path or not os.path.exists(result_path):
+            return {}
+        try:
+            with open(result_path, 'r') as f:
+                return json.load(f)
+        except Exception:
+            return {}
 
     # ========= 实验清单（manifest）最小实现 =========
     def _sanitize_config(self) -> dict:

@@ -356,6 +356,7 @@ class DRSRRegressor(BaseWrapper):
             samples_per_prompt=samples_per_iteration,
             evaluate_timeout_seconds=int(self.params.get("evaluate_timeout_seconds", 10)),
             results_root=self._workdir,
+            wall_time_limit_seconds=self._resolve_wall_time_limit_seconds(),
         )
 
         feature_names, feature_descriptions, target_description = self._resolve_prompt_semantics(self._n_features or 0)
@@ -416,6 +417,14 @@ class DRSRRegressor(BaseWrapper):
         
         self.model_ready = True
         return self
+
+    def _resolve_wall_time_limit_seconds(self):
+        raw = self.params.get("timeout_in_seconds")
+        try:
+            raw = int(raw)
+        except Exception:
+            return None
+        return raw if raw > 0 else None
 
     def serialize(self):
         state = {

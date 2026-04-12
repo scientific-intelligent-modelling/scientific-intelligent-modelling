@@ -217,6 +217,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=1314,
         help="随机种子（默认 1314，用于实验目录命名与下游算法的 seed 参数）",
     )
+    parser.add_argument(
+        "--timeout-in-seconds",
+        "--timeout_in_seconds",
+        dest="timeout_in_seconds",
+        type=int,
+        default=None,
+        help="训练总超时时间（秒）；达到即停止当前算法",
+    )
 
     # prompts 类型/版本标签（用于区分当前使用的提示词版本）
     parser.add_argument(
@@ -378,6 +386,8 @@ def main(argv: Optional[List[str]] = None) -> None:
     # 显式传入 seed，保证下游包装器与 LLMSRRegressor 能够拿到与 manifest 一致的种子
     if getattr(args, "seed", None) is not None:
         extra_params.setdefault("seed", args.seed)
+    if getattr(args, "timeout_in_seconds", None) is not None:
+        extra_params.setdefault("timeout_in_seconds", args.timeout_in_seconds)
     # 显式传入 prompts_type，便于在 WandB 中记录当前 prompts 类型/版本
     if getattr(args, "prompts_type", None):
         extra_params.setdefault("prompts_type", args.prompts_type)

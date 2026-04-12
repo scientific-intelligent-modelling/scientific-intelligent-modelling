@@ -19,6 +19,7 @@ class GPLearnRegressor(BaseWrapper):
         "exp_path",
         "problem_name",
         "seed",
+        "timeout_in_seconds",
     }
 
     _ALLOWED_PARAMS = {

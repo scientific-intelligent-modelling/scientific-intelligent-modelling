@@ -20,6 +20,7 @@ class PySRRegressor(BaseWrapper):
     _FIXED_THREAD_COUNT = "4"
     _ALLOWED_PARAMS = {
         "niterations",
+        "timeout_in_seconds",
         "population_size",
         "populations",
         "ncycles_per_iteration",

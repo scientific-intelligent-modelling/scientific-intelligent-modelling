@@ -22,6 +22,11 @@
       "type": "string",
       "action": "strip",
       "description": "实验元参数，不参与算法训练"
+    },
+    "timeout_in_seconds": {
+      "type": "int",
+      "action": "passthrough",
+      "description": "PySR 原生总时长上限（秒）；到达即停止搜索"
     }
   },
   "allowed_params": {

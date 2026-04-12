@@ -22,6 +22,11 @@
       "type": "string",
       "action": "strip",
       "description": "实验元参数，不参与算法训练"
+    },
+    "timeout_in_seconds": {
+      "type": "int",
+      "action": "strip",
+      "description": "统一运行时元参数；由外层子进程执行器负责总时长控制，不直接透传给 gplearn"
     }
   },
   "allowed_params": {

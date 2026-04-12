@@ -5,7 +5,10 @@ import importlib
 import sys
 import traceback
 import os
-from config_manager import config_manager
+try:
+    from .config_manager import config_manager
+except ImportError:
+    from config_manager import config_manager
 
 # print(f"当前工作目录: {os.getcwd()}")
 # print(f"脚本所在目录: {os.path.dirname(os.path.abspath(__file__))}")
@@ -256,7 +259,9 @@ def handle_fit(regressor_class, command):
     
     # 提取数据和参数
     data = command['data']
-    params = command.get('params', {})
+    params = dict(command.get('params', {}) or {})
+    # 统一的运行时元参数，不直接透传给算法 wrapper。
+    params.pop('timeout_in_seconds', None)
     
     # 转换为numpy数组
     X = np.array(data['X'])

@@ -73,6 +73,7 @@ class DSORegressor(BaseWrapper):
         exp_name = params.pop("exp_name", None)
         problem_name = params.pop("problem_name", None)
         seed = params.pop("seed", None)
+        params.pop("timeout_in_seconds", None)
 
         if seed is not None and "seed" not in experiment:
             experiment["seed"] = int(seed)

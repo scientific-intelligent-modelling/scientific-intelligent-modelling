@@ -79,6 +79,7 @@ class OperonRegressor(BaseWrapper):
             "niterations": "generations",
             "niteration": "generations",
             "population": "population_size",
+            "timeout_in_seconds": "max_time",
         }
 
         for old, new in alias_map.items():
