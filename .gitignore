@@ -14,3 +14,4 @@ experiments/
 wandb
 .sim_datasets/
 tmp/
+artifacts/
