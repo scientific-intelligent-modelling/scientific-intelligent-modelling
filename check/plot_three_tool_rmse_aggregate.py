@@ -24,18 +24,37 @@ AGGREGATED = {
     },
 }
 
+# 这组数据来自同一批次在 3 个种子上的最优值聚合（RMSE 取最小）。
+BEST_AGGREGATED = {
+    "oscillator1": {
+        "pysr": {"id_rmse": 6.203234899810806e-05, "ood_rmse": 0.014209957274535431},
+        "llmsr": {"id_rmse": 6.0702043643014146e-05, "ood_rmse": 0.008124848719464565},
+        "drsr": {"id_rmse": 2.388297261234297e-07, "ood_rmse": 0.0005255690366092218},
+    },
+    "oscillator2": {
+        "pysr": {"id_rmse": 0.1468437920359519, "ood_rmse": 0.43517959878107004},
+        "llmsr": {"id_rmse": 0.0003383900485855028, "ood_rmse": 0.008799335156479753},
+        "drsr": {"id_rmse": 8.321861982482095e-06, "ood_rmse": 0.001131587673715627},
+    },
+    "stressstrain": {
+        "pysr": {"id_rmse": 0.041661342339112804, "ood_rmse": 0.04232541567288662},
+        "llmsr": {"id_rmse": 0.04444833124105994, "ood_rmse": 0.033745038845246454},
+        "drsr": {"id_rmse": 0.03874809338384709, "ood_rmse": 0.03765040569176137},
+    },
+}
+
 DATASETS = ["oscillator1", "oscillator2", "stressstrain"]
 TOOLS = ["drsr", "llmsr", "pysr"]
 COLORS = {"drsr": "#1f77b4", "llmsr": "#ff7f0e", "pysr": "#2ca02c"}
 MARKERS = {"drsr": "o", "llmsr": "s", "pysr": "^"}
 
 
-def plot_metric(metric: str, ylabel: str, title: str, output_path: Path) -> None:
+def plot_metric(metric: str, ylabel: str, title: str, output_path: Path, data: dict) -> None:
     fig, ax = plt.subplots(figsize=(8.2, 4.6), dpi=180)
     x = list(range(len(DATASETS)))
 
     for tool in TOOLS:
-        y = [AGGREGATED[dataset][tool][metric] for dataset in DATASETS]
+        y = [data[dataset][tool][metric] for dataset in DATASETS]
         ax.plot(
             x,
             y,
@@ -67,12 +86,28 @@ def main() -> None:
         ylabel="ID RMSE (log scale)",
         title="3-Seed Average ID RMSE",
         output_path=figures_dir / "three_tool_id_rmse_avg.png",
+        data=AGGREGATED,
     )
     plot_metric(
         metric="ood_rmse",
         ylabel="OOD RMSE (log scale)",
         title="3-Seed Average OOD RMSE",
         output_path=figures_dir / "three_tool_ood_rmse_avg.png",
+        data=AGGREGATED,
+    )
+    plot_metric(
+        metric="id_rmse",
+        ylabel="ID RMSE (log scale)",
+        title="3-Seed Best ID RMSE",
+        output_path=figures_dir / "three_tool_id_rmse_best.png",
+        data=BEST_AGGREGATED,
+    )
+    plot_metric(
+        metric="ood_rmse",
+        ylabel="OOD RMSE (log scale)",
+        title="3-Seed Best OOD RMSE",
+        output_path=figures_dir / "three_tool_ood_rmse_best.png",
+        data=BEST_AGGREGATED,
     )
 
 
