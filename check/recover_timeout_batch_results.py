@@ -125,12 +125,43 @@ def recover_pysr(exp_dir: Path, X_id: np.ndarray, X_ood: np.ndarray):
     from pysr import PySRRegressor as CorePySR
 
     model = CorePySR.from_file(run_directory=str(exp_dir))
-    equations = _extract_pysr_equations(getattr(model, "equations_", None))
+    equations_obj = getattr(model, "equations_", None)
+    equations = _extract_pysr_equations(equations_obj)
+    best_fn = None
+    best_equation = None
+    best_loss = None
+    if hasattr(equations_obj, "iterrows"):
+        for _, row in equations_obj.iterrows():
+            fn = row.get("lambda_format")
+            if not callable(fn):
+                continue
+            try:
+                id_pred = np.asarray(fn(X_id)).reshape(-1)
+                ood_pred = np.asarray(fn(X_ood)).reshape(-1)
+                if not (np.all(np.isfinite(id_pred)) and np.all(np.isfinite(ood_pred))):
+                    continue
+            except Exception:
+                continue
+            cur_loss = safe_float(row.get("loss"))
+            if cur_loss is None:
+                cur_loss = float("inf")
+            if best_loss is None or cur_loss < best_loss:
+                best_loss = cur_loss
+                best_fn = fn
+                best_equation = row.get("sympy_format") or row.get("equation") or row.get("Equation")
+    if best_fn is not None:
+        id_pred = np.asarray(best_fn(X_id)).reshape(-1)
+        ood_pred = np.asarray(best_fn(X_ood)).reshape(-1)
+        equation = str(best_equation)
+    else:
+        id_pred = np.asarray(model.predict(X_id)).reshape(-1)
+        ood_pred = np.asarray(model.predict(X_ood)).reshape(-1)
+        equation = str(model.sympy())
     return {
-        "equation": str(model.sympy()),
+        "equation": equation,
         "equation_count": len(equations) or None,
-        "id_pred": np.asarray(model.predict(X_id)).reshape(-1),
-        "ood_pred": np.asarray(model.predict(X_ood)).reshape(-1),
+        "id_pred": id_pred,
+        "ood_pred": ood_pred,
     }
 
 
