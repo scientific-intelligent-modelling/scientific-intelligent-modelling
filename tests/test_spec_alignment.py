@@ -20,7 +20,8 @@ def test_llmsr_and_drsr_spec_align_text_semantics():
     drsr_spec = reg._build_spec_from_background(np.zeros((8, 3)), np.zeros(8), background)
 
     for text in (llmsr_spec, drsr_spec):
-        assert "Find the mathematical function skeleton that represents PO0." in text
+        assert "Find the mathematical function skeleton that fits the data." in text
+        assert "represents PO0" not in text
         assert "Variables:" in text
         assert "- Independents: x0, x1, x2" in text
         assert "- Dependent: y" in text

@@ -121,7 +121,6 @@ def build_specification(
 
     cleaned_features = dedup_names([sanitize_name(n) for n in features])
     target_clean = sanitize_name(target)
-    problem_str = (problem or target or "target relation").strip()
     background_text = background.strip() if background else ""
     variables_block = _format_variables_block(
         cleaned_features=cleaned_features,
@@ -134,7 +133,7 @@ def build_specification(
     linear_seed = " + ".join(linear_terms)
 
     header = f'''"""
-Find the mathematical function skeleton that represents {problem_str}.
+Find the mathematical function skeleton that fits the data.
 
 Background:
 {background_text}
