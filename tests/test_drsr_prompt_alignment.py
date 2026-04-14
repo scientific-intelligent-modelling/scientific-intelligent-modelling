@@ -30,6 +30,7 @@ def test_prompt_context_uses_x_variables_and_metadata_semantics():
     assert "with driving force" not in rendered
     assert "col0" not in rendered
     assert "col1" not in rendered
+    assert "MatSci0" not in rendered
     assert "x0 (Strain)" in rendered
     assert "x1 (Temperature)" in rendered
     assert "y (Stress)" in rendered
