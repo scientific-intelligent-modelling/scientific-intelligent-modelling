@@ -7,14 +7,15 @@
 ├── train.csv
 ├── valid.csv
 ├── id_test.csv
-├── ood_test.csv
 ├── metadata.yaml
+├── ood_test.csv      # 可选
 └── formula.py        # 可选
 ```
 
 ## CSV 约束
 
-- 四个 CSV 的列头必须一致。
+- `train.csv`、`valid.csv`、`id_test.csv` 的列头必须一致。
+- 若存在 `ood_test.csv`，其列头也必须与其余 split 一致。
 - 必须至少包含：
   - 1 个目标列
   - 1 个或多个特征列
@@ -41,9 +42,6 @@ dataset:
     id_test:
       file: id_test.csv
       samples: <int>
-    ood_test:
-      file: ood_test.csv
-      samples: <int>
   features:
     - name: <feature_1>
       type: continuous
@@ -54,13 +52,24 @@ dataset:
     description: <text>
 ```
 
+若存在 `ood_test.csv`，再额外声明：
+
+```yaml
+dataset:
+  splits:
+    ood_test:
+      file: ood_test.csv
+      samples: <int>
+```
+
 ## 当前代码真实依赖的字段
 
 严格依赖：
 
 - `dataset.target.name`
 - `dataset.features[*].name`
-- split 对应的 CSV 文件存在
+- `train.csv`、`valid.csv`、`id_test.csv` 存在
+- `ood_test.csv` 若缺失，当前 pipeline 会按空数据处理
 
 会被现有逻辑消费的入口：
 

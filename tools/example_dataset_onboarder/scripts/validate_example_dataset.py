@@ -11,13 +11,15 @@ import numpy as np
 import yaml
 
 
-REQUIRED_SPLITS = ("train", "valid", "id_test", "ood_test")
+REQUIRED_SPLITS = ("train", "valid", "id_test")
+OPTIONAL_SPLIT = "ood_test"
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="校验 examples 风格数据集目录")
     parser.add_argument("--dataset-dir", required=True, help="待校验的数据集目录")
     parser.add_argument("--require-formula", action="store_true", help="要求 ground_truth_formula.file 存在")
+    parser.add_argument("--require-ood", action="store_true", help="要求 ood_test.csv 存在")
     parser.add_argument("--allow-empty-ood", action="store_true", help="允许 ood_test.csv 为空")
     parser.add_argument("--verify-formula", action="store_true", help="若存在 ground truth formula，则代入特征并验证目标列")
     parser.add_argument("--formula-nmse-threshold", type=float, default=1e-6, help="公式校验允许的最大 NMSE")
@@ -108,7 +110,7 @@ def verify_formula_against_data(
     formula_fn, formula_name = load_formula_callable(dataset_dir, formula_file, target_name)
     checked_any = False
 
-    for split_name in REQUIRED_SPLITS:
+    for split_name in REQUIRED_SPLITS + (OPTIONAL_SPLIT,):
         split_info = split_meta.get(split_name) or {}
         csv_name = split_info.get("file") or f"{split_name}.csv"
         csv_path = dataset_dir / csv_name
@@ -247,6 +249,48 @@ def main():
                     errors.append(
                         f"metadata 中 {split_name}.samples={declared_samples}，但 {csv_path.name} 实际为 {row_count}"
                     )
+
+    ood_info = split_meta.get(OPTIONAL_SPLIT) or {}
+    ood_csv_name = ood_info.get("file") or f"{OPTIONAL_SPLIT}.csv"
+    ood_csv_path = dataset_dir / ood_csv_name
+    has_ood_meta = bool(ood_info)
+    has_ood_file = ood_csv_path.exists()
+
+    if args.require_ood and not has_ood_file:
+        errors.append(f"缺少 split 文件: {ood_csv_path.name}")
+    elif has_ood_meta and not has_ood_file:
+        errors.append(f"metadata 声明了 {ood_csv_path.name}，但文件不存在")
+    elif has_ood_file:
+        try:
+            header, row_count = read_csv_header_and_count(ood_csv_path)
+        except Exception as exc:
+            errors.append(str(exc))
+        else:
+            if reference_header is None:
+                reference_header = header
+                reference_columns = set(header)
+            elif header != reference_header:
+                errors.append(
+                    f"{ood_csv_path.name} 的列头与 train/首个 split 不一致: {header} != {reference_header}"
+                )
+            if row_count == 0:
+                if args.allow_empty_ood:
+                    warnings.append("ood_test.csv 为空，已按 --allow-empty-ood 放行")
+                else:
+                    errors.append(f"{ood_csv_path.name} 没有数据行")
+            declared_samples = ood_info.get("samples")
+            if declared_samples is not None:
+                try:
+                    declared_samples = int(declared_samples)
+                except Exception:
+                    errors.append("metadata 中 ood_test.samples 不是整数")
+                else:
+                    if declared_samples != row_count:
+                        errors.append(
+                            f"metadata 中 ood_test.samples={declared_samples}，但 {ood_csv_path.name} 实际为 {row_count}"
+                        )
+    else:
+        warnings.append("ood_test.csv 缺失；已按可选 split 处理")
 
     if reference_columns is not None and target_name is not None and target_name not in reference_columns:
         errors.append(f"目标列 {target_name} 不存在于 CSV 列头中")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -130,3 +131,117 @@ def test_generate_metadata_updates_ranges_and_nmse_without_semantic_csv(tmp_path
     assert feature["train_range"] == [1.0, 3.0]
     assert feature["ood_range"] == [[0.8, 1.0], [3.0, 3.2]]
     assert data["dataset"]["splits"]["train"]["nmse"] == 0.0
+
+
+def test_extract_ood_by_iterative_shrink_generates_ood_close_to_target(tmp_path: Path):
+    input_csv = tmp_path / "all.csv"
+    header = ["x0", "target"]
+    rows = [[float(i), float(i * 2)] for i in range(1000)]
+    write_csv(input_csv, header, rows)
+
+    module = load_module(
+        "extract_ood_by_iterative_shrink",
+        Path(
+            ".codex/skills/format-symbolic-regression-dataset/scripts/extract_ood_by_iterative_shrink.py"
+        ).resolve(),
+    )
+
+    output_dir = tmp_path / "out"
+    old_argv = sys.argv[:]
+    sys.argv = [
+        "extract_ood_by_iterative_shrink.py",
+        "--input-csv",
+        str(input_csv),
+        "--output-dir",
+        str(output_dir),
+    ]
+    try:
+        module.main()
+    finally:
+        sys.argv = old_argv
+
+    ood_path = output_dir / "ood_test.csv"
+    id_path = output_dir / "id_pool.csv"
+    summary_path = output_dir / "ood_split_summary.json"
+    assert ood_path.exists()
+    assert id_path.exists()
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert summary["status"] == "success"
+    assert 0.10 <= summary["ood_ratio"] <= 0.20
+
+
+def test_extract_ood_by_iterative_shrink_fails_when_ratio_jumps_over_threshold(tmp_path: Path):
+    input_csv = tmp_path / "all.csv"
+    header = ["x0", "target"]
+    rows = [[0.0, 0.0], [1.0, 2.0], [2.0, 4.0]]
+    write_csv(input_csv, header, rows)
+
+    module = load_module(
+        "extract_ood_by_iterative_shrink",
+        Path(
+            ".codex/skills/format-symbolic-regression-dataset/scripts/extract_ood_by_iterative_shrink.py"
+        ).resolve(),
+    )
+
+    output_dir = tmp_path / "out"
+    old_argv = sys.argv[:]
+    sys.argv = [
+        "extract_ood_by_iterative_shrink.py",
+        "--input-csv",
+        str(input_csv),
+        "--output-dir",
+        str(output_dir),
+    ]
+    try:
+        module.main()
+    finally:
+        sys.argv = old_argv
+
+    summary = json.loads((output_dir / "ood_split_summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "failed"
+    assert summary["reason"] == "ood_ratio_exceeded_max_ratio"
+    assert not (output_dir / "ood_test.csv").exists()
+
+
+def test_validate_example_dataset_allows_missing_ood_by_default(tmp_path: Path, capsys):
+    dataset_dir = tmp_path / "demo"
+    header = ["x0", "target"]
+    write_csv(dataset_dir / "train.csv", header, [[1.0, 2.0], [2.0, 4.0]])
+    write_csv(dataset_dir / "valid.csv", header, [[3.0, 6.0]])
+    write_csv(dataset_dir / "id_test.csv", header, [[4.0, 8.0]])
+    metadata = {
+        "dataset": {
+            "name": "demo",
+            "description": "demo dataset",
+            "splits": {
+                "train": {"file": "train.csv", "samples": 2},
+                "valid": {"file": "valid.csv", "samples": 1},
+                "id_test": {"file": "id_test.csv", "samples": 1},
+            },
+            "features": [{"name": "x0", "type": "continuous", "description": ""}],
+            "target": {"name": "target", "type": "continuous", "description": ""},
+        }
+    }
+    (dataset_dir / "metadata.yaml").write_text(
+        yaml.safe_dump(metadata, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+
+    module = load_module(
+        "validate_example_dataset",
+        Path("tools/example_dataset_onboarder/scripts/validate_example_dataset.py").resolve(),
+    )
+
+    old_argv = sys.argv[:]
+    sys.argv = [
+        "validate_example_dataset.py",
+        "--dataset-dir",
+        str(dataset_dir),
+    ]
+    try:
+        module.main()
+    finally:
+        sys.argv = old_argv
+
+    out = capsys.readouterr().out
+    assert "校验通过" in out

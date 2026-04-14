@@ -4,8 +4,12 @@
 
 - `dataset.name`
 - `dataset.description`
-- `dataset.splits.*.file`
-- `dataset.splits.*.samples`
+- `dataset.splits.train.file`
+- `dataset.splits.train.samples`
+- `dataset.splits.valid.file`
+- `dataset.splits.valid.samples`
+- `dataset.splits.id_test.file`
+- `dataset.splits.id_test.samples`
 - `dataset.features`
 - `dataset.target.name`
 - `dataset.target.type`
@@ -20,13 +24,14 @@
 - `dataset.target.ood_range`
 - `dataset.resources`
 - `dataset.license`
+- `dataset.splits.ood_test.*` 若存在
 
 ## 描述原则
 
 - 说明数据来源。
 - 说明做了哪些筛选、清洗、重采样、聚合。
 - 说明 split 依据，尤其是 OOD 的定义。
-- 若 OOD 为空，明确写原因。
+- 若 OOD 缺失或为空，明确写原因。
 
 ## 什么时候可以不写 formula.py
 
