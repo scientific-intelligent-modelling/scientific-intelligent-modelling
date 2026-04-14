@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import math
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,14 +14,20 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import yaml
+import sympy as sp
 
 from scientific_intelligent_modelling.benchmarks.metrics import regression_metrics
 from scientific_intelligent_modelling.benchmarks.result_archive import write_result_payload
-from scientific_intelligent_modelling.benchmarks.result_artifacts import safe_export_canonical_artifact
+from scientific_intelligent_modelling.benchmarks.result_artifacts import (
+    safe_build_canonical_artifact,
+    safe_export_canonical_artifact,
+)
 from scientific_intelligent_modelling.srkit.regressor import SymbolicRegressor
 
 
 _HIDDEN_PARAM_KEYS = {"api_key", "apikey", "token", "password", "secret"}
+_PROGRESS_JSONL_FILENAME = "progress_results.jsonl"
+_SNAPSHOT_CAPABLE_TOOLS = {"llmsr", "drsr"}
 
 
 @dataclass
@@ -176,6 +184,19 @@ def _evaluate_split(regressor: SymbolicRegressor, split: DatasetSplit | None) ->
     }
 
 
+def _evaluate_prediction(split: DatasetSplit | None, pred: np.ndarray | None) -> dict[str, float | None] | None:
+    if split is None or split.rows == 0 or pred is None:
+        return None
+    pred_arr = np.asarray(pred, dtype=float).reshape(-1)
+    metrics = regression_metrics(split.y, pred_arr, acc_threshold=0.1)
+    return {
+        "rmse": _safe_float(metrics["rmse"]),
+        "r2": _safe_float(metrics["r2"]),
+        "nmse": _safe_float(metrics["nmse"]),
+        "acc_0_1": _safe_float(metrics["acc_tau"]),
+    }
+
+
 def _sanitize_params(params: dict[str, Any]) -> dict[str, Any]:
     sanitized: dict[str, Any] = {}
     for key, value in (params or {}).items():
@@ -183,6 +204,307 @@ def _sanitize_params(params: dict[str, Any]) -> dict[str, Any]:
             continue
         sanitized[key] = value
     return sanitized
+
+
+def _sympy_locals() -> dict[str, Any]:
+    locals_map: dict[str, Any] = {
+        "Abs": sp.Abs,
+        "Max": sp.Max,
+        "Min": sp.Min,
+        "sqrt": sp.sqrt,
+        "log": sp.log,
+        "exp": sp.exp,
+        "sin": sp.sin,
+        "cos": sp.cos,
+        "tan": sp.tan,
+        "asin": sp.asin,
+        "acos": sp.acos,
+        "atan": sp.atan,
+    }
+    for i in range(256):
+        locals_map[f"x{i}"] = sp.Symbol(f"x{i}")
+    return locals_map
+
+
+def _predict_from_canonical_artifact(artifact: dict[str, Any], X: np.ndarray) -> np.ndarray:
+    """基于统一工件中的代值表达式做轻量预测。
+
+    这里只服务 runner 的中间最优快照，不依赖具体算法 wrapper 或子进程环境。
+    """
+    expr_text = (
+        artifact.get("instantiated_expression")
+        or artifact.get("normalized_expression")
+        or artifact.get("return_expression_source")
+    )
+    if not isinstance(expr_text, str) or not expr_text.strip():
+        raise ValueError("canonical_artifact 中缺少可执行表达式")
+
+    X_arr = np.asarray(X, dtype=float)
+    if X_arr.ndim != 2:
+        raise ValueError("中间快照预测要求二维输入")
+
+    expr = sp.sympify(expr_text, locals=_sympy_locals())
+    free_symbols = sorted(
+        list(expr.free_symbols),
+        key=lambda sym: int(str(sym)[1:]) if str(sym).startswith("x") and str(sym)[1:].isdigit() else str(sym),
+    )
+
+    if not free_symbols:
+        value = float(expr)
+        return np.full(X_arr.shape[0], value, dtype=float)
+
+    args = []
+    for sym in free_symbols:
+        name = str(sym)
+        if not name.startswith("x") or not name[1:].isdigit():
+            raise ValueError(f"表达式包含非标准变量: {name}")
+        idx = int(name[1:])
+        if idx >= X_arr.shape[1]:
+            raise ValueError(f"表达式变量索引越界: {name}, 输入维度={X_arr.shape[1]}")
+        args.append(X_arr[:, idx])
+
+    fn = sp.lambdify(free_symbols, expr, modules="numpy")
+    pred = fn(*args)
+    pred_arr = np.asarray(pred, dtype=float)
+    if pred_arr.ndim == 0:
+        pred_arr = np.full(X_arr.shape[0], float(pred_arr), dtype=float)
+    else:
+        pred_arr = np.broadcast_to(pred_arr, (X_arr.shape[0],)).astype(float)
+    return pred_arr.reshape(-1)
+
+
+def _is_equation_function_text(func_source: Any) -> bool:
+    if not isinstance(func_source, str) or not func_source.strip():
+        return False
+    try:
+        tree = ast.parse(func_source)
+    except Exception:
+        return False
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "equation":
+            body = list(node.body)
+            while (
+                body
+                and isinstance(body[0], ast.Expr)
+                and isinstance(getattr(body[0], "value", None), ast.Constant)
+                and isinstance(body[0].value.value, str)
+            ):
+                body = body[1:]
+            return len(body) == 1 and isinstance(body[0], ast.Return) and body[0].value is not None
+    return False
+
+
+def _read_json_file(path: Path) -> dict[str, Any] | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _extract_llmsr_periodic_candidate(experiment_dir: str | Path) -> dict[str, Any] | None:
+    samples_dir = Path(experiment_dir) / "samples"
+    if not samples_dir.is_dir():
+        return None
+    candidates = sorted(samples_dir.glob("top01_*.json")) or sorted(samples_dir.glob("top*.json"))
+    best_key = None
+    best_item = None
+    for path in candidates:
+        item = _read_json_file(path)
+        if not item:
+            continue
+        func = item.get("function")
+        if not _is_equation_function_text(func):
+            continue
+        key_val = None
+        nmse = item.get("nmse")
+        mse = item.get("mse")
+        score = item.get("score")
+        if isinstance(nmse, (int, float)):
+            key_val = float(nmse)
+        elif isinstance(mse, (int, float)):
+            key_val = float(mse)
+        elif isinstance(score, (int, float)):
+            key_val = -float(score)
+        if key_val is None:
+            continue
+        if best_key is None or key_val < best_key:
+            best_key = key_val
+            best_item = item
+    return best_item
+
+
+def _extract_drsr_periodic_candidate(experiment_dir: str | Path) -> dict[str, Any] | None:
+    base_dir = Path(experiment_dir)
+    candidate_paths = []
+    candidate_paths.extend(sorted((base_dir / "samples").glob("top*.json")))
+    candidate_paths.extend(sorted((base_dir / "best_history").glob("best_sample_*.json")))
+    candidate_paths.extend(sorted((base_dir / "samples").glob("samples_*.json")))
+    best_key = None
+    best_item = None
+    for path in candidate_paths:
+        item = _read_json_file(path)
+        if not item:
+            continue
+        func = item.get("function")
+        if not _is_equation_function_text(func):
+            continue
+        score = item.get("score")
+        if not isinstance(score, (int, float)):
+            continue
+        key_val = -float(score)
+        if best_key is None or key_val < best_key:
+            best_key = key_val
+            best_item = item
+    return best_item
+
+
+def _extract_periodic_candidate(tool_name: str, experiment_dir: str | Path) -> dict[str, Any] | None:
+    tool = str(tool_name).strip().lower()
+    if tool == "llmsr":
+        return _extract_llmsr_periodic_candidate(experiment_dir)
+    if tool == "drsr":
+        return _extract_drsr_periodic_candidate(experiment_dir)
+    return None
+
+
+def _append_progress_payload(
+    payload: dict[str, Any],
+    *,
+    primary_path: str | Path,
+    experiment_dir: str | Path | None = None,
+    filename: str = _PROGRESS_JSONL_FILENAME,
+) -> list[Path]:
+    paths: list[Path] = [Path(primary_path).resolve()]
+    if experiment_dir:
+        paths.append(Path(experiment_dir).resolve() / filename)
+
+    unique_paths: list[Path] = []
+    seen: set[str] = set()
+    for path in paths:
+        key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_paths.append(path)
+
+    text = json.dumps(payload, ensure_ascii=False) + "\n"
+    for path in unique_paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(text)
+    return unique_paths
+
+
+def _resolve_progress_snapshot_interval_seconds(tool_name: str, params: dict[str, Any]) -> int | None:
+    raw = params.pop("progress_snapshot_interval_seconds", None)
+    if raw is None:
+        if tool_name in _SNAPSHOT_CAPABLE_TOOLS:
+            return 600
+        return None
+    try:
+        value = int(raw)
+    except Exception:
+        return None
+    return value if value > 0 else None
+
+
+def _build_periodic_snapshot_payload(
+    *,
+    tool_name: str,
+    dataset: LoadedDataset,
+    params: dict[str, Any],
+    seed: int,
+    started_at: float,
+    experiment_dir: str | Path,
+    checkpoint_index: int,
+) -> dict[str, Any] | None:
+    candidate = _extract_periodic_candidate(tool_name, experiment_dir)
+    if not candidate:
+        return None
+
+    parameter_values = candidate.get("params") if isinstance(candidate.get("params"), list) else None
+    canonical_artifact, canonical_artifact_error = safe_build_canonical_artifact(
+        tool_name=tool_name,
+        equation=candidate.get("function"),
+        expected_n_features=len(dataset.feature_names),
+        parameter_values=parameter_values,
+    )
+
+    valid_metrics = None
+    id_metrics = None
+    ood_metrics = None
+    error = None
+    if canonical_artifact is not None:
+        try:
+            valid_pred = _predict_from_canonical_artifact(canonical_artifact, dataset.valid.X) if dataset.valid else None
+            id_pred = _predict_from_canonical_artifact(canonical_artifact, dataset.id_test.X) if dataset.id_test else None
+            ood_pred = _predict_from_canonical_artifact(canonical_artifact, dataset.ood_test.X) if dataset.ood_test else None
+            valid_metrics = _evaluate_prediction(dataset.valid, valid_pred)
+            id_metrics = _evaluate_prediction(dataset.id_test, id_pred)
+            ood_metrics = _evaluate_prediction(dataset.ood_test, ood_pred)
+        except Exception as exc:
+            error = repr(exc)
+    else:
+        error = canonical_artifact_error
+
+    payload = build_result_payload(
+        tool_name=tool_name,
+        dataset=dataset,
+        params=params,
+        seed=seed,
+        started_at=started_at,
+        status="ok" if error is None else "error",
+        error=error,
+        equation=str(candidate.get("function") or ""),
+        equation_count=1,
+        canonical_artifact=canonical_artifact,
+        canonical_artifact_error=canonical_artifact_error,
+        valid_metrics=valid_metrics,
+        id_metrics=id_metrics,
+        ood_metrics=ood_metrics,
+        experiment_dir=str(experiment_dir),
+    )
+    payload["record_type"] = "periodic_best"
+    payload["checkpoint_index"] = int(checkpoint_index)
+    payload["elapsed_seconds"] = round(time.time() - started_at, 3)
+    payload["source_iteration"] = candidate.get("iteration")
+    payload["source_sample_order"] = candidate.get("sample_order")
+    payload["source_score"] = candidate.get("score")
+    return payload
+
+
+def _periodic_snapshot_loop(
+    *,
+    stop_event: threading.Event,
+    interval_seconds: int,
+    tool_name: str,
+    dataset: LoadedDataset,
+    params: dict[str, Any],
+    seed: int,
+    started_at: float,
+    output_dir: Path,
+    experiment_dir: str | Path,
+) -> None:
+    checkpoint_index = 0
+    while not stop_event.wait(interval_seconds):
+        checkpoint_index += 1
+        payload = _build_periodic_snapshot_payload(
+            tool_name=tool_name,
+            dataset=dataset,
+            params=params,
+            seed=seed,
+            started_at=started_at,
+            experiment_dir=experiment_dir,
+            checkpoint_index=checkpoint_index,
+        )
+        if payload is None:
+            continue
+        _append_progress_payload(
+            payload,
+            primary_path=output_dir / _PROGRESS_JSONL_FILENAME,
+            experiment_dir=experiment_dir,
+        )
 
 
 def build_runner_params(
@@ -274,6 +596,7 @@ def run_benchmark_task(
         seed=seed,
         params_override=params_override,
     )
+    progress_snapshot_interval_seconds = _resolve_progress_snapshot_interval_seconds(tool_name, params)
 
     started_at = time.time()
     status = "ok"
@@ -294,6 +617,27 @@ def run_benchmark_task(
         **params,
     )
     experiment_dir = getattr(reg, "experiment_dir", None)
+    snapshot_stop_event: threading.Event | None = None
+    snapshot_thread: threading.Thread | None = None
+
+    if progress_snapshot_interval_seconds and experiment_dir and tool_name in _SNAPSHOT_CAPABLE_TOOLS:
+        snapshot_stop_event = threading.Event()
+        snapshot_thread = threading.Thread(
+            target=_periodic_snapshot_loop,
+            kwargs={
+                "stop_event": snapshot_stop_event,
+                "interval_seconds": progress_snapshot_interval_seconds,
+                "tool_name": tool_name,
+                "dataset": dataset,
+                "params": params,
+                "seed": seed,
+                "started_at": started_at,
+                "output_dir": output_dir,
+                "experiment_dir": experiment_dir,
+            },
+            daemon=True,
+        )
+        snapshot_thread.start()
 
     try:
         reg.fit(dataset.train.X, dataset.train.y)
@@ -311,6 +655,11 @@ def run_benchmark_task(
     except Exception as exc:
         status = "error"
         error = repr(exc)
+    finally:
+        if snapshot_stop_event is not None:
+            snapshot_stop_event.set()
+        if snapshot_thread is not None:
+            snapshot_thread.join(timeout=1.0)
 
     result = build_result_payload(
         tool_name=tool_name,
