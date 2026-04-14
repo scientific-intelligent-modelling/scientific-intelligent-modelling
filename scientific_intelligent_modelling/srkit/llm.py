@@ -2,7 +2,7 @@ import os
 """统一的 LLM 客户端封装。
 
 提供商/模型命名规则：'provider/model'，provider 大小写不敏感，model 保留大小写与路径。
-当前支持：deepseek、siliconflow、openai、ollama。
+当前支持：deepseek、siliconflow、deepinfra、openai、ollama。
 """
 import requests
 from typing import List, Dict, Tuple
@@ -69,6 +69,8 @@ class LLMClient:
                 return 'deepseek'
             if 'siliconflow' in url or 'siliconflow.cn' in url:
                 return 'siliconflow'
+            if 'deepinfra' in url:
+                return 'deepinfra'
             if 'bltcy' in url or 'blt' in url:
                 return 'blt'
             if 'ollama' in url or 'localhost' in url:
@@ -221,6 +223,12 @@ class SiliconflowClient(LLMClient):
     def __init__(self, api_key: str, model: str, base_url: str = "https://api.siliconflow.cn/v1"):
         super().__init__(api_key=api_key, model=model, base_url=base_url)
 
+class DeepInfraClient(LLMClient):
+    """DeepInfra，OpenAI Chat Completions 兼容客户端。"""
+
+    def __init__(self, api_key: str, model: str, base_url: str = "https://api.deepinfra.com/v1/openai"):
+        super().__init__(api_key=api_key, model=model, base_url=base_url)
+
 # 兼容旧拼写，避免历史引用报错
 SliconflowClient = SiliconflowClient
 
@@ -253,6 +261,7 @@ def parse_provider_model(model_str: str) -> Tuple[str, str]:
     示例：
     - "deepseek/deepseek-chat" -> ("deepseek", "deepseek-chat")
     - "SiliconFlow/Qwen/Qwen3-8B" -> ("siliconflow", "Qwen/Qwen3-8B")
+    - "deepinfra/meta-llama/Meta-Llama-3.1-8B-Instruct" -> ("deepinfra", "meta-llama/Meta-Llama-3.1-8B-Instruct")
     - "ollama/llama3.1:8b" -> ("ollama", "llama3.1:8b")
     """
     if not isinstance(model_str, str) or '/' not in model_str:
@@ -283,6 +292,9 @@ class ClientFactory:
         elif provider in ('siliconflow', 'silicon-flow', 'sflow'):
             base_url = base_url or "https://api.siliconflow.cn/v1"
             return SiliconflowClient(api_key=api_key or os.getenv('SILICONFLOW_API_KEY', ''), model=model, base_url=base_url)
+        elif provider in ('deepinfra', 'deep-infra'):
+            base_url = base_url or "https://api.deepinfra.com/v1/openai"
+            return DeepInfraClient(api_key=api_key or os.getenv('DEEPINFRA_API_KEY', ''), model=model, base_url=base_url)
         elif provider == 'openai':
             base_url = base_url or "https://api.openai.com/v1"
             return OpenAIClient(api_key=api_key or os.getenv('OPENAI_API_KEY', ''), model=model, base_url=base_url)
@@ -293,7 +305,7 @@ class ClientFactory:
             # 优先使用传入 api_key，否则读环境变量 BLT_API_KEY
             return BltClient(api_key=api_key or os.getenv('BLT_API_KEY', ''), model=model, base_url=base_url or os.getenv('BLT_API_BASE', 'https://api.bltcy.ai/v1'))
         else:
-            raise ValueError(f"不支持的提供商: {provider}，请使用 'deepseek'、'siliconflow'、'openai'、'blt' 或 'ollama'")
+            raise ValueError(f"不支持的提供商: {provider}，请使用 'deepseek'、'siliconflow'、'deepinfra'、'openai'、'blt' 或 'ollama'")
         
 
 
