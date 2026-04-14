@@ -10,6 +10,9 @@ import pandas as pd
 import yaml
 
 from scientific_intelligent_modelling.benchmarks.metrics import regression_metrics
+from scientific_intelligent_modelling.benchmarks.result_artifacts import (
+    safe_export_canonical_artifact,
+)
 from scientific_intelligent_modelling.srkit.regressor import SymbolicRegressor
 
 
@@ -103,12 +106,15 @@ def main():
 
     started = time.time()
     reg.fit(X_train, y_train)
+    canonical_artifact, canonical_artifact_error = safe_export_canonical_artifact(reg)
     result = {
         "tool": args.tool,
         "dataset": dataset_dir.name,
         "budget": args.budget,
         "seconds": time.time() - started,
         "equation": reg.get_optimal_equation(),
+        "canonical_artifact": canonical_artifact,
+        "canonical_artifact_error": canonical_artifact_error,
         "id_test": metrics(reg, X_id, y_id),
         "ood_test": metrics(reg, X_ood, y_ood),
     }

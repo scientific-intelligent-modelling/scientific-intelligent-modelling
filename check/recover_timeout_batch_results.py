@@ -12,6 +12,9 @@ import numpy as np
 import pandas as pd
 
 from scientific_intelligent_modelling.benchmarks.metrics import regression_metrics
+from scientific_intelligent_modelling.benchmarks.result_artifacts import (
+    safe_build_canonical_artifact,
+)
 
 try:
     from scipy.optimize import minimize
@@ -335,6 +338,7 @@ def recover_llmsr(
     return {
         "equation": str(sample.get("function") or ""),
         "equation_count": len(list((exp_dir / "samples").glob("top*.json"))) or None,
+        "parameter_values": params,
         "id_pred": predict_with_function(func, X_id, params=params),
         "ood_pred": predict_with_function(func, X_ood, params=params),
     }
@@ -371,6 +375,7 @@ def recover_drsr(
     return {
         "equation": str(chosen.get("function") or ""),
         "equation_count": len(entries) or None,
+        "parameter_values": params,
         "id_pred": predict_with_function(func, X_id, params=params),
         "ood_pred": predict_with_function(func, X_ood, params=params),
     }
@@ -407,6 +412,13 @@ def recover_one(result_path: Path, args) -> Dict[str, Any]:
     else:
         raise ValueError(f"不支持的算法: {tool}")
 
+    canonical_artifact, canonical_artifact_error = safe_build_canonical_artifact(
+        tool_name=str(tool),
+        equation=recovered.get("equation"),
+        expected_n_features=len(feature_names) if feature_names else X_train.shape[1],
+        parameter_values=recovered.get("parameter_values"),
+    )
+
     updated = dict(original)
     updated.pop("_result_path", None)
     updated.update(
@@ -415,6 +427,8 @@ def recover_one(result_path: Path, args) -> Dict[str, Any]:
             "error": None,
             "equation": recovered["equation"],
             "equation_count": recovered["equation_count"],
+            "canonical_artifact": canonical_artifact,
+            "canonical_artifact_error": canonical_artifact_error,
             "id_test": evaluate_predictions(y_id, recovered["id_pred"]),
             "ood_test": evaluate_predictions(y_ood, recovered["ood_pred"]),
             "recovered_from_timeout": True,

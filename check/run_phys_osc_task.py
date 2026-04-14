@@ -12,6 +12,9 @@ import pandas as pd
 import yaml
 
 from scientific_intelligent_modelling.benchmarks.metrics import regression_metrics
+from scientific_intelligent_modelling.benchmarks.result_artifacts import (
+    safe_export_canonical_artifact,
+)
 from scientific_intelligent_modelling.srkit.regressor import SymbolicRegressor
 
 
@@ -154,6 +157,8 @@ def run_task(tool: str, dataset_dir: Path, output_root: Path, api_model: str, pa
     error = None
     equation = None
     equations = None
+    canonical_artifact = None
+    canonical_artifact_error = None
     metrics_id = None
     metrics_ood = None
 
@@ -161,6 +166,7 @@ def run_task(tool: str, dataset_dir: Path, output_root: Path, api_model: str, pa
         reg = build_regressor(tool, dataset_dir, output_dir, meta, api_model, params_override=params_override, seed=seed)
         reg.fit(X_train, y_train)
         equation = reg.get_optimal_equation()
+        canonical_artifact, canonical_artifact_error = safe_export_canonical_artifact(reg)
         try:
             equations = reg.get_total_equations()
         except Exception:
@@ -186,6 +192,8 @@ def run_task(tool: str, dataset_dir: Path, output_root: Path, api_model: str, pa
         "seconds": round(time.time() - started_at, 3),
         "equation": equation,
         "equation_count": len(equations) if isinstance(equations, list) else None,
+        "canonical_artifact": canonical_artifact,
+        "canonical_artifact_error": canonical_artifact_error,
         "id_test": metrics_id,
         "ood_test": metrics_ood,
         "finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),

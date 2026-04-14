@@ -8,6 +8,9 @@ import numpy as np
 import pandas as pd
 
 from scientific_intelligent_modelling.benchmarks.metrics import regression_metrics
+from scientific_intelligent_modelling.benchmarks.result_artifacts import (
+    safe_export_canonical_artifact,
+)
 from scientific_intelligent_modelling.srkit.regressor import SymbolicRegressor
 
 
@@ -91,6 +94,8 @@ def main():
     error = None
     equation = None
     equation_count = None
+    canonical_artifact = None
+    canonical_artifact_error = None
     id_metrics = None
     ood_metrics = None
 
@@ -98,6 +103,7 @@ def main():
         reg = SymbolicRegressor("pysr", problem_name="stressstrain", seed=args.random_state, **params)
         reg.fit(ds["X_train"], ds["y_train"])
         equation = reg.get_optimal_equation()
+        canonical_artifact, canonical_artifact_error = safe_export_canonical_artifact(reg)
         try:
             equations = reg.get_total_equations()
             equation_count = len(equations) if isinstance(equations, list) else None
@@ -119,6 +125,8 @@ def main():
         "seconds": round(time.time() - started, 3),
         "equation": equation,
         "equation_count": equation_count,
+        "canonical_artifact": canonical_artifact,
+        "canonical_artifact_error": canonical_artifact_error,
         "id_test": id_metrics,
         "ood_test": ood_metrics,
         "feature_names": ds["feature_cols"],
