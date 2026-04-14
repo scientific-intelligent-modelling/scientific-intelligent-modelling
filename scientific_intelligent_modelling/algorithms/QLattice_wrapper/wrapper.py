@@ -9,6 +9,8 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 import numpy as np
 import pandas as pd
 from typing import List, Optional
@@ -26,10 +28,13 @@ class QLatticeRegressor(BaseWrapper):
     - signif: int = 4，表达式输出的有效数字（用于 sympify 展示）
     - 其他 QLattice.auto_run 支持的参数可透传
     """
+    _PROGRESS_STATE_FILENAME = ".qlattice_current_best.json"
 
     def __init__(self, **kwargs) -> None:
         self.params = dict(kwargs)
         self.model = None
+        self._exp_path = self.params.get("exp_path")
+        self._exp_name = self.params.get("exp_name")
 
         # QLattice 相关缓存
         self._ql = None
@@ -43,6 +48,104 @@ class QLatticeRegressor(BaseWrapper):
         self._lambdified = None
         # 候选方程字符串列表（便于序列化后仍可获取多个解）
         self._equations: List[str] = []
+        self._progress_state_path = self._resolve_progress_state_path(self._exp_path, self._exp_name)
+
+    @classmethod
+    def _resolve_progress_state_path(cls, exp_path, exp_name) -> Optional[str]:
+        if not isinstance(exp_path, str) or not exp_path.strip():
+            return None
+        if not isinstance(exp_name, str) or not exp_name.strip():
+            return None
+        return os.path.join(
+            os.path.abspath(exp_path.strip()),
+            exp_name.strip(),
+            cls._PROGRESS_STATE_FILENAME,
+        )
+
+    @staticmethod
+    def _model_equation(model, signif: int) -> Optional[str]:
+        try:
+            return str(model.sympify(signif=signif))
+        except Exception:
+            try:
+                return str(model)
+            except Exception:
+                return None
+
+    def _criterion_name(self) -> Optional[str]:
+        criterion = self.params.get("criterion", "bic")
+        if criterion is None:
+            return None
+        return str(criterion)
+
+    def _criterion_value(self, model, criterion_name: Optional[str]) -> Optional[float]:
+        if criterion_name:
+            try:
+                value = getattr(model, criterion_name, None)
+            except Exception:
+                value = None
+            if value is not None:
+                try:
+                    return float(value)
+                except Exception:
+                    pass
+        for fallback in ("bic", "aic"):
+            try:
+                value = getattr(model, fallback, None)
+            except Exception:
+                value = None
+            if value is not None:
+                try:
+                    return float(value)
+                except Exception:
+                    pass
+        return None
+
+    def _estimate_complexity(self, equation: str) -> Optional[int]:
+        try:
+            import sympy as sp
+
+            expr = sp.sympify(equation)
+            return int(sum(1 for _ in sp.preorder_traversal(expr)))
+        except Exception:
+            return None
+
+    def _select_best_model(self, models, criterion_name: Optional[str]):
+        if not models:
+            return None
+        scored = []
+        for model in models:
+            value = self._criterion_value(model, criterion_name)
+            if value is not None:
+                scored.append((value, model))
+        if scored:
+            scored.sort(key=lambda item: item[0])
+            return scored[0][1]
+        return models[0]
+
+    def _write_progress_state_from_models(self, models, *, epoch: int, signif: int, criterion_name: Optional[str]) -> None:
+        if not self._progress_state_path or not models:
+            return
+        best_model = self._select_best_model(models, criterion_name)
+        if best_model is None:
+            return
+        equation = self._model_equation(best_model, signif)
+        if not isinstance(equation, str) or not equation.strip():
+            return
+        payload = {
+            "equation": equation,
+            "loss": self._criterion_value(best_model, criterion_name),
+            "criterion": criterion_name,
+            "complexity": self._estimate_complexity(equation),
+            "epoch": int(epoch),
+            "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        try:
+            os.makedirs(os.path.dirname(self._progress_state_path), exist_ok=True)
+            with open(self._progress_state_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
 
     # ---------------- 公共接口 ----------------
     def fit(self, X, y):
@@ -80,27 +183,49 @@ class QLatticeRegressor(BaseWrapper):
             if k in self.params:
                 auto_args[k] = self.params[k]
 
-        models = list(self._ql.auto_run(**auto_args))
-        if not models:
-            raise RuntimeError('QLattice.auto_run 未返回任何模型，请检查数据与参数。')
+        total_epochs = int(auto_args.get('n_epochs', 100))
+        if total_epochs < 1:
+            raise ValueError('n_epochs 必须 >= 1')
+        signif = int(self.params.get('signif', 4))
+        criterion_name = self._criterion_name()
+
+        if self._progress_state_path:
+            running_models = auto_args.get('starting_models')
+            models = []
+            epoch_args = dict(auto_args)
+            epoch_args['n_epochs'] = 1
+            for epoch in range(1, total_epochs + 1):
+                if running_models:
+                    epoch_args['starting_models'] = running_models
+                else:
+                    epoch_args.pop('starting_models', None)
+                models = list(self._ql.auto_run(**epoch_args))
+                if not models:
+                    raise RuntimeError('QLattice.auto_run 未返回任何模型，请检查数据与参数。')
+                running_models = models
+                self._write_progress_state_from_models(
+                    models,
+                    epoch=epoch,
+                    signif=signif,
+                    criterion_name=criterion_name,
+                )
+        else:
+            models = list(self._ql.auto_run(**auto_args))
+            if not models:
+                raise RuntimeError('QLattice.auto_run 未返回任何模型，请检查数据与参数。')
 
         self._models = models
-        self._best_model = models[0]
+        self._best_model = self._select_best_model(models, criterion_name)
         self.model = True
 
         # 提取最优与候选表达式
-        signif = int(self.params.get('signif', 4))
-        try:
-            self._expr_str = str(self._best_model.sympify(signif=signif))
-        except Exception:
-            self._expr_str = str(self._best_model)
+        self._expr_str = self._model_equation(self._best_model, signif)
 
         equations: List[str] = []
         for m in self._models:
-            try:
-                equations.append(str(m.sympify(signif=signif)))
-            except Exception:
-                equations.append(str(m))
+            eq = self._model_equation(m, signif)
+            if eq is not None:
+                equations.append(eq)
         self._equations = equations
 
         # 构建 lambdify 预测器（便于序列化回放）
