@@ -11,6 +11,8 @@ from ..base_wrapper import BaseWrapper
 from scientific_intelligent_modelling.benchmarks.normalizers import normalize_e2esr_artifact
 
 class E2ESRRegressor(BaseWrapper):
+    _PROGRESS_STATE_FILENAME = ".e2esr_current_best.json"
+
     @staticmethod
     def _resolve_default_model_path(current_dir):
         shared_path = os.environ.get("SIM_SYMBOLICREGRESSION_MODEL_PATH")
@@ -22,6 +24,18 @@ class E2ESRRegressor(BaseWrapper):
             if candidate and os.path.isfile(candidate):
                 return candidate
         return os.path.join(current_dir, "model.pt")
+
+    @classmethod
+    def _resolve_progress_state_path(cls, exp_path, exp_name):
+        if not isinstance(exp_path, str) or not exp_path.strip():
+            return None
+        if not isinstance(exp_name, str) or not exp_name.strip():
+            return None
+        return os.path.join(
+            os.path.abspath(exp_path.strip()),
+            exp_name.strip(),
+            cls._PROGRESS_STATE_FILENAME,
+        )
 
     def __init__(self, 
                  model_path=None, 
@@ -42,6 +56,8 @@ class E2ESRRegressor(BaseWrapper):
         rescale: 是否重新缩放数据
         """
         # 保存参数
+        self._exp_path = kwargs.get("exp_path")
+        self._exp_name = kwargs.get("exp_name")
         self.params = {
             'max_input_points': max_input_points,
             'n_trees_to_refine': n_trees_to_refine,
@@ -53,6 +69,7 @@ class E2ESRRegressor(BaseWrapper):
         self.regressor = None
         self.best_tree = None
         self.n_features_ = None
+        self._progress_state_path = self._resolve_progress_state_path(self._exp_path, self._exp_name)
         
         # 获取e2esr模块的路径，添加到系统路径中
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -150,6 +167,7 @@ class E2ESRRegressor(BaseWrapper):
             
             self.regressor = SymbolicTransformerRegressor(
                 model=self.model,
+                progress_state_path=self._progress_state_path,
                 **regressor_kwargs
             )
             
