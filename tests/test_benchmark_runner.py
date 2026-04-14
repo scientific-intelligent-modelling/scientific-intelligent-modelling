@@ -109,6 +109,41 @@ dataset:
                 result,
             )
 
+    def test_run_benchmark_task_ignores_seed_in_params_override(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_dir = root / "dataset"
+            dataset_dir.mkdir()
+            (dataset_dir / "metadata.yaml").write_text(
+                """
+dataset:
+  target:
+    name: y
+  features:
+    - name: x0
+""".strip(),
+                encoding="utf-8",
+            )
+            (dataset_dir / "train.csv").write_text("x0,y\n1,1\n2,2\n", encoding="utf-8")
+
+            original_cls = runner.SymbolicRegressor
+            runner.SymbolicRegressor = _FakeRegressor
+            try:
+                result_path = runner.run_benchmark_task(
+                    tool_name="iMCTS",
+                    dataset_dir=dataset_dir,
+                    output_root=root / "bench_results",
+                    seed=1314,
+                    params_override={"seed": 2025},
+                )
+            finally:
+                runner.SymbolicRegressor = original_cls
+
+            result = json.loads(result_path.read_text(encoding="utf-8"))
+            self.assertEqual(result["status"], "ok")
+            self.assertEqual(result["seed"], 1314)
+            self.assertNotIn("seed", result["params"])
+
 
 if __name__ == "__main__":
     unittest.main()

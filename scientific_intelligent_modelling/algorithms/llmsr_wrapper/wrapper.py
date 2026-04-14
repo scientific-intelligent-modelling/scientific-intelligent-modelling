@@ -63,7 +63,7 @@ def _import_core_regressor():
 
 
 def _is_single_line_formula_function(func_source: Any) -> bool:
-    """只接受单行 return 的 equation 函数。"""
+    """接受仅包含字符串说明块和单个 return 的 equation 函数。"""
     if not isinstance(func_source, str) or not func_source.strip():
         return False
     try:
@@ -80,7 +80,7 @@ def _is_single_line_formula_function(func_source: Any) -> bool:
         return False
 
     body = list(equation_func.body)
-    if (
+    while (
         body
         and isinstance(body[0], ast.Expr)
         and isinstance(getattr(body[0], "value", None), ast.Constant)
@@ -93,10 +93,7 @@ def _is_single_line_formula_function(func_source: Any) -> bool:
     stmt = body[0]
     if not isinstance(stmt, ast.Return) or stmt.value is None:
         return False
-
-    lineno = getattr(stmt, "lineno", None)
-    end_lineno = getattr(stmt, "end_lineno", lineno)
-    return lineno is not None and end_lineno == lineno
+    return True
 
 
 def _infer_n_features_from_function_signature(func_source: Any) -> int | None:
@@ -189,6 +186,17 @@ class LLMSRRegressor(BaseWrapper):
     # ------------------------------------------------------------------
     # 训练接口
     # ------------------------------------------------------------------
+    def _can_reuse_existing_experiment(self) -> bool:
+        """判断是否可以直接复用已有实验目录而跳过在线训练。"""
+        if not self._exp_dir:
+            return False
+        exp_dir = os.path.abspath(self._exp_dir)
+        return (
+            os.path.isdir(exp_dir)
+            and os.path.isfile(os.path.join(exp_dir, "meta.json"))
+            and os.path.isdir(os.path.join(exp_dir, "samples"))
+        )
+
     def fit(self, X, y):
         """
         训练 LLMSR 模型。
@@ -204,6 +212,13 @@ class LLMSRRegressor(BaseWrapper):
             X_arr = X_arr.reshape(-1, 1)
         if X_arr.shape[0] != y_arr.shape[0]:
             raise ValueError(f"X 与 y 的样本数量不一致: X.shape={X_arr.shape}, y.shape={y_arr.shape}")
+
+        # 若显式传入了 existing_exp_dir，则优先离线复用已有实验目录。
+        if self._can_reuse_existing_experiment():
+            self._exp_dir = os.path.abspath(self._exp_dir)
+            self._n_features = int(X_arr.shape[1])
+            self._core = None
+            return self
 
         # 推导 problem_name（允许用户通过参数显式指定）
         problem_name = (self._problem_name or "").strip()

@@ -195,6 +195,8 @@ def build_runner_params(
 ) -> dict[str, Any]:
     output_path = Path(output_dir).resolve()
     params = dict(params_override or {})
+    # runner 在外层统一传 seed，避免 params_override 中重复注入导致构造器冲突。
+    params.pop("seed", None)
     params.setdefault("exp_path", str(output_path / "experiments"))
     params.setdefault("exp_name", f"{dataset.dataset_name}_{tool_name}_seed{seed}")
 
