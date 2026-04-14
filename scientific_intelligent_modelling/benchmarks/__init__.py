@@ -28,6 +28,14 @@ from .metrics import (
     srbench_symbolic_solution,
 )
 from .profiles import BENCHMARK_PROFILES
+from .runner import (
+    DatasetSplit,
+    LoadedDataset,
+    build_result_payload,
+    build_runner_params,
+    load_canonical_dataset,
+    run_benchmark_task,
+)
 
 try:
     from .judges import LLMSymbolicJudge, llm_srbench_symbolic_accuracy
@@ -57,6 +65,12 @@ __all__ = [
     "llm_srbench_symbolic_accuracy",
     "normalized_tree_edit_distance",
     "regression_metrics",
+    "DatasetSplit",
+    "LoadedDataset",
+    "build_result_payload",
+    "build_runner_params",
+    "load_canonical_dataset",
+    "run_benchmark_task",
     "srbench_model_size",
     "srbench_symbolic_solution",
     "validate_canonical_symbolic_program",
