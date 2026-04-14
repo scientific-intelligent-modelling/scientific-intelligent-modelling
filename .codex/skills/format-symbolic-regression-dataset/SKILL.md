@@ -1,16 +1,17 @@
 ---
-name: heterogeneous-data-to-examples
-description: 当需要把用户提供的异构数据源整理成当前仓库 examples 风格的数据集目录时使用。适用于 CSV/Excel/JSON/多文件导出转成 train.csv、valid.csv、id_test.csv、ood_test.csv、metadata.yaml，并用校验脚本检查输出是否符合当前 pipeline 的真实约定。
+name: format-symbolic-regression-dataset
+description: 当需要把符号回归数据源规范化为当前仓库统一数据集目录时使用。适用于 CSV/TSV/Excel/JSON/多文件导出或 benchmark 原始数据，整理成 train.csv、valid.csv、id_test.csv、ood_test.csv、metadata.yaml，并用校验脚本检查输出是否符合当前 pipeline 的真实约定。
 ---
 
-# Heterogeneous Data To Examples
+# Format Symbolic Regression Dataset
 
-用于把用户给的异构数据整理成当前仓库 `examples/` 风格的数据集目录。
+用于把符号回归数据源整理成当前仓库统一数据集目录。
 
 ## 何时使用
 
 - 用户给了一份或多份异构数据，想接成当前项目可直接消费的数据集。
 - 用户说“整理成和 examples 一样的格式”。
+- 用户想把 benchmark 原始数据批量整理成统一 schema，例如 SRBench、SRSD、LLM-SRBench 一类数据。
 - 需要从 CSV、Excel、多 sheet、JSON、导出目录、实验日志中抽出统一的训练/验证/测试数据。
 
 ## 目标输出
@@ -46,10 +47,18 @@ description: 当需要把用户提供的异构数据源整理成当前仓库 exa
    - `python3 tools/example_dataset_onboarder/scripts/scaffold_example_dataset.py --dataset-dir <dir> --dataset-name <name> --target <target> --features x0,x1`
 6. 生成 `metadata.yaml`：
    - 可参考 `tools/example_dataset_onboarder/templates/metadata_template.yaml`
-7. 若已知真值公式，再写 `formula.py`。
-8. 若存在 `ground_truth_formula.file`，必须做公式代入校验：
+7. 若源数据是 benchmark 风格的解析式数据，可按需参考本 skill 自带脚本：
+   - `scripts/analyze_feature_distributions.py`：分析 train split 中各特征分布
+   - `scripts/generate_ood_samples.py`：基于区间规则生成 OOD 样本
+   - `scripts/generate_metadata_2.py`：批量补 metadata 与公式一致性信息
+   - `scripts/force_update_desp.py` / `scripts/debug_metadata.py`：用于排查或覆盖描述字段
+8. 这些脚本带明显的历史 benchmark 假设，主要适合 Feynman / SRBench / SRSD 一类目录。
+   - 使用前必须先读源码，确认列名、目录层级、目标列命名与当前数据一致
+   - 不要在语义不匹配的数据上直接运行
+9. 若已知真值公式，再写 `formula.py`。
+10. 若存在 `ground_truth_formula.file`，必须做公式代入校验：
    - `python3 tools/example_dataset_onboarder/scripts/validate_example_dataset.py --dataset-dir <dir> --verify-formula`
-9. 跑校验：
+11. 跑校验：
    - `python3 tools/example_dataset_onboarder/scripts/validate_example_dataset.py --dataset-dir <dir>`
 
 ## 强约束
@@ -67,6 +76,7 @@ description: 当需要把用户提供的异构数据源整理成当前仓库 exa
 - 帮你把异构源数据映射成统一 split 目录
 - 帮你补最小可用 metadata
 - 帮你用校验器检查产物
+- 在 benchmark 风格数据上，优先复用已有后处理脚本，而不是重复手写同类逻辑
 - 若存在真值公式，帮你实际代入公式验证它是否与数据一致
 
 ## 这个 skill 不会替你臆造什么
@@ -81,3 +91,4 @@ description: 当需要把用户提供的异构数据源整理成当前仓库 exa
 - 目标格式：`references/examples_contract.md`
 - 源数据映射：`references/source_mapping_patterns.md`
 - metadata 规则：`references/metadata_rules.md`
+- 历史后处理脚本：`scripts/`
