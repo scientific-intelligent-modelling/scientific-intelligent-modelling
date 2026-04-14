@@ -267,7 +267,7 @@ Wrapper：
 
 Wrapper：
 
-- `scientific_intelligent_modelling/algorithms/operon_wrapper/wrapper.py`
+- `scientific_intelligent_modelling/algorithms/pyoperon_wrapper/wrapper.py`
 - 对外工具名：`pyoperon`
 - 类名：`OperonRegressor`
 

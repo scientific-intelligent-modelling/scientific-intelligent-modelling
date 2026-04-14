@@ -23,7 +23,7 @@ api_key = os.getenv("DEEPSEEK_API_KEY")
 models = {
     # 'gplearn': SymbolicRegressor('gplearn', population_size=1000, generations=20),
     # 'pysr': SymbolicRegressor('pysr', niterations=5),
-    # 'operon': SymbolicRegressor('operon'),
+    # 'pyoperon': SymbolicRegressor('pyoperon'),
     'llmsr': SymbolicRegressor(
         'llmsr',
         use_api=True,

@@ -174,7 +174,7 @@ scientific_intelligent_modelling/
 ├── algorithms/               # 算法包装器
 │   ├── base_wrapper.py       # 算法包装器的基类
 │   ├── gplearn_wrapper/      # GPlearn实现
-│   ├── operon_wrapper/       # Operon实现
+│   ├── pyoperon_wrapper/     # PyOperon实现
 │   └── pysr_wrapper/         # PySR实现
 ├── config/                   # 配置文件
 │   ├── envs_config.json      # 环境配置

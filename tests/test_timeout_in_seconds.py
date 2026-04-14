@@ -7,7 +7,7 @@ import pytest
 
 from scientific_intelligent_modelling.algorithms.dso_wrapper.wrapper import DSORegressor
 from scientific_intelligent_modelling.algorithms.gplearn_wrapper.wrapper import GPLearnRegressor
-from scientific_intelligent_modelling.algorithms.operon_wrapper.wrapper import OperonRegressor
+from scientific_intelligent_modelling.algorithms.pyoperon_wrapper.wrapper import OperonRegressor
 from scientific_intelligent_modelling.algorithms.pysr_wrapper.wrapper import PySRRegressor
 from scientific_intelligent_modelling.srkit import subprocess_runner
 from scientific_intelligent_modelling.srkit.regressor import SymbolicRegressor

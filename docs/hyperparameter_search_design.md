@@ -43,7 +43,7 @@
 - `maxdepth`: [3, 12]
 - `parsimony`: [1e-6, 0.05]（对数）
 
-### pyoperon（`operon_wrapper`）
+### pyoperon（`pyoperon_wrapper`）
 
 当前 wrapper 为 `**kwargs` 透传，建议先做一次接口对齐再大规模搜索。先从以下关键类参数入手：
 1. `population_size`/`generations`/`n_generations`（按官方签名确认）
@@ -196,4 +196,3 @@ wrapper 当前显式生效参数与子参数（从 `parsers.py`）：
 1. 我先给你一版 `configs/hpo_space.json`，把上面的建议范围编码成机器可读 schema。  
 2. 再给 `--params-json` 做输入校验（字段白名单 + 类型检查），避免无效参数导致子进程崩溃。  
 3. 先在 2~3 个算法做试验模板（gplearn/pysr/tpsr），跑通后批量迁移到全量 10 个工具。
-

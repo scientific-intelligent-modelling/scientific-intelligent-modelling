@@ -5,10 +5,8 @@
 ## 总览
 
 - 当前 `toolbox_config.json` 正式注册了 **10 个**算法后端。
-- 当前 `algorithms/` 目录下还能看到一个额外的 `operon_wrapper/`。
-  - 它不是第 11 个独立工具。
-  - 当前正式注册名称是 `pyoperon`。
-  - `pyoperon_wrapper` 只是对 `operon_wrapper.OperonRegressor` 的别名导出。
+- 当前正式注册名称是 `pyoperon`。
+- `pyoperon_wrapper/` 现在是 `PyOperon` 的唯一实现目录。
 - 当前仓库中：
   - **10 个注册工具**全部有对应 wrapper 目录。
   - **10 个注册工具**全部有对应 `check/check_<tool>.py` 验收脚本。
@@ -24,7 +22,7 @@
 |---|---|---|---|---|---:|---|
 | `gplearn` | `gplearn_wrapper` | `GPLearnRegressor` | `sim_base` | `check_gplearn.py` | 3 | 经典基线，环境最轻 |
 | `pysr` | `pysr_wrapper` | `PySRRegressor` | `sim_base` | `check_pysr.py` | 6 | 当前试点实验主力之一 |
-| `pyoperon` | `pyoperon_wrapper` | `OperonRegressor` | `sim_base` | `check_pyoperon.py` | 1 | 正式工具名是 `pyoperon`，实现实际来自 `operon_wrapper` |
+| `pyoperon` | `pyoperon_wrapper` | `OperonRegressor` | `sim_base` | `check_pyoperon.py` | 1 | 正式工具名与实现目录已统一 |
 | `llmsr` | `llmsr_wrapper` | `LLMSRRegressor` | `sim_llm` | `check_llmsr.py` | 6 | 有离线/在线两种验收路径 |
 | `dso` | `dso_wrapper` | `DSORegressor` | `sim_dso` | `check_dso.py` | 3 | 老依赖栈，环境相对脆弱 |
 | `tpsr` | `tpsr_wrapper` | `TPSRRegressor` | `sim_tpsr` | `check_tpsr.py` | 3 | Transformer系，环境较重 |
@@ -61,10 +59,10 @@
 
 ## 当前风险与注意点
 
-### 1. `pyoperon` 与 `operon_wrapper` 命名容易混淆
+### 1. `pyoperon` 目录与工具名已统一
 
 - 外部统一入口应使用 `tool_name=\"pyoperon\"`。
-- `operon_wrapper/` 是实现承载目录，不应再单独当成一个算法统计。
+- 当前实现目录也统一为 `pyoperon_wrapper/`。
 
 ### 2. 工具名大小写不统一
 
@@ -121,7 +119,7 @@
 ## 结论
 
 - 现在仓库里应按 **10 个正式算法后端** 对外表述。
-- `operon_wrapper` 应视为 `pyoperon` 的实现目录，不应单独计数。
+- `pyoperon` 现在已经做到“工具名 = wrapper 目录名”，不再存在额外的 `operon_wrapper` 统计歧义。
 - 如果你后面要把算法再整理成 benchmark 计划，最合理的排序是：
   - 先 `pysr / llmsr / drsr`
   - 再 `gplearn / pyoperon`

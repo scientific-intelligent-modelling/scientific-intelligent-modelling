@@ -492,7 +492,7 @@ LLM 转换后仍必须经过：
 
 - `scientific_intelligent_modelling/algorithms/pysr_wrapper/wrapper.py`
 - `scientific_intelligent_modelling/algorithms/QLattice_wrapper/wrapper.py`
-- `scientific_intelligent_modelling/algorithms/operon_wrapper/wrapper.py`
+- `scientific_intelligent_modelling/algorithms/pyoperon_wrapper/wrapper.py`
 - `scientific_intelligent_modelling/algorithms/e2esr_wrapper/wrapper.py`
 - `scientific_intelligent_modelling/algorithms/tpsr_wrapper/wrapper.py`
 - `scientific_intelligent_modelling/algorithms/gplearn_wrapper/wrapper.py`
