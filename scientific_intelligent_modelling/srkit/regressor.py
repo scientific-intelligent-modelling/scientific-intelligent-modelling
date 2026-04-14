@@ -34,8 +34,14 @@ class SymbolicRegressor:
         # 基本实验信息
         self.problem_name = problem_name or "problem"
         self.seed = int(seed) if seed is not None else 1314
-        # 默认 experiments 根目录：相对于调用者当前工作目录
-        self.experiments_root = experiments_dir or os.path.join(os.getcwd(), "experiments")
+        # 默认 experiments 根目录：相对于调用者当前工作目录。
+        # 若显式传入 exp_path，则优先以其作为根目录，避免外层与算法内层落到不同目录。
+        explicit_exp_path = self.params.get("exp_path")
+        explicit_exp_name = self.params.get("exp_name")
+        if isinstance(explicit_exp_path, str) and explicit_exp_path.strip():
+            self.experiments_root = os.path.abspath(explicit_exp_path.strip())
+        else:
+            self.experiments_root = experiments_dir or os.path.join(os.getcwd(), "experiments")
 
         # 创建实验目录：{problem}_{tool}_seed{seed}_YYYYMMDD-HHMMSS
         def _slugify(text: str) -> str:
@@ -45,7 +51,14 @@ class SymbolicRegressor:
                 return "item"
 
         ts = time.strftime('%Y%m%d-%H%M%S')
-        exp_name = f"{_slugify(self.problem_name)}_{_slugify(self.tool_name)}_seed{self.seed}_{ts}"
+        generated_exp_name = f"{_slugify(self.problem_name)}_{_slugify(self.tool_name)}_seed{self.seed}_{ts}"
+        use_explicit_layout = (
+            isinstance(explicit_exp_path, str)
+            and explicit_exp_path.strip()
+            and isinstance(explicit_exp_name, str)
+            and explicit_exp_name.strip()
+        )
+        exp_name = explicit_exp_name.strip() if use_explicit_layout else generated_exp_name
         try:
             os.makedirs(self.experiments_root, exist_ok=True)
             self.experiment_dir = os.path.join(self.experiments_root, exp_name)

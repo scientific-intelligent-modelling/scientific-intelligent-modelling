@@ -121,3 +121,28 @@ def test_symbolic_regressor_prefers_explicit_fit_timeout(monkeypatch):
         {"action": "fit", "params": {"timeout_in_seconds": 12}}
     )
     assert timeout == 12
+
+
+def test_symbolic_regressor_reuses_explicit_exp_path_and_exp_name(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "scientific_intelligent_modelling.srkit.regressor.env_manager.get_env_python",
+        lambda env_name: sys.executable,
+    )
+
+    exp_root = tmp_path / "experiments"
+    reg = SymbolicRegressor(
+        "gplearn",
+        problem_name="oscillator1",
+        seed=1316,
+        exp_path=str(exp_root),
+        exp_name="oscillator1_gplearn_seed1316",
+    )
+
+    expected_dir = exp_root / "oscillator1_gplearn_seed1316"
+    assert Path(reg.experiment_dir) == expected_dir
+    manifest_path = expected_dir / "manifest.json"
+    assert manifest_path.exists()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["experiment_id"] == "oscillator1_gplearn_seed1316"
+    assert manifest["config"]["exp_path"] == str(exp_root)
+    assert manifest["config"]["exp_name"] == "oscillator1_gplearn_seed1316"
