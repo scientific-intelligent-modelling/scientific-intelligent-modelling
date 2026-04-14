@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import ast
+import json
 import numbers
+import os
+import time
 import warnings
 import numpy as np
 from typing import Any, Dict, Tuple
@@ -14,6 +17,7 @@ from scientific_intelligent_modelling.benchmarks.normalizers import normalize_gp
 
 class GPLearnRegressor(BaseWrapper):
     """gplearn SymbolicRegressor 的参数化适配层。"""
+    _PROGRESS_STATE_FILENAME = ".gplearn_current_best.json"
     _META_PARAMS = {
         "exp_name",
         "exp_path",
@@ -59,9 +63,12 @@ class GPLearnRegressor(BaseWrapper):
 
     def __init__(self, **kwargs):
         kwargs = dict(kwargs)
+        self._exp_path = kwargs.get("exp_path")
+        self._exp_name = kwargs.get("exp_name")
         # 延迟导入，避免环境问题
         self.params = self._validate_and_normalize_params(kwargs)
         self.model = None
+        self._progress_state_path = self._resolve_progress_state_path(self._exp_path, self._exp_name)
 
     @classmethod
     def _validate_and_normalize_params(cls, raw_params: Dict[str, Any]) -> Dict[str, Any]:
@@ -267,6 +274,35 @@ class GPLearnRegressor(BaseWrapper):
                     f"{prob_sum:.6f}"
                 )
 
+    @classmethod
+    def _resolve_progress_state_path(cls, exp_path, exp_name):
+        if not isinstance(exp_path, str) or not exp_path.strip():
+            return None
+        if not isinstance(exp_name, str) or not exp_name.strip():
+            return None
+        return os.path.join(os.path.abspath(exp_path.strip()), exp_name.strip(), cls._PROGRESS_STATE_FILENAME)
+
+    def _write_progress_state_from_model(self):
+        if not self._progress_state_path or self.model is None:
+            return
+        try:
+            run_details = getattr(self.model, "run_details_", {}) or {}
+            if not run_details or not run_details.get("generation"):
+                return
+            last_idx = len(run_details["generation"]) - 1
+            payload = {
+                "equation": str(self.model),
+                "loss": float(run_details["best_fitness"][last_idx]),
+                "complexity": int(run_details["best_length"][last_idx]),
+                "generation": int(run_details["generation"][last_idx]) + 1,
+                "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            os.makedirs(os.path.dirname(self._progress_state_path), exist_ok=True)
+            with open(self._progress_state_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
     def fit(self, X, y):
         # 仅在需要时导入
         from gplearn.genetic import SymbolicRegressor as GPLearnSR
@@ -278,10 +314,25 @@ class GPLearnRegressor(BaseWrapper):
             message="`BaseEstimator._validate_data` is deprecated",
         )
 
-        # 创建并训练模型
         self._ensure_gplearn_sklearn_compat(GPLearnSR)
-        self.model = GPLearnSR(**self.params)
-        self.model.fit(X, y)
+        params = dict(self.params)
+        total_generations = int(params.get("generations", 1) or 1)
+        total_generations = max(1, total_generations)
+
+        if self._progress_state_path:
+            params["warm_start"] = False
+            params["generations"] = 1
+            self.model = GPLearnSR(**params)
+            self.model.fit(X, y)
+            self._write_progress_state_from_model()
+            for generation in range(2, total_generations + 1):
+                self.model.warm_start = True
+                self.model.generations = generation
+                self.model.fit(X, y)
+                self._write_progress_state_from_model()
+        else:
+            self.model = GPLearnSR(**params)
+            self.model.fit(X, y)
         return self
 
     def predict(self, X):
