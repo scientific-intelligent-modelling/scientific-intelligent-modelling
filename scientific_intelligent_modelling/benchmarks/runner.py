@@ -27,7 +27,7 @@ from scientific_intelligent_modelling.srkit.regressor import SymbolicRegressor
 
 _HIDDEN_PARAM_KEYS = {"api_key", "apikey", "token", "password", "secret"}
 _PROGRESS_DIRNAME = "progress"
-_SNAPSHOT_CAPABLE_TOOLS = {"llmsr", "drsr", "pysr", "dso", "pyoperon", "gplearn", "e2esr"}
+_SNAPSHOT_CAPABLE_TOOLS = {"llmsr", "drsr", "pysr", "dso", "pyoperon", "gplearn", "e2esr", "iMCTS"}
 
 
 @dataclass
@@ -470,6 +470,17 @@ def _extract_e2esr_periodic_candidate(experiment_dir: str | Path) -> dict[str, A
     return item
 
 
+def _extract_imcts_periodic_candidate(experiment_dir: str | Path) -> dict[str, Any] | None:
+    path = Path(experiment_dir) / ".imcts_current_best.json"
+    item = _read_json_file(path)
+    if not item:
+        return None
+    equation = item.get("equation")
+    if not isinstance(equation, str) or not equation.strip():
+        return None
+    return item
+
+
 def _extract_periodic_candidate(tool_name: str, experiment_dir: str | Path) -> dict[str, Any] | None:
     tool = str(tool_name).strip().lower()
     if tool == "llmsr":
@@ -486,6 +497,8 @@ def _extract_periodic_candidate(tool_name: str, experiment_dir: str | Path) -> d
         return _extract_gplearn_periodic_candidate(experiment_dir)
     if tool == "e2esr":
         return _extract_e2esr_periodic_candidate(experiment_dir)
+    if tool == "imcts":
+        return _extract_imcts_periodic_candidate(experiment_dir)
     return None
 
 

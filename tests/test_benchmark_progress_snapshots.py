@@ -319,6 +319,50 @@ class BenchmarkProgressSnapshotsTest(unittest.TestCase):
             self.assertAlmostEqual(payload["id_test"]["rmse"], 0.0, places=10)
             self.assertAlmostEqual(payload["ood_test"]["rmse"], 0.0, places=10)
 
+    def test_build_periodic_snapshot_payload_for_imcts_from_state_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_dir = root / "dataset"
+            exp_dir = root / "exp"
+            exp_dir.mkdir(parents=True, exist_ok=True)
+            _write_dataset(dataset_dir)
+
+            (exp_dir / ".imcts_current_best.json").write_text(
+                json.dumps(
+                    {
+                        "equation": "2*x0 + 3*x1 + 1",
+                        "score": 1.0,
+                        "evaluations": 42,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            dataset = runner.load_canonical_dataset(dataset_dir)
+            payload = runner._build_periodic_snapshot_payload(
+                tool_name="iMCTS",
+                dataset=dataset,
+                params={"max_expressions": 100},
+                seed=1314,
+                started_at=time.time() - 4200,
+                experiment_dir=exp_dir,
+                checkpoint_index=7,
+            )
+
+            self.assertIsNotNone(payload)
+            self.assertEqual(payload["tool"], "iMCTS")
+            self.assertEqual(payload["status"], "ok")
+            self.assertEqual(payload["source_score"], 1.0)
+            self.assertEqual(payload["elapsed_minutes"], 70)
+            self.assertEqual(
+                payload["canonical_artifact"]["instantiated_expression"],
+                "2*x0 + 3*x1 + 1",
+            )
+            self.assertAlmostEqual(payload["valid"]["rmse"], 0.0, places=10)
+            self.assertAlmostEqual(payload["id_test"]["rmse"], 0.0, places=10)
+            self.assertAlmostEqual(payload["ood_test"]["rmse"], 0.0, places=10)
+
     def test_write_progress_payload_writes_outer_and_experiment_json(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

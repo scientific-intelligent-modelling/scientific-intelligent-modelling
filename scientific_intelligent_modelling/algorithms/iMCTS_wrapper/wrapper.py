@@ -17,6 +17,7 @@ iMCTS 包装器
 import os
 import sys
 import json
+import time
 from typing import Any, Dict, Optional, List
 
 import numpy as np
@@ -44,10 +45,13 @@ def _default_eval_context(user_ctx: Optional[Dict[str, Any]] = None) -> Dict[str
 
 class iMCTSRegressor(BaseWrapper):
     """iMCTS 的统一包装器。"""
+    _PROGRESS_STATE_FILENAME = ".imcts_current_best.json"
 
     def __init__(self, **kwargs):
         # 存储用户传入参数，部分会透传给 iMCTS.Regressor
         self.params: Dict[str, Any] = dict(kwargs) if kwargs else {}
+        self._exp_path = self.params.get('exp_path')
+        self._exp_name = self.params.get('exp_name')
 
         # 训练所得的表达式
         self._best_expr_simplified: Optional[str] = None
@@ -61,6 +65,37 @@ class iMCTSRegressor(BaseWrapper):
 
         # 运行时（fit 阶段）引用的底层回归器（仅在同一进程内可用）
         self._runtime_regressor = None
+        self._progress_state_path = self._resolve_progress_state_path(self._exp_path, self._exp_name)
+
+    @classmethod
+    def _resolve_progress_state_path(cls, exp_path: Optional[str], exp_name: Optional[str]) -> Optional[str]:
+        if not isinstance(exp_path, str) or not exp_path.strip():
+            return None
+        if not isinstance(exp_name, str) or not exp_name.strip():
+            return None
+        return os.path.join(
+            os.path.abspath(exp_path.strip()),
+            exp_name.strip(),
+            cls._PROGRESS_STATE_FILENAME,
+        )
+
+    def _write_progress_state(self, *, equation: str, score: Optional[float], evaluations: Optional[int]):
+        if not self._progress_state_path:
+            return
+        if not isinstance(equation, str) or not equation.strip():
+            return
+        payload = {
+            "equation": equation,
+            "score": float(score) if isinstance(score, (int, float)) else None,
+            "evaluations": int(evaluations) if isinstance(evaluations, (int, float)) else None,
+            "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        try:
+            os.makedirs(os.path.dirname(self._progress_state_path), exist_ok=True)
+            with open(self._progress_state_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
 
     # ============ 标准 API ============
     def fit(self, X, y):
@@ -93,7 +128,12 @@ class iMCTSRegressor(BaseWrapper):
         mcts_kwargs = {k: v for k, v in self.params.items() if k in allowed_keys}
 
         # 实例化并训练
-        reg = _MCTSRegressor(x_train=x_train, y_train=y_train, **mcts_kwargs)
+        reg = _MCTSRegressor(
+            x_train=x_train,
+            y_train=y_train,
+            progress_callback=self._write_progress_state if self._progress_state_path else None,
+            **mcts_kwargs,
+        )
         self._runtime_regressor = reg
         simplified_expr, vec_expr, eval_count, path = reg.fit(seed=self.params.get('seed'))
 
@@ -106,6 +146,12 @@ class iMCTSRegressor(BaseWrapper):
         else:
             # iMCTS 运行时返回 path 可能为路径列表，保留原始结构用于调试
             self._best_path = path
+
+        self._write_progress_state(
+            equation=self._best_expr_simplified or self._best_expr_vector or "",
+            score=None,
+            evaluations=self._eval_count,
+        )
 
         return self
 
