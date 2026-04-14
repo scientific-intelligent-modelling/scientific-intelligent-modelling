@@ -105,16 +105,20 @@ class SymbolicRegressor:
         返回:
             self: 支持链式调用
         """
-        # 准备数据
-        if isinstance(X, np.ndarray):
-            X = X.tolist()
-        if isinstance(y, np.ndarray):
-            y = y.tolist()
+        # 保留 numpy 版本，供超时后的恢复流程复用。
+        recovery_X = np.asarray(X)
+        recovery_y = np.asarray(y).reshape(-1)
+        if recovery_X.ndim == 1:
+            recovery_X = recovery_X.reshape(-1, 1)
+
+        # 准备可序列化数据
+        X_payload = recovery_X.tolist()
+        y_payload = recovery_y.tolist()
         
         # 创建命令
         command = {
             'action': 'fit',
-            'data': {'X': X, 'y': y},
+            'data': {'X': X_payload, 'y': y_payload},
             'params': self.params,
             'tool_name': self.tool_name,
             'serialized_model': self.serialized_model  # 传递现有模型状态以支持继续训练
@@ -130,6 +134,18 @@ class SymbolicRegressor:
         try:
             result = self._execute_subprocess(command)
         except TimeoutError:
+            recovered = self._recover_from_timeout(recovery_X, recovery_y, command)
+            if recovered:
+                self.serialized_model = recovered
+                try:
+                    self._update_manifest(
+                        status="success",
+                        timeout_in_seconds=self._resolve_fit_timeout_seconds(command),
+                        recovered_from_timeout=True,
+                    )
+                except Exception:
+                    pass
+                return self
             try:
                 self._update_manifest(
                     status="timed_out",
@@ -162,6 +178,39 @@ class SymbolicRegressor:
         except Exception:
             pass
         return self
+
+    def _recover_from_timeout(self, X: np.ndarray, y: np.ndarray, fit_command: dict) -> Optional[str]:
+        """超时后尝试从实验目录恢复可用模型。"""
+        exp_dir = self.experiment_dir
+        if not exp_dir or not os.path.isdir(exp_dir):
+            return None
+
+        recovery_timeout = self._resolve_timeout_recovery_seconds(
+            self._resolve_fit_timeout_seconds(fit_command)
+        )
+        recovery_command = {
+            "action": "recover_from_timeout",
+            "data": {
+                "X": np.asarray(X).tolist(),
+                "y": np.asarray(y).reshape(-1).tolist(),
+            },
+            "params": dict(self.params or {}),
+            "tool_name": self.tool_name,
+            "experiment_dir": exp_dir,
+            "timeout_in_seconds": recovery_timeout,
+        }
+        try:
+            result = self._execute_subprocess(recovery_command)
+        except Exception:
+            return None
+
+        if not isinstance(result, dict) or result.get("error"):
+            return None
+
+        serialized_model = result.get("serialized_model")
+        if not isinstance(serialized_model, str) or not serialized_model.strip():
+            return None
+        return serialized_model
     
     def predict(self, X):
         """
@@ -448,8 +497,23 @@ class SymbolicRegressor:
             return None
         return raw if raw > 0 else None
 
+    @staticmethod
+    def _resolve_timeout_recovery_seconds(fit_timeout_seconds: Optional[int]) -> int:
+        """恢复阶段使用独立短超时，避免再次长时间挂起。"""
+        if isinstance(fit_timeout_seconds, int) and fit_timeout_seconds > 0:
+            return max(60, min(300, fit_timeout_seconds))
+        return 300
+
     def _resolve_subprocess_timeout_seconds(self, command: dict) -> Optional[int]:
         """解析当前子进程命令的超时时间。"""
+        raw = command.get("timeout_in_seconds")
+        try:
+            raw = int(raw)
+        except Exception:
+            raw = None
+        if raw is not None and raw > 0:
+            return raw
+
         requested = self._resolve_fit_timeout_seconds(command)
         if requested is not None:
             return requested

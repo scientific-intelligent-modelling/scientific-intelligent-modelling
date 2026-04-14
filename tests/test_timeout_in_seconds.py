@@ -55,16 +55,18 @@ def test_subprocess_runner_handle_fit_strips_timeout_meta_param():
     assert seen["shape"] == ((2, 1), (2,))
 
 
-def test_symbolic_regressor_timeout_updates_manifest(monkeypatch):
+def test_symbolic_regressor_timeout_updates_manifest_when_recovery_fails(monkeypatch):
     monkeypatch.setattr(
         "scientific_intelligent_modelling.srkit.regressor.env_manager.get_env_python",
         lambda env_name: sys.executable,
     )
-    monkeypatch.setattr(
-        SymbolicRegressor,
-        "_execute_subprocess",
-        lambda self, command: (_ for _ in ()).throw(TimeoutError("boom")),
-    )
+
+    def fake_execute(self, command):
+        if command["action"] == "fit":
+            raise TimeoutError("boom")
+        raise RuntimeError("recover failed")
+
+    monkeypatch.setattr(SymbolicRegressor, "_execute_subprocess", fake_execute)
 
     reg = SymbolicRegressor("gplearn", timeout_in_seconds=3, generations=2, population_size=8)
 
@@ -75,6 +77,38 @@ def test_symbolic_regressor_timeout_updates_manifest(monkeypatch):
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["status"] == "timed_out"
     assert manifest["timeout_in_seconds"] == 3
+
+
+def test_symbolic_regressor_timeout_with_recovery_marks_success(monkeypatch):
+    monkeypatch.setattr(
+        "scientific_intelligent_modelling.srkit.regressor.env_manager.get_env_python",
+        lambda env_name: sys.executable,
+    )
+    seen_actions = []
+
+    def fake_execute(self, command):
+        seen_actions.append(command["action"])
+        if command["action"] == "fit":
+            raise TimeoutError("boom")
+        if command["action"] == "recover_from_timeout":
+            assert command["experiment_dir"] == reg.experiment_dir
+            return {"serialized_model": "rescued-model"}
+        raise AssertionError(f"unexpected action: {command['action']}")
+
+    monkeypatch.setattr(SymbolicRegressor, "_execute_subprocess", fake_execute)
+
+    reg = SymbolicRegressor("gplearn", timeout_in_seconds=3, generations=2, population_size=8)
+    fitted = reg.fit(np.array([[1.0], [2.0]]), np.array([3.0, 4.0]))
+
+    assert fitted is reg
+    assert reg.serialized_model == "rescued-model"
+    assert seen_actions == ["fit", "recover_from_timeout"]
+
+    manifest_path = Path(reg.experiment_dir) / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["status"] == "success"
+    assert manifest["timeout_in_seconds"] == 3
+    assert manifest["recovered_from_timeout"] is True
 
 
 def test_symbolic_regressor_prefers_explicit_fit_timeout(monkeypatch):

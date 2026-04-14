@@ -67,6 +67,8 @@ def execute_command(module, command):
     
     if action == 'fit':
         return handle_fit(regressor_class, command)
+    elif action == 'recover_from_timeout':
+        return handle_recover_from_timeout(regressor_class, command)
     elif action == 'predict':
         return handle_predict(regressor_class, command)
     elif action == 'get_optimal_equation':
@@ -293,6 +295,59 @@ def handle_fit(regressor_class, command):
     return {
         'success': True,
         'serialized_model': serialized_model
+    }
+
+
+def handle_recover_from_timeout(regressor_class, command):
+    """处理超时后的实验目录恢复。"""
+    import numpy as np
+
+    data = command.get('data') or {}
+    params = dict(command.get('params', {}) or {})
+    X = np.array(data.get('X', []))
+    y = np.array(data.get('y', []))
+    if X.ndim == 1 and X.size > 0:
+        X = X.reshape(-1, 1)
+    y = y.reshape(-1)
+
+    experiment_dir = command.get('experiment_dir')
+    if isinstance(experiment_dir, str) and experiment_dir.strip():
+        params.setdefault('existing_exp_dir', experiment_dir.strip())
+        params.setdefault('exp_dir', experiment_dir.strip())
+
+    regressor = regressor_class(**params)
+
+    # 部分 wrapper 仅在 fit 中实现“从已有实验目录恢复”的逻辑。
+    if command.get('tool_name') == 'drsr':
+        regressor.fit(X, y)
+
+    equation = ""
+    if hasattr(regressor, 'get_optimal_equation'):
+        equation = str(regressor.get_optimal_equation() or "")
+    if not equation.strip():
+        raise ValueError("超时恢复失败：未找到可用最优方程")
+
+    if X.size > 0:
+        sample_rows = min(8, X.shape[0])
+        sample_X = X[:sample_rows]
+        predictions = np.asarray(regressor.predict(sample_X)).reshape(-1)
+        if predictions.shape != (sample_rows,):
+            raise ValueError(
+                f"超时恢复失败：预测形状异常，期望 {(sample_rows,)}, 实际 {predictions.shape}"
+            )
+        if not np.all(np.isfinite(predictions)):
+            raise ValueError("超时恢复失败：预测包含非有限值")
+
+    if hasattr(regressor, 'serialize'):
+        serialized_model = regressor.serialize()
+    else:
+        raise ValueError(f"回归器 {regressor_class.__name__} 未实现 serialize 方法")
+
+    return {
+        'success': True,
+        'serialized_model': serialized_model,
+        'equation': equation,
+        'recovered_from_timeout': True,
     }
 
 def handle_predict(regressor_class, command):
