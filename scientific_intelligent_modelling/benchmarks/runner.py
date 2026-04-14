@@ -26,7 +26,7 @@ from scientific_intelligent_modelling.srkit.regressor import SymbolicRegressor
 
 
 _HIDDEN_PARAM_KEYS = {"api_key", "apikey", "token", "password", "secret"}
-_PROGRESS_JSONL_FILENAME = "progress_results.jsonl"
+_PROGRESS_DIRNAME = "progress"
 _SNAPSHOT_CAPABLE_TOOLS = {"llmsr", "drsr"}
 
 
@@ -368,16 +368,25 @@ def _extract_periodic_candidate(tool_name: str, experiment_dir: str | Path) -> d
     return None
 
 
-def _append_progress_payload(
+def _progress_snapshot_filename(payload: dict[str, Any]) -> str:
+    elapsed_seconds = payload.get("elapsed_seconds")
+    try:
+        elapsed_minutes = max(0, int(round(float(elapsed_seconds) / 60.0)))
+    except Exception:
+        elapsed_minutes = 0
+    return f"minute_{elapsed_minutes:04d}.json"
+
+
+def _write_progress_payload(
     payload: dict[str, Any],
     *,
-    primary_path: str | Path,
+    primary_dir: str | Path,
     experiment_dir: str | Path | None = None,
-    filename: str = _PROGRESS_JSONL_FILENAME,
 ) -> list[Path]:
-    paths: list[Path] = [Path(primary_path).resolve()]
+    filename = _progress_snapshot_filename(payload)
+    paths: list[Path] = [Path(primary_dir).resolve() / filename]
     if experiment_dir:
-        paths.append(Path(experiment_dir).resolve() / filename)
+        paths.append(Path(experiment_dir).resolve() / _PROGRESS_DIRNAME / filename)
 
     unique_paths: list[Path] = []
     seen: set[str] = set()
@@ -388,11 +397,10 @@ def _append_progress_payload(
         seen.add(key)
         unique_paths.append(path)
 
-    text = json.dumps(payload, ensure_ascii=False) + "\n"
+    text = json.dumps(payload, ensure_ascii=False, indent=2)
     for path in unique_paths:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(text)
+        path.write_text(text, encoding="utf-8")
     return unique_paths
 
 
@@ -468,6 +476,7 @@ def _build_periodic_snapshot_payload(
     payload["record_type"] = "periodic_best"
     payload["checkpoint_index"] = int(checkpoint_index)
     payload["elapsed_seconds"] = round(time.time() - started_at, 3)
+    payload["elapsed_minutes"] = max(0, int(round(payload["elapsed_seconds"] / 60.0)))
     payload["source_iteration"] = candidate.get("iteration")
     payload["source_sample_order"] = candidate.get("sample_order")
     payload["source_score"] = candidate.get("score")
@@ -500,9 +509,9 @@ def _periodic_snapshot_loop(
         )
         if payload is None:
             continue
-        _append_progress_payload(
+        _write_progress_payload(
             payload,
-            primary_path=output_dir / _PROGRESS_JSONL_FILENAME,
+            primary_dir=output_dir / _PROGRESS_DIRNAME,
             experiment_dir=experiment_dir,
         )
 

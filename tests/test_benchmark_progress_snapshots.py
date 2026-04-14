@@ -100,7 +100,7 @@ class BenchmarkProgressSnapshotsTest(unittest.TestCase):
             self.assertAlmostEqual(payload["id_test"]["rmse"], 0.0, places=10)
             self.assertAlmostEqual(payload["ood_test"]["rmse"], 0.0, places=10)
 
-    def test_append_progress_payload_writes_outer_and_experiment_jsonl(self):
+    def test_write_progress_payload_writes_outer_and_experiment_json(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             out_dir = root / "outer"
@@ -111,19 +111,21 @@ class BenchmarkProgressSnapshotsTest(unittest.TestCase):
                 "dataset": "demo",
                 "status": "ok",
                 "checkpoint_index": 2,
+                "elapsed_seconds": 600.0,
+                "elapsed_minutes": 10,
             }
 
-            written = runner._append_progress_payload(
+            written = runner._write_progress_payload(
                 payload,
-                primary_path=out_dir / "progress_results.jsonl",
+                primary_dir=out_dir / "progress",
                 experiment_dir=exp_dir,
             )
 
             self.assertEqual(len(written), 2)
             for path in written:
-                lines = path.read_text(encoding="utf-8").strip().splitlines()
-                self.assertEqual(len(lines), 1)
-                self.assertEqual(json.loads(lines[0])["checkpoint_index"], 2)
+                self.assertEqual(path.name, "minute_0010.json")
+                self.assertIn("progress", str(path))
+                self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["checkpoint_index"], 2)
 
 
 if __name__ == "__main__":
