@@ -27,7 +27,7 @@ from scientific_intelligent_modelling.srkit.regressor import SymbolicRegressor
 
 _HIDDEN_PARAM_KEYS = {"api_key", "apikey", "token", "password", "secret"}
 _PROGRESS_DIRNAME = "progress"
-_SNAPSHOT_CAPABLE_TOOLS = {"llmsr", "drsr"}
+_SNAPSHOT_CAPABLE_TOOLS = {"llmsr", "drsr", "pysr"}
 
 
 @dataclass
@@ -359,12 +359,47 @@ def _extract_drsr_periodic_candidate(experiment_dir: str | Path) -> dict[str, An
     return best_item
 
 
+def _extract_pysr_periodic_candidate(experiment_dir: str | Path) -> dict[str, Any] | None:
+    base_dir = Path(experiment_dir)
+    candidate_paths = [base_dir / "hall_of_fame.csv", base_dir / "hall_of_fame.csv.bak"]
+    best_loss = None
+    best_item = None
+    for path in candidate_paths:
+        if not path.is_file():
+            continue
+        try:
+            df = pd.read_csv(path)
+        except Exception:
+            continue
+        if df.empty or "Equation" not in df.columns or "Loss" not in df.columns:
+            continue
+        for _, row in df.iterrows():
+            equation = row.get("Equation")
+            loss = row.get("Loss")
+            if not isinstance(equation, str) or not equation.strip():
+                continue
+            try:
+                loss_val = float(loss)
+            except Exception:
+                continue
+            if best_loss is None or loss_val < best_loss:
+                best_loss = loss_val
+                best_item = {
+                    "equation": equation,
+                    "loss": loss_val,
+                    "complexity": row.get("Complexity"),
+                }
+    return best_item
+
+
 def _extract_periodic_candidate(tool_name: str, experiment_dir: str | Path) -> dict[str, Any] | None:
     tool = str(tool_name).strip().lower()
     if tool == "llmsr":
         return _extract_llmsr_periodic_candidate(experiment_dir)
     if tool == "drsr":
         return _extract_drsr_periodic_candidate(experiment_dir)
+    if tool == "pysr":
+        return _extract_pysr_periodic_candidate(experiment_dir)
     return None
 
 
@@ -434,7 +469,7 @@ def _build_periodic_snapshot_payload(
     parameter_values = candidate.get("params") if isinstance(candidate.get("params"), list) else None
     canonical_artifact, canonical_artifact_error = safe_build_canonical_artifact(
         tool_name=tool_name,
-        equation=candidate.get("function"),
+        equation=candidate.get("function") if "function" in candidate else candidate.get("equation"),
         expected_n_features=len(dataset.feature_names),
         parameter_values=parameter_values,
     )
@@ -464,7 +499,7 @@ def _build_periodic_snapshot_payload(
         started_at=started_at,
         status="ok" if error is None else "error",
         error=error,
-        equation=str(candidate.get("function") or ""),
+        equation=str(candidate.get("function") or candidate.get("equation") or ""),
         equation_count=1,
         canonical_artifact=canonical_artifact,
         canonical_artifact_error=canonical_artifact_error,
@@ -480,6 +515,8 @@ def _build_periodic_snapshot_payload(
     payload["source_iteration"] = candidate.get("iteration")
     payload["source_sample_order"] = candidate.get("sample_order")
     payload["source_score"] = candidate.get("score")
+    payload["source_loss"] = candidate.get("loss")
+    payload["source_complexity"] = candidate.get("complexity")
     return payload
 
 
