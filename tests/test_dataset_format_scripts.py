@@ -106,6 +106,42 @@ def test_extract_ood_by_iterative_shrink_generates_ood_close_to_target(tmp_path:
     assert 0.10 <= summary["ood_ratio"] <= 0.20
 
 
+def test_extract_ood_by_iterative_shrink_falls_back_for_discrete_like_data(tmp_path: Path):
+    input_csv = tmp_path / "all.csv"
+    header = ["x0", "x1", "target"]
+    rows = []
+    for i in range(100):
+        rows.append([float((i % 4) + 1), float((i % 3) + 1), float(i)])
+    write_csv(input_csv, header, rows)
+
+    module = load_module(
+        "extract_ood_by_iterative_shrink",
+        Path(
+            ".codex/skills/format-symbolic-regression-dataset/scripts/extract_ood_by_iterative_shrink.py"
+        ).resolve(),
+    )
+
+    output_dir = tmp_path / "out"
+    old_argv = sys.argv[:]
+    sys.argv = [
+        "extract_ood_by_iterative_shrink.py",
+        "--input-csv",
+        str(input_csv),
+        "--output-dir",
+        str(output_dir),
+    ]
+    try:
+        module.main()
+    finally:
+        sys.argv = old_argv
+
+    summary = json.loads((output_dir / "ood_split_summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "success"
+    assert summary["method"] == "fallback_boundary_rarity_ranking"
+    assert abs(summary["ood_ratio"] - 0.10) < 1e-9
+    assert (output_dir / "ood_test.csv").exists()
+
+
 def test_extract_ood_by_iterative_shrink_fails_when_ratio_jumps_over_threshold(tmp_path: Path):
     input_csv = tmp_path / "all.csv"
     header = ["x0", "target"]
