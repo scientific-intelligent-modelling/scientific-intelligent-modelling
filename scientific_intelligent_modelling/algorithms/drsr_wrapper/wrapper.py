@@ -384,6 +384,7 @@ class DRSRRegressor(BaseWrapper):
                 log_dir=self.params.get("log_dir") or os.path.join(self._workdir, "logs"),
                 llm_client=client,
                 prompt_ctx=prompt_ctx,
+                persist_all_samples=bool(self.params.get("persist_all_samples", False)),
             )
         finally:
             os.chdir(cwd_backup)
