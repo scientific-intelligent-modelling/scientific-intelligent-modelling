@@ -2,33 +2,32 @@
 # -*- coding: utf-8 -*-
 
 """
-基于结构化 YAML 重写的 metadata_2.yaml 生成脚本。
+基于结构化 YAML 的 metadata 后处理脚本。
 
 功能：
-1. 读取 feynman/srbench_feynman.csv，填充：
+1. 读取 feature_distributions.csv，更新每个特征的 train_range / ood_range。
+2. 若存在 formula.py，则对各 split 计算并写入 NMSE。
+3. 若提供 Feynman 语义 CSV，则额外填充：
    - 数据集整体描述（context）
    - target 的含义（Meaning）
    - 各个变量的自然语言描述（vars）
-2. 读取 feature_distributions.csv，更新每个特征的 train_range / ood_range。
-3. 利用 formula.py 和各个 split 的 csv，计算并写入 NMSE。
 4. 通过 PyYAML 直接读写 YAML，不再使用逐行状态机与缩进解析。
 """
 
 from __future__ import annotations
 
+import argparse
 import csv
 import os
 import importlib.util
 import inspect
-from typing import Dict, Optional, Tuple, Any
+from typing import Dict, Optional, Tuple, Any, List
 
 import numpy as np
 import yaml
 
 
-ROOT_DIR = "."
-SUMMARY_CSV = os.path.join(ROOT_DIR, "feature_distributions.csv")
-SRBENCH_FEYNMAN_CSV = os.path.join(ROOT_DIR, "feynman", "srbench_feynman.csv")
+DEFAULT_ROOT_DIR = "."
 
 
 # === 1. 公共工具函数 ===
@@ -46,7 +45,40 @@ def parse_float(value: str) -> Optional[float]:
         return None
 
 
-def load_ood_ranges() -> Dict[str, Dict[str, Tuple]]:
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Update metadata files with ranges, optional semantics and NMSE.",
+    )
+    parser.add_argument(
+        "--root",
+        default=DEFAULT_ROOT_DIR,
+        help="数据集家族根目录；内部应包含 <group>/<dataset>/metadata.yaml。",
+    )
+    parser.add_argument(
+        "--summary-csv",
+        default=None,
+        help="feature_distributions.csv 路径；默认使用 <root>/feature_distributions.csv。",
+    )
+    parser.add_argument(
+        "--semantic-csv",
+        default=None,
+        help="可选语义 CSV，目前按 Feynman CSV 结构解析。",
+    )
+    parser.add_argument(
+        "--dataset-prefix",
+        action="append",
+        default=[],
+        help="仅处理指定前缀的数据集键，如 feynman/ 或 firstprinciples/；可重复传参。",
+    )
+    parser.add_argument(
+        "--output-name",
+        default="metadata_2.yaml",
+        help="输出文件名，默认 metadata_2.yaml。",
+    )
+    return parser.parse_args()
+
+
+def load_ood_ranges(summary_csv: str) -> Dict[str, Dict[str, Tuple]]:
     """
     从 feature_distributions.csv 加载每个数据集、每个特征的区间信息。
 
@@ -60,10 +92,10 @@ def load_ood_ranges() -> Dict[str, Dict[str, Tuple]]:
     }
     """
     result: Dict[str, Dict[str, Tuple]] = {}
-    if not os.path.exists(SUMMARY_CSV):
+    if not os.path.exists(summary_csv):
         return result
 
-    with open(SUMMARY_CSV, newline="") as f:
+    with open(summary_csv, newline="") as f:
         reader = csv.reader(f)
         header = next(reader, None)
         for row in reader:
@@ -134,11 +166,11 @@ def load_formula_func(dataset_dir: str):
     return functions[0]
 
 
-def compute_nmse(dataset_dir: str, csv_file: str, y_func) -> float:
+def compute_nmse(dataset_dir: str, csv_file: str, y_func) -> Optional[float]:
     """按 srbench 的定义，计算一个 split 的 NMSE。"""
     path = os.path.join(dataset_dir, csv_file)
     if not os.path.isfile(path) or y_func is None:
-        return 0.0
+        return None
 
     sig = inspect.signature(y_func)
     func_params = list(sig.parameters.keys())
@@ -178,19 +210,19 @@ def compute_nmse(dataset_dir: str, csv_file: str, y_func) -> float:
                 except (ValueError, TypeError, ZeroDivisionError):
                     continue
     except Exception:
-        return 0.0
+        return None
 
     if not y_true_list:
-        return 0.0
+        return None
 
     var_y = float(np.var(y_true_list))
     if var_y < 1e-12:
-        return 0.0
+        return None
 
     return float(np.mean(sq_errors) / var_y)
 
 
-def load_srbench_feynman_csv_info() -> Dict[str, Dict[str, Any]]:
+def load_srbench_feynman_csv_info(semantic_csv_path: Optional[str]) -> Dict[str, Dict[str, Any]]:
     """
     读取 feynman/srbench_feynman.csv，返回：
     {
@@ -204,10 +236,10 @@ def load_srbench_feynman_csv_info() -> Dict[str, Dict[str, Any]]:
     其中 key 为第一列 Filename（如 "I.6.2a" 或 "test_1"）。
     """
     info_map: Dict[str, Dict[str, Any]] = {}
-    if not os.path.exists(SRBENCH_FEYNMAN_CSV):
+    if not semantic_csv_path or not os.path.exists(semantic_csv_path):
         return info_map
 
-    with open(SRBENCH_FEYNMAN_CSV, newline="") as f:
+    with open(semantic_csv_path, newline="") as f:
         reader = csv.reader(f)
         header = next(reader, None)  # 跳过表头
         for row in reader:
@@ -266,12 +298,24 @@ def derive_key_from_dataset_name(dataset_full_name: str) -> Optional[str]:
 
 # === 2. 处理单个数据集 ===
 
-def process_single_metadata(dataset_key: str, ood_map: Dict[str, Dict[str, Tuple]], srbench_csv_data: Dict[str, Dict[str, Any]]) -> None:
+def split_dataset_key(dataset_name: str) -> Tuple[str, str]:
+    top, sub = dataset_name.split("/", 1)
+    return top, sub
+
+
+def process_single_metadata(
+    root_dir: str,
+    dataset_key: str,
+    ood_map: Dict[str, Dict[str, Tuple]],
+    srbench_csv_data: Dict[str, Dict[str, Any]],
+    *,
+    output_name: str,
+) -> None:
     """
     读取某个数据集的 metadata.yaml，按规则生成 metadata_2.yaml。
     """
-    top, sub = dataset_key.split("/")
-    dir_path = os.path.join(ROOT_DIR, top, sub)
+    top, sub = split_dataset_key(dataset_key)
+    dir_path = os.path.join(root_dir, top, sub)
     meta_path = os.path.join(dir_path, "metadata.yaml")
     if not os.path.isfile(meta_path):
         return
@@ -301,12 +345,12 @@ def process_single_metadata(dataset_key: str, ood_map: Dict[str, Dict[str, Tuple
         for split_name, split_cfg in splits.items():
             if not isinstance(split_cfg, dict):
                 continue
-            nmse_val = 0.0
             if y_func is not None:
                 csv_file = split_cfg.get("file")
                 if csv_file:
                     nmse_val = compute_nmse(dir_path, csv_file, y_func)
-            split_cfg["nmse"] = float(nmse_val)
+                    if nmse_val is not None:
+                        split_cfg["nmse"] = float(nmse_val)
         dataset["splits"] = splits
 
     # 4. 更新特征区间 + 描述
@@ -357,7 +401,7 @@ def process_single_metadata(dataset_key: str, ood_map: Dict[str, Dict[str, Tuple
     data["dataset"] = dataset
 
     # 6. 输出到 metadata_2.yaml
-    out_path = os.path.join(dir_path, "metadata_2.yaml")
+    out_path = os.path.join(dir_path, output_name)
     # 自定义 Dumper：仅对“数值数组”或“数值数组的数组”使用 flow-style（[] / [[...], [...]]）
     class RangeAwareDumper(yaml.SafeDumper):
         pass
@@ -398,35 +442,42 @@ def process_single_metadata(dataset_key: str, ood_map: Dict[str, Dict[str, Tuple
 
 # === 3. 主入口 ===
 
-def main() -> None:
-    """
-    主入口：
-    1. 读取 feature_distributions.csv 得到所有数据集、特征的区间信息；
-    2. 读取 srbench_feynman.csv 得到 Feynman 系列的语义信息；
-    3. 仅遍历 feynman 目录下的数据集，生成/更新 metadata_2.yaml。
+def dataset_selected(dataset_name: str, dataset_prefixes: List[str]) -> bool:
+    if not dataset_prefixes:
+        return True
+    return any(dataset_name.startswith(prefix) for prefix in dataset_prefixes)
 
-    说明：
-    - 原始版本会遍历根目录下所有数据集（包括 blackbox 等），在当前环境下对某些目录写
-      metadata_2.yaml 会触发权限错误。
-    - 目前你的需求是“基于新的 srbench_feynman.csv 重新生成 Feynman 描述”，
-      因此这里将处理范围收缩为 dataset_key 以 "feynman/" 开头的条目。
-    """
-    ood_map = load_ood_ranges()
-    srbench_csv_data = load_srbench_feynman_csv_info()
+
+def main() -> None:
+    args = parse_args()
+    root_dir = os.path.abspath(args.root)
+    summary_csv = args.summary_csv or os.path.join(root_dir, "feature_distributions.csv")
+    semantic_csv = args.semantic_csv or os.path.join(root_dir, "feynman", "srbench_feynman.csv")
+    ood_map = load_ood_ranges(summary_csv)
+    srbench_csv_data = load_srbench_feynman_csv_info(semantic_csv)
 
     if not ood_map:
         print("No feature_distributions.csv or empty; nothing to do.")
         return
 
     print(f"Loaded OOD ranges for {len(ood_map)} datasets.")
-    print(f"Loaded Feynman CSV info for {len(srbench_csv_data)} formulas.")
+    if srbench_csv_data:
+        print(f"Loaded Feynman semantic CSV info for {len(srbench_csv_data)} formulas.")
+    else:
+        print("No optional semantic CSV loaded; only range/NMSE updates will be applied.")
 
     for dataset_key in sorted(ood_map.keys()):
-        if not dataset_key.startswith("feynman/"):
+        if not dataset_selected(dataset_key, args.dataset_prefix):
             continue
-        process_single_metadata(dataset_key, ood_map, srbench_csv_data)
+        process_single_metadata(
+            root_dir,
+            dataset_key,
+            ood_map,
+            srbench_csv_data,
+            output_name=args.output_name,
+        )
 
-    print("全部 feynman metadata_2.yaml 已生成/更新完毕。")
+    print(f"Metadata update finished. Output file name: {args.output_name}")
 
 
 if __name__ == "__main__":

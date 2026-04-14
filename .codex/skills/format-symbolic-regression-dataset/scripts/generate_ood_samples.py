@@ -4,14 +4,17 @@
 """
 基于 feature_distributions.csv 中的 OOD 区间，
 为每个数据集在特征的 OOD 区间内进行均匀采样，
-并使用对应目录下的 formula.py 计算目标 y，生成新的 OOD 数据集。
+并使用对应目录下的 formula.py 计算目标值，生成新的 OOD 数据集。
 
-针对 Feynman 数据集进行了适配：
-- 仅处理 feynman/ 目录
-- 支持 target 列名为 'target'
+当前版本保留旧 benchmark 兼容逻辑，但去掉了对某个固定目录家族的硬编码：
+- 默认处理 summary 中的全部数据集
+- 支持按 dataset prefix 过滤
+- 支持 target 列名为 'target' / 'y' / 最后一列
 - 动态匹配 formula.py 中的函数参数
-- **增强功能**：自动重试生成 NaN/Inf 的样本，确保输出数据有效。
+- 自动重试生成 NaN/Inf 的样本，确保输出数据有效
 """
+
+import argparse
 
 import csv
 import importlib.util
@@ -23,8 +26,7 @@ from typing import Dict, List, Optional, Tuple, Any
 import numpy as np
 
 
-ROOT_DIR = "."
-SUMMARY_CSV = os.path.join(ROOT_DIR, "feature_distributions.csv")
+DEFAULT_ROOT_DIR = "."
 SAMPLES_PER_DATASET = 10000
 MAX_RETRIES_PER_SAMPLE = 100 # 单个样本生成的最大重试次数
 MAX_TOTAL_ATTEMPTS_MULTIPLIER = 50 # 数据集总尝试次数 = 样本数 * 倍数
@@ -64,18 +66,52 @@ def parse_float(value: str) -> Optional[float]:
         return None
 
 
-def load_feature_meta() -> Dict[str, Dict[str, FeatureMeta]]:
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Generate OOD samples from feature_distributions.csv and formula.py.",
+    )
+    parser.add_argument(
+        "--root",
+        default=DEFAULT_ROOT_DIR,
+        help="数据集家族根目录；内部应包含 <group>/<dataset>/train.csv。",
+    )
+    parser.add_argument(
+        "--summary-csv",
+        default=None,
+        help="feature_distributions.csv 路径；默认使用 <root>/feature_distributions.csv。",
+    )
+    parser.add_argument(
+        "--samples-per-dataset",
+        type=int,
+        default=SAMPLES_PER_DATASET,
+        help="每个数据集生成的 OOD 样本数。",
+    )
+    parser.add_argument(
+        "--output-file",
+        default="ood_test.csv",
+        help="输出文件名，默认 ood_test.csv。",
+    )
+    parser.add_argument(
+        "--dataset-prefix",
+        action="append",
+        default=[],
+        help="仅处理指定前缀的数据集键，如 feynman/ 或 firstprinciples/；可重复传参。",
+    )
+    return parser.parse_args()
+
+
+def load_feature_meta(summary_csv: str) -> Dict[str, Dict[str, FeatureMeta]]:
     """
     从 feature_distributions.csv 读取每个数据集、每个特征的 OOD 信息。
     返回：dataset_name -> { feature_name -> FeatureMeta }
     """
     dataset_map: Dict[str, Dict[str, FeatureMeta]] = {}
 
-    if not os.path.exists(SUMMARY_CSV):
-        print(f"Error: {SUMMARY_CSV} not found.")
+    if not os.path.exists(summary_csv):
+        print(f"Error: {summary_csv} not found.")
         return {}
 
-    with open(SUMMARY_CSV, newline="") as f:
+    with open(summary_csv, newline="") as f:
         reader = csv.reader(f)
         header = next(reader)
 
@@ -114,23 +150,28 @@ def load_feature_meta() -> Dict[str, Dict[str, FeatureMeta]]:
     return dataset_map
 
 
-def load_train_header(dataset_name: str) -> List[str]:
+def split_dataset_key(dataset_name: str) -> Tuple[str, str]:
+    top, sub = dataset_name.split("/", 1)
+    return top, sub
+
+
+def load_train_header(root_dir: str, dataset_name: str) -> List[str]:
     """读取某个数据集的 train.csv 表头，保持原列顺序。"""
-    top, sub = dataset_name.split("/")
-    train_path = os.path.join(ROOT_DIR, top, sub, "train.csv")
+    top, sub = split_dataset_key(dataset_name)
+    train_path = os.path.join(root_dir, top, sub, "train.csv")
     with open(train_path, newline="") as f:
         reader = csv.reader(f)
         header = next(reader)
     return header
 
 
-def load_formula_func(dataset_name: str):
+def load_formula_func(root_dir: str, dataset_name: str):
     """
     加载某个数据集目录下的 formula.py 中的主函数。
     返回函数对象。
     """
-    top, sub = dataset_name.split("/")
-    formula_path = os.path.join(ROOT_DIR, top, sub, "formula.py")
+    top, sub = split_dataset_key(dataset_name)
+    formula_path = os.path.join(root_dir, top, sub, "formula.py")
     
     spec = importlib.util.spec_from_file_location("formula_module", formula_path)
     if spec is None or spec.loader is None:
@@ -224,9 +265,16 @@ def sample_feature_value(meta: FeatureMeta, discrete_values: Optional[List[float
     return 0.0
 
 
-def generate_ood_for_dataset(dataset_name: str, feature_meta: Dict[str, FeatureMeta]) -> None:
+def generate_ood_for_dataset(
+    root_dir: str,
+    dataset_name: str,
+    feature_meta: Dict[str, FeatureMeta],
+    *,
+    samples_per_dataset: int,
+    output_file: str,
+) -> bool:
     """为单个数据集生成 OOD 样本并写入 ood_test.csv。"""
-    header = load_train_header(dataset_name)
+    header = load_train_header(root_dir, dataset_name)
 
     # 识别 Target 列名
     target_col = "y"
@@ -248,8 +296,8 @@ def generate_ood_for_dataset(dataset_name: str, feature_meta: Dict[str, FeatureM
     need_discrete = [name for name in feature_names if name in feature_meta and feature_meta[name].dist_type == "离散"]
     
     if need_discrete:
-        top, sub = dataset_name.split("/")
-        train_path = os.path.join(ROOT_DIR, top, sub, "train.csv")
+        top, sub = split_dataset_key(dataset_name)
+        train_path = os.path.join(root_dir, top, sub, "train.csv")
         value_sets: Dict[str, set] = {name: set() for name in need_discrete}
         with open(train_path, newline="") as f:
             reader = csv.DictReader(f)
@@ -264,27 +312,27 @@ def generate_ood_for_dataset(dataset_name: str, feature_meta: Dict[str, FeatureM
                 discrete_values_map[name] = sorted(s)
 
     try:
-        func = load_formula_func(dataset_name)
+        func = load_formula_func(root_dir, dataset_name)
     except Exception as e:
         print(f"  Skipping {dataset_name}: {e}")
-        return
+        return False
 
     sig = inspect.signature(func)
     func_params = list(sig.parameters.keys())
 
-    top, sub = dataset_name.split("/")
-    out_path = os.path.join(ROOT_DIR, top, sub, "ood_test.csv")
+    top, sub = split_dataset_key(dataset_name)
+    out_path = os.path.join(root_dir, top, sub, output_file)
 
     # 统计信息
     generated_count = 0
     total_attempts = 0
-    max_total_attempts = SAMPLES_PER_DATASET * MAX_TOTAL_ATTEMPTS_MULTIPLIER
+    max_total_attempts = samples_per_dataset * MAX_TOTAL_ATTEMPTS_MULTIPLIER
 
     with open(out_path, "w", newline="") as f_out:
         writer = csv.writer(f_out)
         writer.writerow(header)
 
-        while generated_count < SAMPLES_PER_DATASET and total_attempts < max_total_attempts:
+        while generated_count < samples_per_dataset and total_attempts < max_total_attempts:
             total_attempts += 1
             feat_values: Dict[str, float] = {}
             y_val = float('nan')
@@ -338,27 +386,48 @@ def generate_ood_for_dataset(dataset_name: str, feature_meta: Dict[str, FeatureM
                 writer.writerow(row)
                 generated_count += 1
         
-        if generated_count < SAMPLES_PER_DATASET:
-            print(f"  Warning: {dataset_name} - Only generated {generated_count}/{SAMPLES_PER_DATASET} valid samples (Attempts: {total_attempts})")
+        if generated_count < samples_per_dataset:
+            print(
+                f"  Warning: {dataset_name} - Only generated "
+                f"{generated_count}/{samples_per_dataset} valid samples "
+                f"(Attempts: {total_attempts})"
+            )
+    return generated_count > 0
+
+
+def dataset_selected(dataset_name: str, dataset_prefixes: List[str]) -> bool:
+    if not dataset_prefixes:
+        return True
+    return any(dataset_name.startswith(prefix) for prefix in dataset_prefixes)
+
 
 def main() -> None:
-    dataset_feature_map = load_feature_meta()
+    args = parse_args()
+    root_dir = os.path.abspath(args.root)
+    summary_csv = args.summary_csv or os.path.join(root_dir, "feature_distributions.csv")
+    dataset_feature_map = load_feature_meta(summary_csv)
 
     count = 0
     for dataset_name, features in sorted(dataset_feature_map.items()):
-        if not dataset_name.startswith("feynman"):
+        if not dataset_selected(dataset_name, args.dataset_prefix):
             continue
 
-        top, sub = dataset_name.split("/")
-        train_path = os.path.join(ROOT_DIR, top, sub, "train.csv")
+        top, sub = split_dataset_key(dataset_name)
+        train_path = os.path.join(root_dir, top, sub, "train.csv")
         if not os.path.isfile(train_path):
             continue
 
         print(f"Generating OOD for {dataset_name}...")
-        generate_ood_for_dataset(dataset_name, features)
-        count += 1
+        if generate_ood_for_dataset(
+            root_dir,
+            dataset_name,
+            features,
+            samples_per_dataset=args.samples_per_dataset,
+            output_file=args.output_file,
+        ):
+            count += 1
 
-    print(f"Done. Generated OOD samples for {count} feynman datasets.")
+    print(f"Done. Generated OOD samples for {count} datasets.")
 
 if __name__ == "__main__":
     main()
