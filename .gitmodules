@@ -17,6 +17,6 @@
 [submodule "scientific_intelligent_modelling/algorithms/iMCTS_wrapper/MCTS-4-SR"]
 	path = scientific_intelligent_modelling/algorithms/iMCTS_wrapper/MCTS-4-SR
 	url = https://github.com/scientific-intelligent-modelling/MCTS-4-SR.git
-[submodule "sim-datasets"]
-	path = sim-datasets
+[submodule "sim-datasets-py"]
+	path = sim-datasets-py
 	url = https://github.com/scientific-intelligent-modelling/sim-datasets.git

@@ -17,7 +17,7 @@ def _resolve_dataset_path(path: str) -> str:
     """
     解析数据集路径：
     - 若设置了环境变量 SIM_DATASETS_PATH，且传入路径为相对路径，
-      则将其视作数据根目录并进行拼接；
+      则将其视作数据根目录（例如仓库根目录下的 sim-datasets-data）并进行拼接；
     - 否则直接使用传入路径。
     最终返回绝对路径，便于日志与后续处理。
     """

@@ -54,6 +54,16 @@
    pip install -e .
    ```
 
+### 本地数据与包目录约定
+
+- `sim-datasets-py/`：`sim-datasets` Python 包源码目录
+- `sim-datasets-data/`：本地数据集仓库目录
+- 若通过 CLI 传入相对数据集路径，建议设置：
+
+  ```bash
+  export SIM_DATASETS_PATH=$(pwd)/sim-datasets-data
+  ```
+
 ### 配置环境
 
 首次运行工具包时，需手动管理环境：
