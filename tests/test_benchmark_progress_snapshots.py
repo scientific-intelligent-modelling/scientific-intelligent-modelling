@@ -179,6 +179,52 @@ class BenchmarkProgressSnapshotsTest(unittest.TestCase):
             self.assertAlmostEqual(payload["id_test"]["rmse"], 0.0, places=10)
             self.assertAlmostEqual(payload["ood_test"]["rmse"], 0.0, places=10)
 
+    def test_build_periodic_snapshot_payload_for_pyoperon_from_state_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_dir = root / "dataset"
+            exp_dir = root / "exp"
+            exp_dir.mkdir(parents=True, exist_ok=True)
+            _write_dataset(dataset_dir)
+
+            (exp_dir / ".pyoperon_current_best.json").write_text(
+                json.dumps(
+                    {
+                        "equation": "2*X1 + 3*X2 + 1",
+                        "loss": 0.0,
+                        "complexity": 5,
+                        "generation": 7,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            dataset = runner.load_canonical_dataset(dataset_dir)
+            payload = runner._build_periodic_snapshot_payload(
+                tool_name="pyoperon",
+                dataset=dataset,
+                params={"generations": 100},
+                seed=1314,
+                started_at=time.time() - 2400,
+                experiment_dir=exp_dir,
+                checkpoint_index=4,
+            )
+
+            self.assertIsNotNone(payload)
+            self.assertEqual(payload["tool"], "pyoperon")
+            self.assertEqual(payload["status"], "ok")
+            self.assertEqual(payload["source_loss"], 0.0)
+            self.assertEqual(payload["source_complexity"], 5)
+            self.assertEqual(payload["elapsed_minutes"], 40)
+            self.assertEqual(
+                payload["canonical_artifact"]["instantiated_expression"],
+                "2*x0 + 3*x1 + 1",
+            )
+            self.assertAlmostEqual(payload["valid"]["rmse"], 0.0, places=10)
+            self.assertAlmostEqual(payload["id_test"]["rmse"], 0.0, places=10)
+            self.assertAlmostEqual(payload["ood_test"]["rmse"], 0.0, places=10)
+
     def test_write_progress_payload_writes_outer_and_experiment_json(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

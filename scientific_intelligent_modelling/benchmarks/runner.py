@@ -27,7 +27,7 @@ from scientific_intelligent_modelling.srkit.regressor import SymbolicRegressor
 
 _HIDDEN_PARAM_KEYS = {"api_key", "apikey", "token", "password", "secret"}
 _PROGRESS_DIRNAME = "progress"
-_SNAPSHOT_CAPABLE_TOOLS = {"llmsr", "drsr", "pysr", "dso"}
+_SNAPSHOT_CAPABLE_TOOLS = {"llmsr", "drsr", "pysr", "dso", "pyoperon"}
 
 
 @dataclass
@@ -437,6 +437,17 @@ def _extract_dso_periodic_candidate(experiment_dir: str | Path) -> dict[str, Any
     return best_item
 
 
+def _extract_pyoperon_periodic_candidate(experiment_dir: str | Path) -> dict[str, Any] | None:
+    path = Path(experiment_dir) / ".pyoperon_current_best.json"
+    item = _read_json_file(path)
+    if not item:
+        return None
+    equation = item.get("equation")
+    if not isinstance(equation, str) or not equation.strip():
+        return None
+    return item
+
+
 def _extract_periodic_candidate(tool_name: str, experiment_dir: str | Path) -> dict[str, Any] | None:
     tool = str(tool_name).strip().lower()
     if tool == "llmsr":
@@ -447,6 +458,8 @@ def _extract_periodic_candidate(tool_name: str, experiment_dir: str | Path) -> d
         return _extract_pysr_periodic_candidate(experiment_dir)
     if tool == "dso":
         return _extract_dso_periodic_candidate(experiment_dir)
+    if tool == "pyoperon":
+        return _extract_pyoperon_periodic_candidate(experiment_dir)
     return None
 
 

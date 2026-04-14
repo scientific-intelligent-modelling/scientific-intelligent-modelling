@@ -1,6 +1,9 @@
 # algorithms/pyoperon_wrapper/wrapper.py
 import base64
+import json
+import os
 import pickle
+import time
 
 import numpy as np
 
@@ -10,6 +13,7 @@ from scientific_intelligent_modelling.benchmarks.normalizers import normalize_op
 
 class OperonRegressor(BaseWrapper):
     _META_PARAMS = {"exp_name", "exp_path", "problem_name", "seed"}
+    _PROGRESS_STATE_FILENAME = ".pyoperon_current_best.json"
     _ALLOWED_PARAMS = {
         "allowed_symbols",
         "symbolic_mode",
@@ -63,8 +67,12 @@ class OperonRegressor(BaseWrapper):
     }
 
     def __init__(self, **kwargs):
-        self.params = self._validate_and_normalize_params(dict(kwargs))
+        raw_kwargs = dict(kwargs)
+        self._exp_path = raw_kwargs.get("exp_path")
+        self._exp_name = raw_kwargs.get("exp_name")
+        self.params = self._validate_and_normalize_params(raw_kwargs)
         self.model = None
+        self._progress_state_path = self._resolve_progress_state_path(self._exp_path, self._exp_name)
 
     @classmethod
     def _validate_and_normalize_params(cls, raw_params):
@@ -121,14 +129,112 @@ class OperonRegressor(BaseWrapper):
 
         return params
 
+    @classmethod
+    def _resolve_progress_state_path(cls, exp_path, exp_name):
+        if not isinstance(exp_path, str) or not exp_path.strip():
+            return None
+        if not isinstance(exp_name, str) or not exp_name.strip():
+            return None
+        return os.path.join(os.path.abspath(exp_path.strip()), exp_name.strip(), cls._PROGRESS_STATE_FILENAME)
+
+    def _write_progress_state(self, payload):
+        if not self._progress_state_path:
+            return
+        try:
+            os.makedirs(os.path.dirname(self._progress_state_path), exist_ok=True)
+            with open(self._progress_state_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _extract_best_front_entry(model):
+        front = getattr(model, "pareto_front_", None) or []
+        if not front:
+            return None
+        try:
+            criterion = getattr(model, "model_selection_criterion", "minimum_description_length")
+            return min(front, key=lambda item: item.get(criterion, float("inf")))
+        except Exception:
+            return front[0]
+
+    def _update_progress_state_from_model(self, model, completed_generations: int):
+        best_entry = self._extract_best_front_entry(model)
+        equation = None
+        complexity = None
+        loss = None
+
+        if isinstance(best_entry, dict):
+            equation = best_entry.get("model")
+            complexity = best_entry.get("complexity")
+            loss = best_entry.get("mean_squared_error")
+
+        if not equation and getattr(model, "model_", None) is not None:
+            try:
+                equation = model.get_model_string(model.model_)
+            except Exception:
+                equation = None
+
+        if complexity is None:
+            try:
+                complexity = getattr(model, "stats_", {}).get("model_complexity")
+            except Exception:
+                complexity = None
+
+        if not isinstance(equation, str) or not equation.strip():
+            return
+
+        self._write_progress_state(
+            {
+                "equation": equation,
+                "loss": float(loss) if isinstance(loss, (int, float)) else None,
+                "complexity": int(complexity) if isinstance(complexity, (int, float)) else None,
+                "generation": int(completed_generations),
+                "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
+
     def fit(self, X, y):
         from pyoperon.sklearn import SymbolicRegressor
+        X = np.asarray(X)
+        self.n_features_ = int(X.shape[1]) if X.ndim == 2 else 1
+        params = dict(self.params)
+        total_generations = int(params.get("generations", 1) or 1)
+        total_generations = max(1, total_generations)
+        max_time = params.get("max_time")
+        try:
+            max_time = float(max_time) if max_time is not None else None
+        except Exception:
+            max_time = None
 
-        self.model = SymbolicRegressor(**self.params)
-        self.model.fit(X, y)
+        if self._progress_state_path:
+            params["warm_start"] = False
+            params["generations"] = 1
+            model = SymbolicRegressor(**params)
+            self.model = model
+            started_at = time.time()
+            completed = 0
+            while completed < total_generations:
+                if completed > 0:
+                    model.warm_start = True
+                    model.generations = 1
+                if max_time is not None:
+                    remaining = max_time - (time.time() - started_at)
+                    if remaining <= 0:
+                        break
+                    model.max_time = remaining
+                model.fit(X, y)
+                completed += 1
+                self._update_progress_state_from_model(model, completed)
+                if max_time is not None and time.time() - started_at >= max_time:
+                    break
+        else:
+            model = SymbolicRegressor(**params)
+            self.model = model
+            model.fit(X, y)
+
         self.best_model_str = self.model.get_model_string(self.model.model_)
         self.pareto_models = self._extract_pareto_models(self.model.pareto_front_)
-        self.n_features_ = int(X.shape[1])
         return self
 
     def predict(self, X):
