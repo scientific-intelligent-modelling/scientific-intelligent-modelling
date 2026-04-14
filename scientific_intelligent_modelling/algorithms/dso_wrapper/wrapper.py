@@ -80,8 +80,9 @@ class DSORegressor(BaseWrapper):
         if exp_name and "exp_name" not in experiment:
             experiment["exp_name"] = str(exp_name)
         if exp_path and experiment.get("logdir") is None:
-            run_name = exp_name or problem_name or "dso"
-            experiment["logdir"] = os.path.join(str(exp_path), str(run_name))
+            # DSO 内部会再用 exp_name 组装 save_path，logdir 这里只传实验根目录，
+            # 避免最终路径变成 exp_path/exp_name/exp_name 的双层结构。
+            experiment["logdir"] = os.path.abspath(str(exp_path))
 
         config = dict(params)
         config["experiment"] = experiment

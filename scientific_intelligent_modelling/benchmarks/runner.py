@@ -27,7 +27,7 @@ from scientific_intelligent_modelling.srkit.regressor import SymbolicRegressor
 
 _HIDDEN_PARAM_KEYS = {"api_key", "apikey", "token", "password", "secret"}
 _PROGRESS_DIRNAME = "progress"
-_SNAPSHOT_CAPABLE_TOOLS = {"llmsr", "drsr", "pysr"}
+_SNAPSHOT_CAPABLE_TOOLS = {"llmsr", "drsr", "pysr", "dso"}
 
 
 @dataclass
@@ -392,6 +392,51 @@ def _extract_pysr_periodic_candidate(experiment_dir: str | Path) -> dict[str, An
     return best_item
 
 
+def _extract_dso_periodic_candidate(experiment_dir: str | Path) -> dict[str, Any] | None:
+    base_dir = Path(experiment_dir)
+    candidate_paths = sorted(base_dir.glob("*_hof.csv"))
+    best_key = None
+    best_item = None
+    for path in candidate_paths:
+        try:
+            df = pd.read_csv(path)
+        except Exception:
+            continue
+        if df.empty:
+            continue
+        expr_col = None
+        for name in ("expression", "Equation", "equation", "sympy_format"):
+            if name in df.columns:
+                expr_col = name
+                break
+        score_col = None
+        for name in ("r", "score", "reward"):
+            if name in df.columns:
+                score_col = name
+                break
+        if expr_col is None or score_col is None:
+            continue
+        for _, row in df.iterrows():
+            equation = row.get(expr_col)
+            score = row.get(score_col)
+            if not isinstance(equation, str) or not equation.strip():
+                continue
+            try:
+                score_val = float(score)
+            except Exception:
+                continue
+            # DSO 的 reward 越大越好，这里统一转成“越小越优”的排序键。
+            key_val = -score_val
+            if best_key is None or key_val < best_key:
+                best_key = key_val
+                best_item = {
+                    "equation": equation,
+                    "score": score_val,
+                    "complexity": row.get("complexity"),
+                }
+    return best_item
+
+
 def _extract_periodic_candidate(tool_name: str, experiment_dir: str | Path) -> dict[str, Any] | None:
     tool = str(tool_name).strip().lower()
     if tool == "llmsr":
@@ -400,6 +445,8 @@ def _extract_periodic_candidate(tool_name: str, experiment_dir: str | Path) -> d
         return _extract_drsr_periodic_candidate(experiment_dir)
     if tool == "pysr":
         return _extract_pysr_periodic_candidate(experiment_dir)
+    if tool == "dso":
+        return _extract_dso_periodic_candidate(experiment_dir)
     return None
 
 

@@ -140,6 +140,45 @@ class BenchmarkProgressSnapshotsTest(unittest.TestCase):
             self.assertAlmostEqual(payload["id_test"]["rmse"], 0.0, places=10)
             self.assertAlmostEqual(payload["ood_test"]["rmse"], 0.0, places=10)
 
+    def test_build_periodic_snapshot_payload_for_dso_from_hof(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_dir = root / "dataset"
+            exp_dir = root / "exp"
+            exp_dir.mkdir(parents=True, exist_ok=True)
+            _write_dataset(dataset_dir)
+
+            (exp_dir / "dso_dataset2d_1314_hof.csv").write_text(
+                "r,on_policy_count,off_policy_count,expression,traversal\n"
+                "-10.0,0,0,0.0,0.0\n"
+                "1.0,1,0,2*x0 + 3*x1 + 1,2*x0 + 3*x1 + 1\n",
+                encoding="utf-8",
+            )
+
+            dataset = runner.load_canonical_dataset(dataset_dir)
+            payload = runner._build_periodic_snapshot_payload(
+                tool_name="dso",
+                dataset=dataset,
+                params={"training": {"n_samples": 20}},
+                seed=1314,
+                started_at=time.time() - 1800,
+                experiment_dir=exp_dir,
+                checkpoint_index=3,
+            )
+
+            self.assertIsNotNone(payload)
+            self.assertEqual(payload["tool"], "dso")
+            self.assertEqual(payload["status"], "ok")
+            self.assertEqual(payload["source_score"], 1.0)
+            self.assertEqual(payload["elapsed_minutes"], 30)
+            self.assertEqual(
+                payload["canonical_artifact"]["instantiated_expression"],
+                "2*x0 + 3*x1 + 1",
+            )
+            self.assertAlmostEqual(payload["valid"]["rmse"], 0.0, places=10)
+            self.assertAlmostEqual(payload["id_test"]["rmse"], 0.0, places=10)
+            self.assertAlmostEqual(payload["ood_test"]["rmse"], 0.0, places=10)
+
     def test_write_progress_payload_writes_outer_and_experiment_json(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
