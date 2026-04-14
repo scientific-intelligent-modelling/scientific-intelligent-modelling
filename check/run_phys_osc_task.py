@@ -12,6 +12,7 @@ import pandas as pd
 import yaml
 
 from scientific_intelligent_modelling.benchmarks.metrics import regression_metrics
+from scientific_intelligent_modelling.benchmarks.result_archive import write_result_payload
 from scientific_intelligent_modelling.benchmarks.result_artifacts import (
     safe_export_canonical_artifact,
 )
@@ -161,10 +162,13 @@ def run_task(tool: str, dataset_dir: Path, output_root: Path, api_model: str, pa
     canonical_artifact_error = None
     metrics_id = None
     metrics_ood = None
+    experiment_dir = None
 
     try:
         reg = build_regressor(tool, dataset_dir, output_dir, meta, api_model, params_override=params_override, seed=seed)
+        experiment_dir = getattr(reg, "experiment_dir", None)
         reg.fit(X_train, y_train)
+        experiment_dir = getattr(reg, "experiment_dir", experiment_dir)
         equation = reg.get_optimal_equation()
         canonical_artifact, canonical_artifact_error = safe_export_canonical_artifact(reg)
         try:
@@ -190,6 +194,7 @@ def run_task(tool: str, dataset_dir: Path, output_root: Path, api_model: str, pa
         "id_test_rows": int(len(y_id)),
         "ood_test_rows": int(len(y_ood)),
         "seconds": round(time.time() - started_at, 3),
+        "experiment_dir": str(Path(experiment_dir).resolve()) if experiment_dir else None,
         "equation": equation,
         "equation_count": len(equations) if isinstance(equations, list) else None,
         "canonical_artifact": canonical_artifact,
@@ -201,7 +206,7 @@ def run_task(tool: str, dataset_dir: Path, output_root: Path, api_model: str, pa
     }
 
     result_path = output_dir / "result.json"
-    result_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_result_payload(result, primary_path=result_path, experiment_dir=experiment_dir)
     print(json.dumps(result, ensure_ascii=False))
     return result_path
 

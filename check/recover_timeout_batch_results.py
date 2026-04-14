@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from scientific_intelligent_modelling.benchmarks.metrics import regression_metrics
+from scientific_intelligent_modelling.benchmarks.result_archive import write_result_payload
 from scientific_intelligent_modelling.benchmarks.result_artifacts import (
     safe_build_canonical_artifact,
 )
@@ -431,6 +432,7 @@ def recover_one(result_path: Path, args) -> Dict[str, Any]:
             "canonical_artifact_error": canonical_artifact_error,
             "id_test": evaluate_predictions(y_id, recovered["id_pred"]),
             "ood_test": evaluate_predictions(y_ood, recovered["ood_pred"]),
+            "experiment_dir": str(exp_dir.resolve()),
             "recovered_from_timeout": True,
             "original_status": original.get("status"),
             "original_error": original.get("error"),
@@ -443,7 +445,7 @@ def recover_one(result_path: Path, args) -> Dict[str, Any]:
     output_path = result_path if args.overwrite else result_path.with_name("result.recovered.json")
     if args.overwrite:
         backup_original_result(result_path)
-    output_path.write_text(json.dumps(updated, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_result_payload(updated, primary_path=output_path, experiment_dir=exp_dir)
 
     return {
         "seed": updated.get("seed"),

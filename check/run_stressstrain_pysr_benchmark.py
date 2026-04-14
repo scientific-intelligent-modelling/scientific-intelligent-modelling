@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from scientific_intelligent_modelling.benchmarks.metrics import regression_metrics
+from scientific_intelligent_modelling.benchmarks.result_archive import write_result_payload
 from scientific_intelligent_modelling.benchmarks.result_artifacts import (
     safe_export_canonical_artifact,
 )
@@ -98,10 +99,13 @@ def main():
     canonical_artifact_error = None
     id_metrics = None
     ood_metrics = None
+    experiment_dir = None
 
     try:
         reg = SymbolicRegressor("pysr", problem_name="stressstrain", seed=args.random_state, **params)
+        experiment_dir = getattr(reg, "experiment_dir", None)
         reg.fit(ds["X_train"], ds["y_train"])
+        experiment_dir = getattr(reg, "experiment_dir", experiment_dir)
         equation = reg.get_optimal_equation()
         canonical_artifact, canonical_artifact_error = safe_export_canonical_artifact(reg)
         try:
@@ -123,6 +127,7 @@ def main():
         "status": status,
         "error": error,
         "seconds": round(time.time() - started, 3),
+        "experiment_dir": str(Path(experiment_dir).resolve()) if experiment_dir else None,
         "equation": equation,
         "equation_count": equation_count,
         "canonical_artifact": canonical_artifact,
@@ -135,7 +140,7 @@ def main():
         "finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     result_path = output_dir / "result.json"
-    result_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_result_payload(result, primary_path=result_path, experiment_dir=experiment_dir)
     print(json.dumps(result, ensure_ascii=False))
 
 
