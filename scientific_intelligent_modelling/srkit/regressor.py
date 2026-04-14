@@ -50,6 +50,9 @@ class SymbolicRegressor:
             except Exception:
                 return "item"
 
+        def _has_timestamp_suffix(text: str) -> bool:
+            return bool(re.search(r"_\d{8}-\d{6}$", str(text).strip()))
+
         ts = time.strftime('%Y%m%d-%H%M%S')
         generated_exp_name = f"{_slugify(self.problem_name)}_{_slugify(self.tool_name)}_seed{self.seed}_{ts}"
         use_explicit_layout = (
@@ -58,7 +61,11 @@ class SymbolicRegressor:
             and isinstance(explicit_exp_name, str)
             and explicit_exp_name.strip()
         )
-        exp_name = explicit_exp_name.strip() if use_explicit_layout else generated_exp_name
+        if use_explicit_layout:
+            requested_exp_name = explicit_exp_name.strip()
+            exp_name = requested_exp_name if _has_timestamp_suffix(requested_exp_name) else f"{requested_exp_name}_{ts}"
+        else:
+            exp_name = generated_exp_name
         try:
             os.makedirs(self.experiments_root, exist_ok=True)
             self.experiment_dir = os.path.join(self.experiments_root, exp_name)
@@ -73,10 +80,10 @@ class SymbolicRegressor:
         # - exp_path: 统一的实验根目录
         # - exp_name: 当前实验子目录名
         # - problem_name / seed: 便于算法内部复用
-        # 这里只在未显式指定时设置，避免覆盖用户传入的参数。
+        # 这里写入“最终解析后的目录名”，保证外层 manifest 与算法内层真实工作目录一致。
         try:
-            self.params.setdefault("exp_path", self.experiments_root)
-            self.params.setdefault("exp_name", os.path.basename(self.experiment_dir))
+            self.params["exp_path"] = self.experiments_root
+            self.params["exp_name"] = os.path.basename(self.experiment_dir)
             self.params.setdefault("problem_name", self.problem_name)
             self.params.setdefault("seed", self.seed)
         except Exception:

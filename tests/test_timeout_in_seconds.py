@@ -138,11 +138,34 @@ def test_symbolic_regressor_reuses_explicit_exp_path_and_exp_name(monkeypatch, t
         exp_name="oscillator1_gplearn_seed1316",
     )
 
-    expected_dir = exp_root / "oscillator1_gplearn_seed1316"
-    assert Path(reg.experiment_dir) == expected_dir
+    expected_dir = Path(reg.experiment_dir)
+    assert expected_dir.parent == exp_root
+    assert expected_dir.name.startswith("oscillator1_gplearn_seed1316_")
     manifest_path = expected_dir / "manifest.json"
     assert manifest_path.exists()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert manifest["experiment_id"] == "oscillator1_gplearn_seed1316"
+    assert manifest["experiment_id"] == expected_dir.name
     assert manifest["config"]["exp_path"] == str(exp_root)
-    assert manifest["config"]["exp_name"] == "oscillator1_gplearn_seed1316"
+    assert manifest["config"]["exp_name"] == expected_dir.name
+
+
+def test_symbolic_regressor_respects_explicit_timestamped_exp_name(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "scientific_intelligent_modelling.srkit.regressor.env_manager.get_env_python",
+        lambda env_name: sys.executable,
+    )
+
+    exp_root = tmp_path / "experiments"
+    exp_name = "oscillator1_gplearn_seed1316_20260414-120000"
+    reg = SymbolicRegressor(
+        "gplearn",
+        problem_name="oscillator1",
+        seed=1316,
+        exp_path=str(exp_root),
+        exp_name=exp_name,
+    )
+
+    assert Path(reg.experiment_dir) == exp_root / exp_name
+    manifest = json.loads((exp_root / exp_name / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["experiment_id"] == exp_name
+    assert manifest["config"]["exp_name"] == exp_name
