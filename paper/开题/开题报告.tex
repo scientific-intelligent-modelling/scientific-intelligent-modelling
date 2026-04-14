@@ -1,0 +1,224 @@
+% 编译方式：
+% xelatex 开题报告.tex && bibtex 开题报告 && xelatex 开题报告.tex && xelatex 开题报告.tex
+\documentclass[UTF8]{ctexart}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage[numbers]{natbib}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{xcolor}
+
+\setlist[itemize]{leftmargin=1.6em,itemsep=4pt,topsep=4pt}
+\setlist[enumerate]{leftmargin=1.8em,itemsep=4pt,topsep=4pt}
+\captionsetup{font=small,skip=4pt}
+
+\title{\textbf{开题报告题目（待填写）}}
+\author{
+学生姓名：XXX \\
+学\hspace{1.5em}号：XXXXXXXX \\
+专\hspace{1.5em}业：XXXXXXXX \\
+指导教师：XXX \\
+所在学院：XXXXXXXX
+}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{选题背景与研究意义}
+
+\subsection{研究背景}
+
+请在本节回答三个问题：
+\begin{itemize}
+    \item 这个研究问题产生于什么学术或工程背景？
+    \item 当前领域已经取得了哪些进展？
+    \item 为什么这个问题仍然值得继续研究？
+\end{itemize}
+
+可从以下角度展开撰写：
+\begin{itemize}
+    \item 场景背景：研究问题对应的应用场景、业务需求或科学问题。
+    \item 学术背景：该方向在符号回归、科学机器学习、自动建模等领域中的位置。
+    \item 痛点归纳：现有方法在复现成本、统一评测、可扩展性、自动化程度等方面的不足。
+\end{itemize}
+
+\subsection{研究意义}
+
+建议分别从理论意义与应用意义展开：
+\begin{itemize}
+    \item 理论意义：该工作对方法体系、评测协议、研究流程或系统化建模的贡献。
+    \item 应用意义：该工作对实验复现、工程集成、研究效率或实际场景落地的价值。
+\end{itemize}
+
+\section{国内外研究现状}
+
+\subsection{研究现状综述}
+
+建议按主题分类综述，而不是逐篇罗列文献。可参考以下结构：
+\begin{enumerate}
+    \item 经典符号回归方法与基准评测研究。
+    \item 面向科学发现或科学机器学习的自动建模系统。
+    \item 面向统一执行、环境隔离、实验复现的研究基础设施工作。
+    \item 大语言模型或自动代理在科学研究流程中的应用。
+\end{enumerate}
+
+\subsection{现有工作的不足}
+
+请明确指出与你的课题最相关的不足，例如：
+\begin{itemize}
+    \item 工具链与依赖环境碎片化，导致复现门槛高。
+    \item 数据集组织方式异构，难以形成统一评测协议。
+    \item 缺少审查优先、可追溯、可迭代的自动化研究闭环。
+    \item 现有工作更关注单一算法性能，较少关注研究操作层基础设施。
+\end{itemize}
+
+\section{研究目标与拟解决的关键问题}
+
+\subsection{总体研究目标}
+
+本课题拟围绕“\textcolor{red}{请用一句话概括你的核心目标}”开展研究，目标是在明确研究边界的前提下，形成一套可复现、可验证、可扩展的解决方案。
+
+\subsection{拟解决的关键问题}
+
+建议写成 3--5 条清晰、可检验的问题：
+\begin{enumerate}
+    \item 如何\textcolor{red}{问题 1：待填写}？
+    \item 如何\textcolor{red}{问题 2：待填写}？
+    \item 如何\textcolor{red}{问题 3：待填写}？
+\end{enumerate}
+
+\section{研究内容与技术路线}
+
+\subsection{研究内容}
+
+建议把研究内容拆为若干相互衔接的模块：
+\begin{enumerate}
+    \item \textbf{内容一：} 问题定义与需求分析。
+    \item \textbf{内容二：} 系统框架或方法设计。
+    \item \textbf{内容三：} 数据、实验与评测协议设计。
+    \item \textbf{内容四：} 实现、验证与结果分析。
+    \item \textbf{内容五：} 总结与迭代改进。
+\end{enumerate}
+
+\subsection{技术路线}
+
+建议用“输入 $\rightarrow$ 处理 $\rightarrow$ 输出”的形式描述整体流程，并配合文字说明每一步的作用。
+
+% 如需插入技术路线图，可取消下面注释并替换图片路径。
+% \begin{figure}[htbp]
+%     \centering
+%     \includegraphics[width=0.9\linewidth]{../figures/your_figure.pdf}
+%     \caption{课题技术路线图}
+%     \label{fig:roadmap}
+% \end{figure}
+
+一个可直接改写的文字版路线示例如下：
+\begin{center}
+问题分析 $\rightarrow$ 方法设计 $\rightarrow$ 系统实现 $\rightarrow$ 实验验证 $\rightarrow$ 审查评估 $\rightarrow$ 迭代优化
+\end{center}
+
+\section{研究方法与可行性分析}
+
+\subsection{研究方法}
+
+请说明本课题将采用的方法类型，例如：
+\begin{itemize}
+    \item 文献调研与对比分析。
+    \item 系统设计与模块化实现。
+    \item 数据标准化与实验协议构建。
+    \item 定量实验、消融分析与案例分析。
+\end{itemize}
+
+\subsection{可行性分析}
+
+建议从以下方面展开：
+\begin{itemize}
+    \item \textbf{理论可行性：} 是否已有明确的问题定义、研究假设与方法基础。
+    \item \textbf{技术可行性：} 是否具备代码框架、运行环境、数据资源和实验条件。
+    \item \textbf{实现可行性：} 是否已有原型系统、已有模块或可复用仓库基础。
+    \item \textbf{时间可行性：} 是否能够在计划周期内完成设计、实现、实验与写作。
+\end{itemize}
+
+\section{可能的创新点}
+
+创新点建议写成具体、可验证的陈述，避免空泛表述。示例格式：
+\begin{enumerate}
+    \item 在\textcolor{red}{某个问题环节}提出\textcolor{red}{某种新机制/新框架/新流程}。
+    \item 在\textcolor{red}{评测或验证层}提供\textcolor{red}{新的统一方式或自动化能力}。
+    \item 在\textcolor{red}{系统工程层}实现\textcolor{red}{可复现、可追溯、可扩展}的研究基础设施。
+\end{enumerate}
+
+\section{研究计划与进度安排}
+
+可按月或按阶段安排。下面给出一个可直接修改的示例：
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{p{3cm}p{10cm}}
+\toprule
+时间阶段 & 计划内容 \\
+\midrule
+第 1 阶段 & 文献调研，明确研究问题，完成开题准备。 \\
+第 2 阶段 & 细化系统方案或方法框架，完成核心模块设计。 \\
+第 3 阶段 & 实现原型系统，打通主要实验流程。 \\
+第 4 阶段 & 开展实验、整理结果并分析问题。 \\
+第 5 阶段 & 完善系统、补充实验、撰写论文初稿。 \\
+第 6 阶段 & 修改论文并准备中期检查、答辩材料。 \\
+\bottomrule
+\end{tabular}
+\caption{研究计划与进度安排示例}
+\label{tab:schedule}
+\end{table}
+
+\section{预期成果}
+
+预期成果可以从以下几个维度描述：
+\begin{itemize}
+    \item 形成一套清晰的问题定义、方法设计与实验方案。
+    \item 完成可运行的系统原型、代码模块或实验平台。
+    \item 产出阶段性实验结果、图表与分析结论。
+    \item 完成论文、技术报告、项目文档或其他可交付成果。
+\end{itemize}
+
+\section{风险分析与应对措施}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{p{4cm}p{4.5cm}p{4.5cm}}
+\toprule
+潜在风险 & 影响 & 应对措施 \\
+\midrule
+研究问题边界不清 & 导致任务发散、难以收敛 & 尽早固化研究目标与评测范围 \\
+实验环境复杂或依赖冲突 & 阻塞实验推进 & 提前完成环境隔离与脚本固化 \\
+实验结果不稳定 & 影响结论可信度 & 增加重复实验、日志审计与误差分析 \\
+进度滞后 & 影响论文与答辩准备 & 以阶段里程碑方式推进并定期复盘 \\
+\bottomrule
+\end{tabular}
+\caption{风险分析与应对措施示例}
+\label{tab:risk}
+\end{table}
+
+\section{参考文献}
+
+后续写作时请按下面方式处理参考文献：
+\begin{itemize}
+    \item 在正文中使用 \verb|\cite{...}| 插入引用。
+    \item 在 \texttt{references.bib} 中补充 BibTeX 条目。
+    \item 模板阶段保留 \verb|\nocite{*}|，以保证空模板也能通过 BibTeX；正式写作时如只想保留正文实际引用的文献，可删除下一行。
+\end{itemize}
+
+\nocite{*}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
