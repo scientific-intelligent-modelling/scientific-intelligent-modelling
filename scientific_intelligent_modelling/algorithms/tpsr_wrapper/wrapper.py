@@ -6,6 +6,8 @@ import pickle
 import re
 import tempfile
 import sys
+import json
+import time
 import torch
 import numpy as np
 import shutil
@@ -15,6 +17,8 @@ from scientific_intelligent_modelling.benchmarks.normalizers import normalize_tp
 
 
 class TPSRRegressor(BaseWrapper):
+    _PROGRESS_STATE_FILENAME = ".tpsr_current_best.json"
+
     def __init__(self, **kwargs):
         # 延迟导入，避免环境问题
         self.params = kwargs
@@ -25,6 +29,9 @@ class TPSRRegressor(BaseWrapper):
         self._backend_params = {}
         self._predict_variable_names = []
         self._n_features = None
+        self._exp_path = self.params.get("exp_path")
+        self._exp_name = self.params.get("exp_name")
+        self._progress_state_path = self._resolve_progress_state_path(self._exp_path, self._exp_name)
 
         # 设置默认参数
         self.params.setdefault("backbone_model", "e2e")
@@ -52,6 +59,18 @@ class TPSRRegressor(BaseWrapper):
         self.params.setdefault("nesymres_model_path", None)
         self.params.setdefault("symbolicregression_model_path", self._shared_symbolic_model_path())
         self.params.setdefault("symbolicregression_model_url", "https://dl.fbaipublicfiles.com/symbolicregression/model1.pt")
+
+    @classmethod
+    def _resolve_progress_state_path(cls, exp_path, exp_name):
+        if not isinstance(exp_path, str) or not exp_path.strip():
+            return None
+        if not isinstance(exp_name, str) or not exp_name.strip():
+            return None
+        return os.path.join(
+            os.path.abspath(exp_path.strip()),
+            exp_name.strip(),
+            cls._PROGRESS_STATE_FILENAME,
+        )
 
     @staticmethod
     def _shared_symbolic_model_path():
@@ -185,6 +204,87 @@ class TPSRRegressor(BaseWrapper):
             equations.append(self._normalize_equation(tree))
         return equations
 
+    def _write_progress_state(self, payload):
+        if not self._progress_state_path:
+            return
+        try:
+            os.makedirs(os.path.dirname(self._progress_state_path), exist_ok=True)
+            with open(self._progress_state_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _sequence_length(sequence):
+        if sequence is None:
+            return None
+        try:
+            return int(len(sequence))
+        except Exception:
+            return None
+
+    def _emit_progress_equation(self, *, equation, score=None, complexity=None, source=None):
+        if not isinstance(equation, str) or not equation.strip():
+            return
+        payload = {
+            "equation": self._normalize_equation(equation),
+            "score": float(score) if isinstance(score, (int, float, np.floating)) else None,
+            "complexity": int(complexity) if isinstance(complexity, (int, float, np.integer, np.floating)) else None,
+            "source": source,
+            "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        self._write_progress_state(payload)
+
+    def _extract_best_new_candidate(self, candidate_programs, reward_fn, *, checked_count, best_reward):
+        best_seq = None
+        new_checked = len(candidate_programs)
+        for seq in candidate_programs[checked_count:]:
+            try:
+                reward = reward_fn(seq)
+            except Exception:
+                continue
+            if reward is None:
+                continue
+            try:
+                reward = float(reward)
+            except Exception:
+                continue
+            if reward > best_reward:
+                best_reward = reward
+                best_seq = seq
+        return new_checked, best_reward, best_seq
+
+    def _sequence_to_e2e_expression(self, args, model, equation_env, sequence, samples):
+        from symbolicregression.e2e_model import pred_for_sample_no_refine, refine_for_sample
+
+        refined_expr = None
+        raw_expr = None
+        try:
+            _, refined_expr, _ = refine_for_sample(
+                args,
+                model,
+                equation_env,
+                sequence,
+                samples["x_to_fit"],
+                samples["y_to_fit"],
+            )
+        except Exception:
+            refined_expr = None
+        try:
+            _, raw_expr, _ = pred_for_sample_no_refine(
+                model,
+                equation_env,
+                sequence,
+                samples["x_to_fit"],
+            )
+        except Exception:
+            raw_expr = None
+
+        for expr in (refined_expr, raw_expr):
+            if isinstance(expr, str) and expr.strip():
+                return self._normalize_equation(expr)
+        return None
+
     def __getstate__(self):
         state = self.__dict__.copy()
         state["model"] = None
@@ -314,6 +414,8 @@ class TPSRRegressor(BaseWrapper):
         # 运行搜索
         done = False
         s = rl_env.state
+        checked_candidate_count = 0
+        best_progress_reward = float("-inf")
         for _ in range(args.horizon):
             if done or len(s) >= args.horizon:
                 break
@@ -321,6 +423,36 @@ class TPSRRegressor(BaseWrapper):
             s, _, done, _ = rl_env.step(act)
             update_root(agent, act, s)
             dp.update_cache(s)
+
+            checked_candidate_count, best_progress_reward, best_seq = self._extract_best_new_candidate(
+                dp.candidate_programs,
+                rl_env.get_reward,
+                checked_count=checked_candidate_count,
+                best_reward=best_progress_reward,
+            )
+            if best_seq is not None:
+                progress_expr = self._sequence_to_e2e_expression(args, model, equation_env, best_seq, samples)
+                self._emit_progress_equation(
+                    equation=progress_expr,
+                    score=best_progress_reward,
+                    complexity=self._sequence_length(best_seq),
+                    source="e2e_candidate",
+                )
+
+            if done and s is not None:
+                try:
+                    terminal_reward = float(rl_env.get_reward(s))
+                except Exception:
+                    terminal_reward = None
+                if terminal_reward is not None and terminal_reward > best_progress_reward:
+                    best_progress_reward = terminal_reward
+                    progress_expr = self._sequence_to_e2e_expression(args, model, equation_env, s, samples)
+                    self._emit_progress_equation(
+                        equation=progress_expr,
+                        score=best_progress_reward,
+                        complexity=self._sequence_length(s),
+                        source="e2e_terminal",
+                    )
 
         # `s` 可能只是搜索到当前 horizon 的中间前缀，并不保证是完整程序。
         # 优先从 default policy 已经生成的完整候选中选最优者；只有在搜索确实完成时，才回退到 `s`。
@@ -404,6 +536,12 @@ class TPSRRegressor(BaseWrapper):
         self._backend_params["search_state"] = best_sequence
         self._predict_fn = self._build_predictor_from_expression(
             self.best_tree, self._predict_variable_names
+        )
+        self._emit_progress_equation(
+            equation=self.best_tree,
+            score=best_progress_reward if best_progress_reward != float("-inf") else None,
+            complexity=self._sequence_length(best_sequence),
+            source="e2e_final",
         )
 
     def _resolve_nesymres_resources(self, cfg):
@@ -538,6 +676,8 @@ class TPSRRegressor(BaseWrapper):
 
         done = False
         s = rl_env.state
+        checked_candidate_count = 0
+        best_progress_reward = float("-inf")
         for _ in range(200 if not getattr(args, "sample_only", False) else 1):
             if done or len(s) >= args.horizon:
                 break
@@ -545,6 +685,42 @@ class TPSRRegressor(BaseWrapper):
             s, _, done, _ = rl_env.step(act)
             update_root(agent, act, s)
             dp.update_cache(s)
+
+            def _reward_and_expr(seq):
+                _, reward_val, pred_expr = compute_reward_nesymres(model.X, model.y, seq, fit_params)
+                return reward_val, pred_expr
+
+            for seq in dp.candidate_programs[checked_candidate_count:]:
+                try:
+                    reward_val, pred_expr = _reward_and_expr(seq)
+                    reward_val = float(reward_val) if reward_val is not None else None
+                except Exception:
+                    continue
+                if reward_val is None or reward_val <= best_progress_reward:
+                    continue
+                best_progress_reward = reward_val
+                self._emit_progress_equation(
+                    equation=pred_expr,
+                    score=best_progress_reward,
+                    complexity=self._sequence_length(seq),
+                    source="nesymres_candidate",
+                )
+            checked_candidate_count = len(dp.candidate_programs)
+
+            if done and s is not None:
+                try:
+                    _, reward_val, pred_expr = _reward_and_expr(s)
+                    reward_val = float(reward_val) if reward_val is not None else None
+                except Exception:
+                    reward_val, pred_expr = None, None
+                if reward_val is not None and reward_val > best_progress_reward:
+                    best_progress_reward = reward_val
+                    self._emit_progress_equation(
+                        equation=pred_expr,
+                        score=best_progress_reward,
+                        complexity=self._sequence_length(s),
+                        source="nesymres_terminal",
+                    )
 
         _, reward_mcts, pred_str = compute_reward_nesymres(model.X, model.y, s, fit_params)
         mcts_expr = pred_str or baseline_expr
@@ -569,6 +745,12 @@ class TPSRRegressor(BaseWrapper):
         self._backend_params["search_state"] = s
         self._backend_params["best_expr"] = mcts_expr
         self._backend_params["eq_variables"] = eq_setting["total_variables"]
+        self._emit_progress_equation(
+            equation=mcts_expr,
+            score=best_progress_reward if best_progress_reward != float("-inf") else reward_mcts,
+            complexity=self._sequence_length(s),
+            source="nesymres_final",
+        )
 
     def fit(self, X, y):
         """
