@@ -39,6 +39,7 @@ class SymbolicNormalizersTest(unittest.TestCase):
         artifact = normalize_pysr_artifact("x0 + 2*x1")
         self.assertEqual(artifact["tool_name"], "pysr")
         self.assertEqual(artifact["normalized_expression"], "x0 + 2*x1")
+        self.assertEqual(artifact["instantiated_expression"], "x0 + 2*x1")
         self.assertTrue(artifact["sympy_parse_ok"])
 
     def test_normalize_qlattice_artifact(self):
@@ -95,6 +96,7 @@ class SymbolicNormalizersTest(unittest.TestCase):
         artifact = normalize_llmsr_artifact(raw, parameter_values=[1.0, 2.0, 3.0])
         self.assertEqual(artifact["tool_name"], "llmsr")
         self.assertEqual(artifact["normalized_expression"], "c0 + c1*x0 + c2*x1")
+        self.assertEqual(artifact["instantiated_expression"], "1.0 + 2.0*x0 + 3.0*x1")
         self.assertEqual(artifact["parameter_symbols"], ["c0", "c1", "c2"])
         self.assertTrue(artifact["sympy_parse_ok"])
 
@@ -113,6 +115,7 @@ class SymbolicNormalizersTest(unittest.TestCase):
         artifact = normalize_drsr_artifact(raw, parameter_values=[1.0, 2.0, 3.0])
         self.assertEqual(artifact["tool_name"], "drsr")
         self.assertEqual(artifact["normalized_expression"], "c0 + c1*x0 + c2*x1")
+        self.assertEqual(artifact["instantiated_expression"], "1.0 + 2.0*x0 + 3.0*x1")
         self.assertTrue(artifact["sympy_parse_ok"])
 
     def test_normalize_drsr_legacy_xyv_artifact(self):

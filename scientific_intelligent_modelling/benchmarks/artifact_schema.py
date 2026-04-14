@@ -72,6 +72,29 @@ def infer_parameter_symbols(parameter_values: list[float] | None) -> list[str]:
     return [f"c{i}" for i in range(len(parameter_values))]
 
 
+def instantiate_expression(
+    expression: str | None,
+    *,
+    parameter_symbols: list[str] | None,
+    parameter_values: list[float] | None,
+) -> str | None:
+    """将统一表达式中的参数符号替换成具体数值。"""
+    if not isinstance(expression, str) or not expression.strip():
+        return None
+    text = expression.strip()
+    if not parameter_symbols or not parameter_values:
+        return text
+
+    out = text
+    for idx, symbol in enumerate(parameter_symbols):
+        if idx >= len(parameter_values):
+            break
+        value = repr(float(parameter_values[idx]))
+        out = re.sub(rf"\b{re.escape(symbol)}\b", value, out)
+        out = re.sub(rf"(?<!\w)params\[{idx}\](?!\w)", value, out)
+    return out
+
+
 def infer_variable_indices(variables: list[str] | None) -> list[int]:
     """从变量名列表中提取 x{i} 的索引。"""
     if not isinstance(variables, list):
@@ -163,6 +186,11 @@ def build_canonical_symbolic_program(
         "python_function_source": function_source,
         "return_expression_source": extracted_return,
         "normalized_expression": normalized_expression,
+        "instantiated_expression": instantiate_expression(
+            normalized_expression,
+            parameter_symbols=derived_param_symbols,
+            parameter_values=normalized_params,
+        ),
         "variables": derived_variables,
         "parameter_symbols": derived_param_symbols,
         "parameter_values": normalized_params,
@@ -211,6 +239,13 @@ def validate_canonical_symbolic_program(
                 f"期望 {field_type.__name__}, 实际 {type(artifact[field_name]).__name__}"
             )
 
+    instantiated_expression = artifact.get("instantiated_expression")
+    if instantiated_expression is not None and not isinstance(instantiated_expression, str):
+        raise TypeError(
+            "CanonicalSymbolicProgram 字段 instantiated_expression 类型错误: "
+            f"期望 str 或 None, 实际 {type(instantiated_expression).__name__}"
+        )
+
     if artifact["version"] != CSP_VERSION:
         raise ValueError(
             f"CanonicalSymbolicProgram 版本不支持: {artifact['version']!r}, "
@@ -243,5 +278,10 @@ def validate_canonical_symbolic_program(
 
     artifact["validation_errors"] = validation_errors
     artifact["artifact_valid"] = len(validation_errors) == 0
+    artifact["instantiated_expression"] = instantiate_expression(
+        artifact.get("normalized_expression"),
+        parameter_symbols=artifact.get("parameter_symbols"),
+        parameter_values=artifact.get("parameter_values"),
+    )
 
     return artifact

@@ -53,6 +53,7 @@ class SymbolicArtifactSchemaTest(unittest.TestCase):
         self.assertEqual(artifact["tool_name"], "pysr")
         self.assertEqual(artifact["raw_equation_kind"], "plain_expression")
         self.assertEqual(artifact["normalized_expression"], "x0 + 2*x1")
+        self.assertEqual(artifact["instantiated_expression"], "x0 + 2*x1")
         self.assertEqual(artifact["variables"], ["x0", "x1"])
         self.assertTrue(artifact["artifact_valid"])
 
@@ -75,6 +76,7 @@ class SymbolicArtifactSchemaTest(unittest.TestCase):
         self.assertEqual(validated["return_expression_source"], "params[0] + x0 * x1")
         self.assertEqual(validated["parameter_values"], [1.5])
         self.assertEqual(validated["parameter_symbols"], ["c0"])
+        self.assertEqual(validated["instantiated_expression"], "1.5 + x0 * x1")
 
 
 if __name__ == "__main__":

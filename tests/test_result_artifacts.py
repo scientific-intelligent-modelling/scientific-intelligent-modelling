@@ -17,6 +17,7 @@ class _FakeRegressor:
             "python_function_source": None,
             "return_expression_source": "x0 + 1",
             "normalized_expression": "x0 + 1",
+            "instantiated_expression": "x0 + 1",
             "variables": ["x0"],
             "parameter_symbols": [],
             "parameter_values": None,
@@ -39,6 +40,7 @@ class ResultArtifactsTest(unittest.TestCase):
         self.assertIsNotNone(artifact)
         self.assertEqual(artifact["version"], CSP_VERSION)
         self.assertEqual(artifact["normalized_expression"], "x0 + 1")
+        self.assertEqual(artifact["instantiated_expression"], "x0 + 1")
 
     def test_safe_build_canonical_artifact_for_pysr(self):
         artifact, error = safe_build_canonical_artifact(
@@ -48,6 +50,7 @@ class ResultArtifactsTest(unittest.TestCase):
         )
         self.assertIsNone(error)
         self.assertEqual(artifact["normalized_expression"], "x0 + 2*x1")
+        self.assertEqual(artifact["instantiated_expression"], "x0 + 2*x1")
         self.assertEqual(artifact["variables"], ["x0", "x1"])
 
     def test_safe_build_canonical_artifact_for_llmsr_function(self):
@@ -63,6 +66,7 @@ class ResultArtifactsTest(unittest.TestCase):
         )
         self.assertIsNone(error)
         self.assertEqual(artifact["normalized_expression"], "c0*x0 + c1*x1 + c2")
+        self.assertEqual(artifact["instantiated_expression"], "1.0*x0 + 2.0*x1 + 3.0")
         self.assertEqual(artifact["parameter_values"], [1.0, 2.0, 3.0])
 
     def test_safe_build_canonical_artifact_for_unknown_tool(self):
