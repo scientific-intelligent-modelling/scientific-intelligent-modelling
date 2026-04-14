@@ -9,6 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .benchmarks.runner import run_benchmark_task
 from .srkit.regressor import SymbolicRegressor
 from .pipelines.iterative_experiment import IterativeExperimentPipeline
 
@@ -180,6 +181,16 @@ def _load_dataset(
     X = arr[:, :-1]
     y = arr[:, -1]
     return np.asarray(X, dtype=float), np.asarray(y, dtype=float)
+
+
+def _is_canonical_dataset_dir(path: str) -> bool:
+    """判断路径是否为当前仓库统一数据集目录。"""
+    p = Path(path)
+    return (
+        p.is_dir()
+        and (p / "metadata.yaml").is_file()
+        and (p / "train.csv").is_file()
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -411,6 +422,25 @@ def main(argv: Optional[List[str]] = None) -> None:
     print(f"[sim-cli] 使用算法: {algorithm}")
     resolved_train_path = _resolve_dataset_path(train_path)
     print(f"[sim-cli] 训练数据: {resolved_train_path}")
+
+    if _is_canonical_dataset_dir(resolved_train_path):
+        # 保持原 CLI 入口不变：当 --train-path 指向标准数据集目录时，
+        # 内部自动切换到统一 benchmark runner。
+        output_root = extra_params.pop(
+            "output_root",
+            os.path.join(os.getcwd(), "bench_results", "sim_cli"),
+        )
+        print(f"[sim-cli] 检测到标准数据集目录，自动使用统一 runner")
+        print(f"[sim-cli] 结果根目录: {os.path.abspath(str(output_root))}")
+        result_path = run_benchmark_task(
+            tool_name=algorithm,
+            dataset_dir=resolved_train_path,
+            output_root=output_root,
+            seed=args.seed,
+            params_override=extra_params,
+        )
+        print(f"[sim-cli] 实验完成，结果已写入: {result_path}")
+        return
 
     # 先构造回归器以创建实验目录，便于重定向日志到实验目录
     reg = SymbolicRegressor(
