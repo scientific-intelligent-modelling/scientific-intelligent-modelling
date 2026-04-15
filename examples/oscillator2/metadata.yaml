@@ -2,6 +2,8 @@ dataset:
   name: sim__oscillator2
   description: Calculate Acceleration in Nonl-linear Harmonic Oscillator given Time,
     Position at time t and Velocity at time t
+  ground_truth_formula:
+    file: formula.py
   splits:
     train:
       file: train.csv

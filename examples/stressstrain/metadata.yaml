@@ -1,6 +1,7 @@
 dataset:
   name: sim__stressstrain
-  description: Calculate Stress given Strain and Temperature
+  description: Calculate Stress given Strain and Temperature. This dataset is based
+    on real tensile measurements, so no analytical ground-truth formula is available.
   splits:
     train:
       file: train.csv
