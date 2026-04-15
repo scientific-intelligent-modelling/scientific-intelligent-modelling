@@ -35,6 +35,16 @@ def parse_args() -> argparse.Namespace:
         default=8.0,
         help="每条候选公式计算 TED 的超时时间（秒）",
     )
+    parser.add_argument(
+        "--best-only-tools",
+        default="",
+        help="强制只用最终最优公式而不是 top10 的工具名列表，逗号分隔，例如 llmsr,pysr",
+    )
+    parser.add_argument(
+        "--output-suffix",
+        default="",
+        help="输出文件名后缀，不带扩展名，例如 llmsr_bestonly",
+    )
     return parser.parse_args()
 
 
@@ -158,6 +168,13 @@ def _safe_bool_mean(series: pd.Series) -> float | None:
     return float(clean.astype(float).mean())
 
 
+def _build_output_name(stem: str, suffix: str) -> str:
+    suffix = str(suffix or "").strip()
+    if not suffix:
+        return f"{stem}.csv"
+    return f"{stem}_{suffix}.csv"
+
+
 def _evaluate_candidate_worker(payload: dict[str, Any], queue: mp.Queue) -> None:
     equation_text = _resolve_optional_param_guards(payload["raw_equation"], payload.get("parameter_values"))
     artifact, artifact_error = safe_build_canonical_artifact(
@@ -249,11 +266,35 @@ def main() -> None:
     if not submit_dir.is_dir():
         raise SystemExit(f"submit 目录不存在: {submit_dir}")
 
+    best_only_tools = {
+        item.strip().lower()
+        for item in str(args.best_only_tools or "").split(",")
+        if item.strip()
+    }
     gt_map = _custom_ground_truth()
     candidate_rows: list[dict[str, Any]] = []
 
     for result_path in sorted(submit_dir.glob("**/result.json")):
-        candidate_rows.extend(_load_candidate_rows(result_path))
+        rows = _load_candidate_rows(result_path)
+        if rows and rows[0]["tool"].strip().lower() in best_only_tools:
+            first = rows[0]
+            payload = json.loads(result_path.read_text(encoding="utf-8"))
+            rows = [
+                {
+                    "result_path": str(result_path),
+                    "tool": first["tool"],
+                    "dataset": first["dataset"],
+                    "seed": first["seed"],
+                    "source": "best_only_forced",
+                    "candidate_file": str(result_path),
+                    "candidate_rank": "best01",
+                    "sample_order": None,
+                    "raw_equation": str(payload.get("equation") or "").strip(),
+                    "parameter_values": None,
+                    "expected_n_features": first["expected_n_features"],
+                }
+            ]
+        candidate_rows.extend(rows)
 
     evaluated_rows: list[dict[str, Any]] = []
     for row in candidate_rows:
@@ -280,7 +321,7 @@ def main() -> None:
     candidates_df["candidate_file"] = candidates_df["candidate_file"].map(
         lambda x: str(Path(x).relative_to(submit_dir))
     )
-    candidates_csv = submit_dir / "topk_ted_candidates.csv"
+    candidates_csv = submit_dir / _build_output_name("topk_ted_candidates", args.output_suffix)
     candidates_df.to_csv(candidates_csv, index=False)
 
     run_summary_rows: list[dict[str, Any]] = []
@@ -308,7 +349,7 @@ def main() -> None:
             }
         )
     run_summary_df = pd.DataFrame(run_summary_rows).sort_values(["dataset", "tool", "seed"])
-    run_summary_csv = submit_dir / "topk_ted_run_summary.csv"
+    run_summary_csv = submit_dir / _build_output_name("topk_ted_run_summary", args.output_suffix)
     run_summary_df.to_csv(run_summary_csv, index=False)
 
     agg_rows: list[dict[str, Any]] = []
@@ -331,7 +372,7 @@ def main() -> None:
             }
         )
     agg_df = pd.DataFrame(agg_rows).sort_values(["dataset", "tool"])
-    agg_csv = submit_dir / "topk_ted_aggregate_summary.csv"
+    agg_csv = submit_dir / _build_output_name("topk_ted_aggregate_summary", args.output_suffix)
     agg_df.to_csv(agg_csv, index=False)
 
     print(f"已写出候选明细: {candidates_csv}")
