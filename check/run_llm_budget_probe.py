@@ -87,7 +87,7 @@ def main():
             exp_name=problem_name,
             niterations=max(1, args.budget // 2),
             samples_per_iteration=2,
-            max_params=12,
+            max_params=10,
             seed=1314,
         )
     else:

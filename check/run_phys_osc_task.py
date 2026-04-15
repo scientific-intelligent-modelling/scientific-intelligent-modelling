@@ -117,7 +117,7 @@ def build_regressor(tool: str, dataset_dir: Path, output_dir: Path, meta: dict, 
             "llm_config_path": str(llm_config_path),
             "niterations": 30,
             "samples_per_iteration": 2,
-            "max_params": 12,
+            "max_params": 10,
         }
         params.update(params_override)
         return SymbolicRegressor(tool, **params, **common)
