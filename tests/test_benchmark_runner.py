@@ -55,6 +55,11 @@ class _FakeRegressor:
         }
 
 
+class _TimeoutFakeRegressor(_FakeRegressor):
+    def fit(self, X, y):
+        raise TimeoutError("fit timeout")
+
+
 class BenchmarkRunnerTest(unittest.TestCase):
     def test_run_benchmark_task_writes_outer_and_experiment_results(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -143,6 +148,40 @@ dataset:
             self.assertEqual(result["status"], "ok")
             self.assertEqual(result["seed"], 1314)
             self.assertNotIn("seed", result["params"])
+
+    def test_run_benchmark_task_maps_timeout_to_timed_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_dir = root / "dataset"
+            dataset_dir.mkdir()
+            (dataset_dir / "metadata.yaml").write_text(
+                """
+dataset:
+  target:
+    name: y
+  features:
+    - name: x0
+""".strip(),
+                encoding="utf-8",
+            )
+            (dataset_dir / "train.csv").write_text("x0,y\n1,1\n2,2\n", encoding="utf-8")
+
+            original_cls = runner.SymbolicRegressor
+            runner.SymbolicRegressor = _TimeoutFakeRegressor
+            try:
+                result_path = runner.run_benchmark_task(
+                    tool_name="pysr",
+                    dataset_dir=dataset_dir,
+                    output_root=root / "bench_results",
+                    seed=1314,
+                )
+            finally:
+                runner.SymbolicRegressor = original_cls
+
+            result = json.loads(result_path.read_text(encoding="utf-8"))
+            self.assertEqual(result["status"], "timed_out")
+            self.assertIn("TimeoutError", result["error"])
+            self.assertTrue(result["experiment_dir"])
 
 
 if __name__ == "__main__":

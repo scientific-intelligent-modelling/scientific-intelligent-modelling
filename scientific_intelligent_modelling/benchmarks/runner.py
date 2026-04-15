@@ -823,6 +823,9 @@ def run_benchmark_task(
         valid_metrics = _evaluate_split(reg, dataset.valid)
         id_metrics = _evaluate_split(reg, dataset.id_test)
         ood_metrics = _evaluate_split(reg, dataset.ood_test)
+    except TimeoutError as exc:
+        status = "timed_out"
+        error = repr(exc)
     except Exception as exc:
         status = "error"
         error = repr(exc)
