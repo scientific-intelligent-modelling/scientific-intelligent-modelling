@@ -36,6 +36,10 @@ print(reg.predict(X[:4]))
 - `binary_operators`, `unary_operators`
 - `parsimony`, `maxsize`, `maxdepth`
 - `verbosity`, `progress`, `random_state`
+- `constraints`, `nested_constraints`
+- `complexity_of_operators`, `complexity_of_constants`, `complexity_of_variables`
+- `max_evals`, `early_stop_condition`
+- `precision`, `deterministic`
 
 > 仅允许白名单内参数，超出参数会直接报错。
 

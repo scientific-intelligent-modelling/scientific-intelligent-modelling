@@ -36,6 +36,17 @@
       "required": false,
       "default": null
     },
+    "max_evals": {
+      "type": "int",
+      "range": "(0, +inf)",
+      "required": false,
+      "default": null
+    },
+    "early_stop_condition": {
+      "type": "float|string",
+      "required": false,
+      "default": null
+    },
     "population_size": {
       "type": "int",
       "range": "(0, +inf)",
@@ -85,6 +96,31 @@
       "required": false,
       "default": null
     },
+    "constraints": {
+      "type": "dict",
+      "required": false,
+      "default": null
+    },
+    "nested_constraints": {
+      "type": "dict",
+      "required": false,
+      "default": null
+    },
+    "complexity_of_operators": {
+      "type": "dict",
+      "required": false,
+      "default": null
+    },
+    "complexity_of_constants": {
+      "type": "int|float",
+      "required": false,
+      "default": null
+    },
+    "complexity_of_variables": {
+      "type": "int|float|list",
+      "required": false,
+      "default": null
+    },
     "binary_operators": {
       "type": "string|list|tuple",
       "required": false,
@@ -130,6 +166,16 @@
       "type": "int",
       "required": false,
       "default": null
+    },
+    "precision": {
+      "type": "int",
+      "required": false,
+      "default": null
+    },
+    "deterministic": {
+      "type": "bool",
+      "required": false,
+      "default": false
     }
   },
   "constraints": {
