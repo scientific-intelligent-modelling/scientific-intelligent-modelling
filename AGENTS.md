@@ -149,3 +149,113 @@ version https://git-lfs.github.com/spec/v1
   2. 通过 `ModelScope + git-lfs` 补齐了最后 `3` 个 `srbench1.0/feynman` 数据集的真实 CSV
 
 - 后续如需在新机器复刻修复，按这两个规则操作，不要直接批量改 metadata。
+
+### 10. 用 `tmux` 起远程任务时，优先直接执行脚本文件，不要把长命令内联给 `tmux`
+
+- **优先做法**：
+
+```bash
+tmux new-session -d -s smoke_xxx /bin/bash /tmp/run_xxx.sh
+```
+
+- 不要优先使用：
+
+```bash
+tmux new-session -d -s smoke_xxx "bash -lc '很长的一串命令 ...'"
+```
+
+- 原因：
+  - 多层 shell 时，命令字符串非常容易被提前吃掉
+  - 表面上 `tmux` 会话已经创建，但 pane 里只剩一个空 `bash`
+  - 这类错误很隐蔽，往往没有日志、没有报告文件，容易误判为算法失败
+
+### 11. 通过 `/tmp/*.py` 调仓库代码时，要显式设置 `PYTHONPATH=.`
+
+- 如果远程临时脚本在：
+  - `/tmp/run_probe_smoke_one.py`
+- 但脚本内部要 `import scientific_intelligent_modelling...`
+- 必须在仓库根目录下执行，并显式带：
+
+```bash
+cd /home/zhangziwen/workplace/scientific-intelligent-modelling
+PYTHONPATH=. conda run -n sim_base python /tmp/run_probe_smoke_one.py ...
+```
+
+- 否则容易出现：
+
+```text
+ModuleNotFoundError: No module named 'scientific_intelligent_modelling...'
+```
+
+- 不要假设：
+  - `cd repo` 之后 Python 会自动把当前仓库加入模块搜索路径
+
+### 12. 临时 smoke / one-shot 任务不要依赖 launcher 内部的路径兜底，优先把 `dataset_dir` 写成远端绝对路径
+
+- launcher 内部已经做过相对路径到远端真实数据目录的映射。
+- 但临时 one-shot 脚本、独立 smoke 脚本、调试脚本未必复用了那层逻辑。
+
+- 因此在远端 smoke CSV 里，优先直接写：
+
+```text
+/home/zhangziwen/sim-datasets-data/...
+```
+
+- 不要依赖：
+
+```text
+sim-datasets-data/...
+```
+
+- 原因：
+  - 临时脚本常常比正式 launcher 少一层路径映射
+  - 很容易出现 `FileNotFoundError`
+  - 这种错误会伪装成“算法没跑起来”
+
+### 13. 从 `iaaccn22` 再去访问 `23~29` 时，优先用内网 IP，不要继续用主机别名
+
+- 在本地可以用：
+  - `iaaccn22`
+  - `iaaccn23`
+  - ...
+
+- 但在 `iaaccn22` 内部再次访问其它机器时，优先用：
+  - `10.10.100.23`
+  - `10.10.100.24`
+  - ...
+
+- 不要优先继续用：
+  - `iaaccn23`
+  - `iaaccn24`
+  - ...
+
+- 原因：
+  - 远端机器自己的 `~/.ssh/config` 可能带跳板、代理或私钥路径
+  - 别名解析后可能再次走外层 hub
+  - 容易出现：
+    - 缺失私钥
+    - 权限拒绝
+    - banner 超时
+    - 明明内网可达却连不上
+
+### 14. 远端批量重试脚本不要直接 `set -e` 串到底
+
+- 对 8 台机器批量起任务、同步脚本、同步切片时：
+  - 单台机器临时连不上是常见情况
+
+- 因此批量重试脚本里：
+  - 单机失败要记录并继续
+  - 不要让第一台失败直接中断整轮分发
+
+- 推荐形式：
+
+```bash
+ssh host '...' || { echo PREP_FAIL host; continue; }
+rsync ... || { echo SYNC_FAIL host; continue; }
+tmux new-session ... && echo STARTED host || echo START_FAIL host
+```
+
+- 适用场景：
+  - 网络抖动
+  - 某几台机器偶发超时
+  - 需要 22 上本地控制器持续重试把剩余机器逐步拉起来
