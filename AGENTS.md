@@ -259,3 +259,66 @@ tmux new-session ... && echo STARTED host || echo START_FAIL host
   - 网络抖动
   - 某几台机器偶发超时
   - 需要 22 上本地控制器持续重试把剩余机器逐步拉起来
+
+### 15. `task_status.jsonl` 里的 `FileNotFoundError` 不一定是数据路径错了，要先看单任务日志
+
+- 在 `pysr` / `subprocess_runner` 这条链路里，如果底层子进程异常退出、没有成功写出 `.result` 文件：
+  - 上层很可能只看到：
+
+```text
+FileNotFoundError(2, 'No such file or directory')
+```
+
+- 这时不要立刻下结论说：
+  - `dataset_dir` 路径错了
+  - 远端缺少数据集目录
+
+- 正确顺序：
+  1. 先看 `__launcher__/logs/*.log`
+  2. 再判断是：
+     - 真正的路径缺失
+     - 还是底层运行时崩了但没写 `.result`
+
+- 这次真实案例里：
+  - `task_status` 表面是 `FileNotFoundError`
+  - 但单任务日志里真正根因是：
+
+```text
+ERROR: ArgumentError: Package Pkg not found in current path.
+```
+
+### 16. 如果远端 `pyjuliapkg_pysr` 连 `import Pkg` 都失败，不要只修 `Project.toml`，直接整目录替换
+
+- 诊断命令：
+
+```bash
+/home/zhangziwen/pyjuliapkg_pysr/pyjuliapkg/install/bin/julia --startup-file=no -e 'import Pkg; println(\"pkg_ok\")'
+```
+
+- 如果这条都失败，说明问题已经不是：
+  - `PySR` 参数
+  - `datasets_to_run.csv`
+  - `Project.toml` 某一项依赖
+
+- 而是：
+  - 远端 Julia 安装/stdlib/共享缓存本身坏了
+
+- 最稳修法：
+  1. 停掉正在跑的 `pysr` 任务
+  2. 备份旧的 `~/pyjuliapkg_pysr`
+  3. 用一份已验证可用的完整缓存整目录覆盖
+  4. 再逐台执行一次：
+
+```bash
+PYTHON_JULIAPKG_PROJECT=/home/zhangziwen/pyjuliapkg_pysr \
+PYTHONPATH=. conda run -n sim_base python -c 'from pysr import PySRRegressor; print("pysr_import_ok")'
+```
+
+  5. 预热成功后再重启全量 probe
+
+- 不要优先做：
+  - 只改 `Project.toml`
+  - 只删 `lock.pid`
+  - 只重试全量任务
+
+- 因为这类坏缓存会让整片任务系统性报错。
