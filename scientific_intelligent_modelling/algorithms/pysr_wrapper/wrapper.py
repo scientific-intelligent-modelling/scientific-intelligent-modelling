@@ -42,6 +42,7 @@ class PySRRegressor(BaseWrapper):
         "random_state",
         "precision",
         "deterministic",
+        "parallelism",
         "procs",
         "n_jobs",
         "run_id",

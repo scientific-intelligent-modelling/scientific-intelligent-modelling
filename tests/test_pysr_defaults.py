@@ -58,3 +58,17 @@ def test_pysr_accepts_advanced_probe_params():
     assert reg.params["complexity_of_variables"] == [1, 1]
     assert reg.params["precision"] == 32
     assert reg.params["deterministic"] is True
+
+
+def test_pysr_accepts_deterministic_parallelism_combo():
+    reg = PySRRegressor(
+        niterations=5,
+        population_size=32,
+        deterministic=True,
+        parallelism="serial",
+        seed=1314,
+    )
+
+    assert reg.params["deterministic"] is True
+    assert reg.params["parallelism"] == "serial"
+    assert reg.params["random_state"] == 1314

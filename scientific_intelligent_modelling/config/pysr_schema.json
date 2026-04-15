@@ -176,6 +176,12 @@
       "type": "bool",
       "required": false,
       "default": false
+    },
+    "parallelism": {
+      "type": "string",
+      "required": false,
+      "default": null,
+      "enum": ["serial", "multithreading", "multiprocessing"]
     }
   },
   "constraints": {
