@@ -196,6 +196,7 @@
 
 - `precision=32`
 - `deterministic=True`
+- `parallelism="serial"`
 - `procs=1`
 
 原因：
@@ -203,6 +204,13 @@
 1. 降低单任务资源占用
 2. 适合大规模并发调度
 3. 减少探针结果中的非必要随机波动
+4. 当前 `PySR` 在 `deterministic=True` 时要求显式使用 `parallelism="serial"`，否则会直接报错
+
+另外：
+
+- 框架层统一传入 `seed`
+- `pysr` wrapper 会自动把 `seed -> random_state`
+- 因此执行脚本中无需额外手写 `random_state`
 
 
 ## 5. `PySR` 推荐 probe 配置
@@ -256,6 +264,7 @@ pysr_probe = dict(
 
     precision=32,
     deterministic=True,
+    parallelism="serial",
 
     model_selection="best",
     progress=True,
