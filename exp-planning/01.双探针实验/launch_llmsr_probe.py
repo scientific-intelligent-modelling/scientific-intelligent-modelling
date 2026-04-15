@@ -64,6 +64,21 @@ def _task_key(row: dict[str, str], seed: int) -> str:
     return f"{row['dataset_dir']}|seed={seed}"
 
 
+def _resolve_dataset_dir(dataset_dir: str) -> str:
+    path = Path(dataset_dir)
+    candidates = []
+    if path.is_absolute():
+        candidates.append(path)
+    else:
+        candidates.append(Path.cwd() / path)
+        candidates.append(Path.home() / path)
+
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate.resolve())
+    return dataset_dir
+
+
 def _should_skip(row: dict[str, str], seed: int, completed: dict[str, dict[str, Any]], retry_failed: bool) -> bool:
     record = completed.get(_task_key(row, seed))
     if not record:
@@ -202,21 +217,30 @@ def _run_task(args: argparse.Namespace) -> None:
     output_root = Path(args.output_root).resolve()
     params = dict(LLMSR_PARAMS)
     params["llm_config_path"] = str(Path(args.llm_config_path).resolve())
-    result_path = run_benchmark_task(
-        tool_name="llmsr",
-        dataset_dir=args.dataset_dir,
-        output_root=str(output_root),
-        seed=args.seed,
-        params_override=params,
-    )
-    result = json.loads(Path(result_path).read_text(encoding="utf-8"))
-    report = {
-        "result_path": str(result_path),
-        "status": result.get("status"),
-        "error": result.get("error"),
-        "seconds": result.get("seconds"),
-        "experiment_dir": result.get("experiment_dir"),
-    }
+    try:
+        result_path = run_benchmark_task(
+            tool_name="llmsr",
+            dataset_dir=_resolve_dataset_dir(args.dataset_dir),
+            output_root=str(output_root),
+            seed=args.seed,
+            params_override=params,
+        )
+        result = json.loads(Path(result_path).read_text(encoding="utf-8"))
+        report = {
+            "result_path": str(result_path),
+            "status": result.get("status"),
+            "error": result.get("error"),
+            "seconds": result.get("seconds"),
+            "experiment_dir": result.get("experiment_dir"),
+        }
+    except Exception as exc:
+        report = {
+            "result_path": None,
+            "status": "error",
+            "error": repr(exc),
+            "seconds": None,
+            "experiment_dir": None,
+        }
     Path(args.report_json).write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
