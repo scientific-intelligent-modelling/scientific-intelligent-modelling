@@ -244,13 +244,13 @@ pysr_probe = dict(
 
 使用：
 
-- `max_params=12`
+- `max_params=10`
 
 原因：
 
-1. 对中低维公式足够灵活
-2. 不至于让参数优化成本过高
-3. 对小样本集更稳，减少过拟合风险
+1. 这是当前 `llmsr` wrapper 和 `main.py` 的默认值。
+2. 对当前这批数据集的绝大多数中低维公式已经足够灵活。
+3. 比更大的参数槽位更稳，更不容易在小样本集上通过常数堆砌过拟合。
 
 另外，当前共享 spec 生成器已经保证：
 
@@ -313,7 +313,7 @@ llmsr_probe = dict(
     timeout_in_seconds=3600,
     niterations=100000,
     samples_per_iteration=4,
-    max_params=12,
+    max_params=10,
 
     background="This is a symbolic regression task. Find a compact mathematical equation that predicts the target from the observed variables.",
 
@@ -402,4 +402,3 @@ llmsr_probe = dict(
 - 给两个归纳偏置差异明显的算法设定统一、稳定、可解释、成本可控的默认工作点
 - 用于对全量数据集进行 probe
 - 从中筛出最具区分度的核心 benchmark
-
