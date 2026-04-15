@@ -8,6 +8,23 @@ from scientific_intelligent_modelling.srkit import llm as srkit_llm
 
 
 class LLMProviderFactoryTest(unittest.TestCase):
+    def test_llmsr_mock_factory_returns_fixed_response_without_network(self):
+        client = llmsr_llm.ClientFactory.from_config(
+            {
+                "model": "mock/fixed",
+                "fixed_response": "    return x0 + params[0]\n",
+                "mock_prompt_tokens": 7,
+                "mock_content_tokens": 3,
+            }
+        )
+        self.assertIsInstance(client, llmsr_llm.MockFixedClient)
+        with mock.patch.object(llmsr_llm.requests, "post") as mocked_post:
+            response = client.chat([{"role": "user", "content": "hello"}])
+        mocked_post.assert_not_called()
+        self.assertEqual(response["content"], "    return x0 + params[0]\n")
+        self.assertEqual(response["tokens"]["prompt"], 7)
+        self.assertEqual(response["tokens"]["content"], 3)
+
     def test_llmsr_deepinfra_factory_defaults(self):
         with mock.patch.dict(os.environ, {"DEEPINFRA_API_KEY": "dummy-deepinfra-key"}, clear=False):
             client = llmsr_llm.ClientFactory.from_config(
