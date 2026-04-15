@@ -79,3 +79,16 @@ def test_llmsr_prompt_default_max_params_is_10():
 
     assert "MAX_NPARAMS = 10" in spec
     assert "MAX_NPARAMS = 12" not in spec
+
+
+def test_spec_builder_clamps_max_params_to_linear_seed_requirement():
+    spec = prompts.build_specification(
+        background="demo background",
+        features=["x0", "x1"],
+        target="y",
+        max_params=2,
+        problem="demo_problem",
+    )
+
+    assert "MAX_NPARAMS = 3" in spec
+    assert "return params[0] + params[1] * x0 + params[2] * x1" in spec

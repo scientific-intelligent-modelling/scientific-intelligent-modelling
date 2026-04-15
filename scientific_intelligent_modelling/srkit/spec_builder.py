@@ -120,6 +120,9 @@ def build_specification(
         raise ValueError("features 不能为空")
 
     cleaned_features = dedup_names([sanitize_name(n) for n in features])
+    # 线性 seed 至少需要：常数项 params[0] + 每个特征一个系数。
+    # 如果调用方把 max_params 设得更小，会导致模板里引用了不存在的 params[k]。
+    effective_max_params = max(int(max_params), len(cleaned_features) + 1)
     target_clean = sanitize_name(target)
     background_text = background.strip() if background else ""
     variables_block = _format_variables_block(
@@ -149,7 +152,7 @@ import numpy as np
 from scipy.optimize import minimize
 
 # Initialize parameters
-MAX_NPARAMS = {max_params}
+MAX_NPARAMS = {effective_max_params}
 params = [1.0]*MAX_NPARAMS
 # 全局变量用于在沙箱中读取 BFGS 结果参数
 BFGS_PARAMS = None
@@ -180,7 +183,7 @@ def evaluate(data: dict) -> float:
 import numpy as np
 
 # Initialize parameters
-MAX_NPARAMS = {max_params}
+MAX_NPARAMS = {effective_max_params}
 params = [1.0]*MAX_NPARAMS
 
 @evaluate.run
