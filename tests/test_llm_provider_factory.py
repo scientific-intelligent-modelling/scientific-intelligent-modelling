@@ -25,6 +25,26 @@ class LLMProviderFactoryTest(unittest.TestCase):
         self.assertEqual(response["tokens"]["prompt"], 7)
         self.assertEqual(response["tokens"]["content"], 3)
 
+    def test_llmsr_mock_pool_factory_cycles_responses_without_network(self):
+        client = llmsr_llm.ClientFactory.from_config(
+            {
+                "model": "mock/pool",
+                "mock_responses": [
+                    "    return x0 + params[0]\n",
+                    "    return x1 + params[0]\n",
+                ],
+            }
+        )
+        self.assertIsInstance(client, llmsr_llm.MockPoolClient)
+        with mock.patch.object(llmsr_llm.requests, "post") as mocked_post:
+            first = client.chat([{"role": "user", "content": "hello"}])
+            second = client.chat([{"role": "user", "content": "hello"}])
+            third = client.chat([{"role": "user", "content": "hello"}])
+        mocked_post.assert_not_called()
+        self.assertEqual(first["content"], "    return x0 + params[0]\n")
+        self.assertEqual(second["content"], "    return x1 + params[0]\n")
+        self.assertEqual(third["content"], "    return x0 + params[0]\n")
+
     def test_llmsr_deepinfra_factory_defaults(self):
         with mock.patch.dict(os.environ, {"DEEPINFRA_API_KEY": "dummy-deepinfra-key"}, clear=False):
             client = llmsr_llm.ClientFactory.from_config(
