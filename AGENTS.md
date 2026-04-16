@@ -383,3 +383,54 @@ sim-datasets-data/...
      - `canonical_artifact`
      - `valid / id_test / ood_test`
   3. 不要先把这类结果判成“彻底不可恢复”
+
+### 19. 一整轮 probe 突然“都不在跑了”，先区分是异常停掉，还是整片任务正常超时收口
+
+- 典型误判：
+  - 看到 `tmux` 没了、`run-task` 也没了，就以为整轮崩了
+
+- 正确排查顺序：
+  1. 先看 `__launcher__/task_status.jsonl`
+  2. 再统计：
+     - `timed_out`
+     - `error`
+     - `ok`
+  3. 最后再看 `controller.log`
+
+- 这次真实案例里：
+  - `iaaccn22~25` 上的 `pysr` 任务全都停了
+  - 真实原因不是 controller 崩溃
+  - 而是 `664 / 664` 全部正常跑到 `timeout_in_seconds=3600` 后收口退出
+
+- 结论：
+  - “整轮不在跑了” 不等于 “异常中断”
+  - 先看状态分布，再判断是否真是事故
+
+### 20. `pysr` 超时恢复后如果“有方程但指标还是空”，优先沿 `hall_of_fame` 找第一条数值稳定候选
+
+- 典型现象：
+  - `result.json` 里：
+    - `equation` 已经有了
+    - `canonical_artifact` 也有了
+    - 但 `valid / id_test / ood_test` 仍然是 `null`
+
+- 常见原因：
+  - 当前恢复出的 loss 最优公式在某些 split 上数值发散，例如：
+    - `log(0)`
+    - 除零
+    - `nan / inf`
+
+- 正确修法：
+  1. 按 `Loss` 升序遍历 `hall_of_fame.csv`
+  2. 若不存在则遍历 `hall_of_fame.csv.bak`
+  3. 对每条候选尝试：
+     - 构造 `canonical_artifact`
+     - 在 `valid / id_test / ood_test` 上做轻量预测
+  4. 选第一条能给出有限预测值的候选作为稳定恢复结果
+
+- 不要默认：
+  - “loss 最低那条一定最适合回填指标”
+
+- 这次真实抽样里：
+  - 多个“有方程但没指标”的数据集
+  - 都能在 `hall_of_fame` 的更低排名候选里找到稳定可评估的公式
