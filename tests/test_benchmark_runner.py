@@ -60,6 +60,11 @@ class _TimeoutFakeRegressor(_FakeRegressor):
         raise TimeoutError("fit timeout")
 
 
+class _TimeoutRecoverableFakeRegressor(_FakeRegressor):
+    def fit(self, X, y):
+        raise TimeoutError("fit timeout")
+
+
 class BenchmarkRunnerTest(unittest.TestCase):
     def test_run_benchmark_task_writes_outer_and_experiment_results(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -182,6 +187,53 @@ dataset:
             self.assertEqual(result["status"], "timed_out")
             self.assertIn("TimeoutError", result["error"])
             self.assertTrue(result["experiment_dir"])
+
+    def test_run_benchmark_task_recovers_timeout_result_from_candidate_artifacts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_dir = root / "dataset"
+            dataset_dir.mkdir()
+            (dataset_dir / "metadata.yaml").write_text(
+                """
+dataset:
+  target:
+    name: y
+  features:
+    - name: x0
+""".strip(),
+                encoding="utf-8",
+            )
+            for name, rows in {
+                "train.csv": "x0,y\n1,1\n2,2\n",
+                "valid.csv": "x0,y\n3,3\n",
+                "id_test.csv": "x0,y\n4,4\n",
+                "ood_test.csv": "x0,y\n5,5\n",
+            }.items():
+                (dataset_dir / name).write_text(rows, encoding="utf-8")
+
+            original_cls = runner.SymbolicRegressor
+            original_extract = runner._extract_periodic_candidate
+            runner.SymbolicRegressor = _TimeoutRecoverableFakeRegressor
+            runner._extract_periodic_candidate = lambda tool, exp_dir: {"equation": "x0", "loss": 0.1}
+            try:
+                result_path = runner.run_benchmark_task(
+                    tool_name="pysr",
+                    dataset_dir=dataset_dir,
+                    output_root=root / "bench_results",
+                    seed=1314,
+                )
+            finally:
+                runner.SymbolicRegressor = original_cls
+                runner._extract_periodic_candidate = original_extract
+
+            result = json.loads(result_path.read_text(encoding="utf-8"))
+            self.assertEqual(result["status"], "timed_out")
+            self.assertEqual(result["equation"], "x0")
+            self.assertIsNotNone(result["canonical_artifact"])
+            self.assertIsNotNone(result["valid"])
+            self.assertIsNotNone(result["id_test"])
+            self.assertIsNotNone(result["ood_test"])
+            self.assertEqual(result["equation_count"], 1)
 
 
 if __name__ == "__main__":

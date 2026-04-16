@@ -353,3 +353,33 @@ sim-datasets-data/...
   - `task_status` 大面积出现 `FileNotFoundError`
   - 表面像是数据集路径全错
   - 实际是 launcher 命中了仓库内不完整的 `repo/sim-datasets-data/...`
+
+### 18. `pysr` 超时后若只写出 `timed_out` 壳结果，先检查恢复链，不要先下结论为“`hall_of_fame` 没了”
+
+- 典型现象：
+  - `task_status.jsonl` / `*.report.json` 全是 `timed_out`
+  - `result.json` 里只有：
+    - `status = timed_out`
+    - `equation = null`
+    - `valid / id_test / ood_test = null`
+
+- 正确排查顺序：
+  1. 先进实验目录检查：
+     - `hall_of_fame.csv`
+     - `hall_of_fame.csv.bak`
+     - `checkpoint.pkl`
+  2. 再判断是：
+     - 文件真的缺失
+     - 还是“超时当下自动恢复失败，但事后仍可恢复”
+
+- 这次真实案例里：
+  - `hall_of_fame.csv` / `.bak` / `checkpoint.pkl` 都在
+  - 手动用 `PySRRegressor(existing_exp_dir=...)` 仍然能恢复出方程
+  - 真正的问题不是“文件丢了”，而是“自动恢复时机过早，没把现成 best result 补写进 `result.json`”
+
+- 修法优先级：
+  1. 优先从 `hall_of_fame.csv`，兜底 `hall_of_fame.csv.bak` 反向恢复 best equation
+  2. 再补写：
+     - `canonical_artifact`
+     - `valid / id_test / ood_test`
+  3. 不要先把这类结果判成“彻底不可恢复”

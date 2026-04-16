@@ -645,6 +645,63 @@ def _build_periodic_snapshot_payload(
     return payload
 
 
+def _recover_timeout_payload_from_candidate(
+    *,
+    tool_name: str,
+    dataset: LoadedDataset,
+    experiment_dir: str | Path | None,
+) -> dict[str, Any] | None:
+    """在训练超时后，直接从实验目录里的已落盘候选恢复可分析结果。
+
+    对 `pysr` 来说，这里会优先利用 `hall_of_fame.csv/.bak`；
+    对其他已接入周期快照的算法，则复用各自的候选提取逻辑。
+    """
+    if not experiment_dir:
+        return None
+
+    candidate = _extract_periodic_candidate(tool_name, experiment_dir)
+    if not candidate:
+        return None
+
+    raw_equation = candidate.get("function") if "function" in candidate else candidate.get("equation")
+    equation = str(raw_equation or "").strip()
+    if not equation:
+        return None
+
+    parameter_values = candidate.get("params") if isinstance(candidate.get("params"), list) else None
+    canonical_artifact, canonical_artifact_error = safe_build_canonical_artifact(
+        tool_name=tool_name,
+        equation=equation,
+        expected_n_features=len(dataset.feature_names),
+        parameter_values=parameter_values,
+    )
+
+    valid_metrics = None
+    id_metrics = None
+    ood_metrics = None
+    if canonical_artifact is not None:
+        try:
+            valid_pred = _predict_from_canonical_artifact(canonical_artifact, dataset.valid.X) if dataset.valid else None
+            id_pred = _predict_from_canonical_artifact(canonical_artifact, dataset.id_test.X) if dataset.id_test else None
+            ood_pred = _predict_from_canonical_artifact(canonical_artifact, dataset.ood_test.X) if dataset.ood_test else None
+            valid_metrics = _evaluate_prediction(dataset.valid, valid_pred)
+            id_metrics = _evaluate_prediction(dataset.id_test, id_pred)
+            ood_metrics = _evaluate_prediction(dataset.ood_test, ood_pred)
+        except Exception as exc:
+            if canonical_artifact_error is None:
+                canonical_artifact_error = repr(exc)
+
+    return {
+        "equation": equation,
+        "equation_count": 1,
+        "canonical_artifact": canonical_artifact,
+        "canonical_artifact_error": canonical_artifact_error,
+        "valid_metrics": valid_metrics,
+        "id_metrics": id_metrics,
+        "ood_metrics": ood_metrics,
+    }
+
+
 def _periodic_snapshot_loop(
     *,
     stop_event: threading.Event,
@@ -826,6 +883,20 @@ def run_benchmark_task(
     except TimeoutError as exc:
         status = "timed_out"
         error = repr(exc)
+        experiment_dir = getattr(reg, "experiment_dir", experiment_dir)
+        recovered_payload = _recover_timeout_payload_from_candidate(
+            tool_name=tool_name,
+            dataset=dataset,
+            experiment_dir=experiment_dir,
+        )
+        if recovered_payload is not None:
+            equation = recovered_payload["equation"]
+            equation_count = recovered_payload["equation_count"]
+            canonical_artifact = recovered_payload["canonical_artifact"]
+            canonical_artifact_error = recovered_payload["canonical_artifact_error"]
+            valid_metrics = recovered_payload["valid_metrics"]
+            id_metrics = recovered_payload["id_metrics"]
+            ood_metrics = recovered_payload["ood_metrics"]
     except Exception as exc:
         status = "error"
         error = repr(exc)
