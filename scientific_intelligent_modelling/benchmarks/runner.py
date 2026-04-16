@@ -28,6 +28,10 @@ from scientific_intelligent_modelling.srkit.regressor import SymbolicRegressor
 _HIDDEN_PARAM_KEYS = {"api_key", "apikey", "token", "password", "secret"}
 _PROGRESS_DIRNAME = "progress"
 _SNAPSHOT_CAPABLE_TOOLS = {"llmsr", "drsr", "pysr", "dso", "pyoperon", "gplearn", "e2esr", "iMCTS", "tpsr", "QLattice"}
+_NEUTRAL_SR_BACKGROUND = (
+    "This is a symbolic regression task. "
+    "Find a compact mathematical equation that predicts the target from the observed variables."
+)
 
 
 @dataclass
@@ -115,6 +119,20 @@ def _build_background(dataset_meta: dict[str, Any], feature_names: list[str]) ->
         feature_descs = feature_names
     feature_text = ", ".join(str(x) for x in feature_descs if x)
     return f"Find the mathematical function skeleton that represents {target_desc}, given data on {feature_text}."
+
+
+def _as_bool(value: Any, default: bool = True) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in {"0", "false", "no", "off"}:
+            return False
+        if text in {"1", "true", "yes", "on"}:
+            return True
+    return bool(value)
 
 
 def load_canonical_dataset(dataset_dir: str | Path) -> LoadedDataset:
@@ -751,11 +769,18 @@ def build_runner_params(
     params.setdefault("exp_name", f"{dataset.dataset_name}_{tool_name}_seed{seed}")
 
     if tool_name in {"llmsr", "drsr"}:
-        params.setdefault("background", _build_background(dataset.metadata, dataset.feature_names))
-        params.setdefault("metadata_path", str(dataset.dataset_dir / "metadata.yaml"))
-        params.setdefault("feature_descriptions", dataset.feature_descriptions)
-        if dataset.target_description:
-            params.setdefault("target_description", dataset.target_description)
+        inject_prompt_semantics = _as_bool(params.get("inject_prompt_semantics"), default=True)
+        if inject_prompt_semantics:
+            params.setdefault("background", _build_background(dataset.metadata, dataset.feature_names))
+            params.setdefault("metadata_path", str(dataset.dataset_dir / "metadata.yaml"))
+            params.setdefault("feature_descriptions", dataset.feature_descriptions)
+            if dataset.target_description:
+                params.setdefault("target_description", dataset.target_description)
+        else:
+            params.setdefault("background", _NEUTRAL_SR_BACKGROUND)
+            params.pop("metadata_path", None)
+            params.pop("feature_descriptions", None)
+            params.pop("target_description", None)
 
     return params
 

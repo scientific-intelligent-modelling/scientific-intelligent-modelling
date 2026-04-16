@@ -20,6 +20,7 @@ LLMSR_PARAMS = {
     "niterations": 100000,
     "samples_per_iteration": 4,
     "max_params": 10,
+    "inject_prompt_semantics": False,
     "background": (
         "This is a symbolic regression task. "
         "Find a compact mathematical equation that predicts the target from the observed variables."

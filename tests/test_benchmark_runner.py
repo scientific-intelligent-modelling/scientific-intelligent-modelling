@@ -235,6 +235,44 @@ dataset:
             self.assertIsNotNone(result["ood_test"])
             self.assertEqual(result["equation_count"], 1)
 
+    def test_build_runner_params_can_disable_prompt_semantics_for_llmsr(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_dir = root / "dataset"
+            dataset_dir.mkdir()
+            (dataset_dir / "metadata.yaml").write_text(
+                """
+dataset:
+  description: hidden semantic description
+  target:
+    name: y
+    description: hidden target
+  features:
+    - name: x0
+      description: hidden feature
+""".strip(),
+                encoding="utf-8",
+            )
+            (dataset_dir / "train.csv").write_text("x0,y\n1,1\n2,2\n", encoding="utf-8")
+
+            dataset = runner.load_canonical_dataset(dataset_dir)
+            params = runner.build_runner_params(
+                "llmsr",
+                dataset,
+                root / "bench_results",
+                seed=1314,
+                params_override={"inject_prompt_semantics": False},
+            )
+
+            self.assertFalse(params["inject_prompt_semantics"])
+            self.assertNotIn("metadata_path", params)
+            self.assertNotIn("feature_descriptions", params)
+            self.assertNotIn("target_description", params)
+            self.assertEqual(
+                params["background"],
+                "This is a symbolic regression task. Find a compact mathematical equation that predicts the target from the observed variables.",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
