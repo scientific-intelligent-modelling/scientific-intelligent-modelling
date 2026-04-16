@@ -106,8 +106,13 @@ def _resolve_dataset_dir(dataset_dir: str) -> str:
     if path.is_absolute():
         candidates.append(path)
     else:
-        candidates.append(Path.cwd() / path)
-        candidates.append(Path.home() / path)
+        if path.parts and path.parts[0] == "sim-datasets-data":
+            # 远端真实数据根优先放在 ~/sim-datasets-data，仓库内同名目录可能只是残缺镜像。
+            candidates.append(Path.home() / path)
+            candidates.append(Path.cwd() / path)
+        else:
+            candidates.append(Path.cwd() / path)
+            candidates.append(Path.home() / path)
 
     for candidate in candidates:
         if candidate.exists():

@@ -322,3 +322,34 @@ PYTHONPATH=. conda run -n sim_base python -c 'from pysr import PySRRegressor; pr
   - 只重试全量任务
 
 - 因为这类坏缓存会让整片任务系统性报错。
+
+### 17. 如果远端仓库内存在 `repo/sim-datasets-data` 残缺镜像，launcher 的 `dataset_dir` 解析必须优先命中 `~/sim-datasets-data`
+
+- 当 `dataset_dir` 形如：
+
+```text
+sim-datasets-data/...
+```
+
+- 远端通常同时存在两份候选路径：
+  1. `repo/sim-datasets-data/...`
+  2. `~/sim-datasets-data/...`
+
+- 如果仓库内那份只是之前同步留下的**局部镜像/残缺目录**，而 launcher 又优先选了它，
+  就会出现：
+  - 目录本身存在
+  - 但 `metadata.yaml` / 某些 split 文件不存在
+  - 上层表现成大量 `FileNotFoundError`
+
+- 正确规则：
+  - 只要 `dataset_dir` 以 `sim-datasets-data/` 开头，
+  - **优先尝试 `Path.home() / dataset_dir`**
+  - 再尝试 `Path.cwd() / dataset_dir`
+
+- 不要默认：
+  - `cwd/path` 在远端永远比 `home/path` 更可信
+
+- 这次真实案例里：
+  - `task_status` 大面积出现 `FileNotFoundError`
+  - 表面像是数据集路径全错
+  - 实际是 launcher 命中了仓库内不完整的 `repo/sim-datasets-data/...`
