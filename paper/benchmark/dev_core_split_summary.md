@@ -396,6 +396,88 @@
 
 这样可以避免 `Core-50` 过度变成“稳定性 failure-mode 测试集”，而保留它作为综合 benchmark 的意义。
 
+## 指标图与解释
+
+下面这 4 张图对应了这次切分最核心的 4 个论点。
+
+### 图 1：Candidate-200 → Master-100 → Dev/Core 的 family 缩放
+
+![Family distribution](figures/dev_core_selection_v1/family_distribution_200_master_dev_core.png)
+
+这张图回答的是：
+
+- **为什么不能直接在 200 个候选上随机切 50/50？**
+- **为什么要先压到 `Master-100`？**
+
+从图里可以直接看到：
+
+- 原始 `200` 个候选里，`srsd` 和 `llm-srbench` 两大族明显过重；
+- `Master-100` 阶段对大族做了收缩；
+- `Dev-50` 与 `Core-50` 在大族和小族上的分配又基本对齐。
+
+所以这张图支撑的是：
+
+- **先做 family 级压缩，再做 matched split，是必要的。**
+
+### 图 2：`selection_mode` 与候选阶段优势标签在 `Master/Dev/Core` 中的分布
+
+![Mode and advantage distribution](figures/dev_core_selection_v1/mode_and_advantage_distribution.png)
+
+这张图回答的是：
+
+- **为什么 `Dev-50` 和 `Core-50` 可以认为是“角色接近”的两个集合？**
+
+从图里可以看到：
+
+- `strict` 在两边都是 `31`
+- `mid-gap` 是 `11 / 12`
+- `one-sided` 是 `5 / 5`
+- `pysr / llmsr` 候选阶段优势标签也是 `34/16` vs `35/15`
+
+所以这张图支撑的是：
+
+- **两边并不是一个偏 `PySR` 主场、一个偏 `LLM-SR` 主场；**
+- **它们在候选角色和方法偏向上是匹配的。**
+
+### 图 3：200 候选上的正式三 seed 方法性能分布
+
+![Method metric distributions](figures/dev_core_selection_v1/method_metric_distributions.png)
+
+这张图回答的是：
+
+- **为什么 `Master-100` 必须看正式结果，而不能只看 probe？**
+
+从图里可以看到：
+
+- `PySR` 在 `ID/OOD NMSE` 上整体更低；
+- `PySR` 的 `OOD R²` 分布也整体更高；
+- `LLM-SR` 在部分样本上能做得不错，但整体 `OOD` 分布明显更弱。
+
+这说明：
+
+- 正式三 seed 结果已经给出了足够清晰的方法差异；
+- `Master-100` 的构建应该以后验正式结果为主，而不是只以前置 probe gap 为主。
+
+### 图 4：可直接比较数据集上的 family 级胜负分布
+
+![Family win distribution](figures/dev_core_selection_v1/family_win_distribution.png)
+
+这张图回答的是：
+
+- **为什么 `Master-100` 不能只按一个全局分数排序？**
+
+从图里可以看到：
+
+- `srsd` 与 `srbench1.0` 更偏向 `PySR`
+- `llm-srbench` 里 `LLM-SR` 仍有大量真实胜利
+- `korns` 甚至整体更偏向 `LLM-SR`
+
+所以这张图支撑的是：
+
+- **不同 family 对两种方法的偏好并不一致；**
+- **如果只按全局排序，`LLM-SR` 主场 family 很容易被过度削弱；**
+- **因此 `Master-100` 必须带 family 配额，而不是单纯 top-k。**
+
 ## 集合规模
 
 - `Master-100 = 100`
