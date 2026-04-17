@@ -7,130 +7,279 @@
 - 强约束：`Master-100` 内 `basename <= 1`，避免同 basename 变体跨集合泄漏。
 - `Core-50` 中 `one-sided` 样本数限制为 `<= 5`。
 
-## 为什么这样选
+## 为什么这样切
 
-### 1. 为什么先做 `Master-100`
+### 1. 这个切分要同时满足的两个目标
 
-- 原始候选池是 `200` 个数据集，已经经过双探针和三 seed 正式实验筛选，但仍然偏大，不适合直接切成 `Dev/Core` 后长期冻结。
-- 因此先用三 seed 正式结果把 `200` 压缩成 `Master-100`，目标是：
-  - 保留高区分度样本；
-  - 保留足够多的 family / subgroup；
-  - 在 `PySR` 优势样本更多的现实前提下，仍给 `LLM-SR` 保留稳定代表。
+这次不是单纯做一个 `Top-100` 排名，而是同时满足两个目标：
 
-### 2. 为什么 `Dev/Core` 切分不用正式结果
+1. **题要选得好**
+   - 从 `200` 个候选里保留更有区分度、覆盖更完整、正式三 seed 结果更可信的一批；
+2. **测试集要切得干净**
+   - 后续会在 `Dev-50` 上做进化，因此 `Core-50` 不能再按正式结果量身定制，否则会污染最终评测。
 
-- 如果切分时继续使用 `priority_score / three_seed_gap / 正式 OOD 指标`，`Core-50` 就会变成按结果量身定制的测试集。
-- 因此 `Dev/Core` 只使用非结果信息：
-  - `family`
-  - `subgroup`
-  - `selection_mode`
-  - `candidate_advantage_side`
-  - `basename`
-  - 特征维度
-  - 各 split 样本量
-  - 静态公式复杂度
-- 这样做的目的是：
-  - `Master-100` 负责“题选得好不好”；
-  - `Dev/Core` 负责“切得干不干净”。
+所以我们把问题拆成两步：
 
-### 3. 为什么要加 `basename <= 1`
+- **第一步：** 用正式结果选 `Master-100`
+- **第二步：** 只用非结果信息，把 `Master-100` 切成 `Dev-50 / Core-50`
 
-- 在原始 `200` 个候选中，存在 `12` 组重复 `basename`，且最大重复次数为 `2`。
-- 如果同 basename 的 dummy / hard / medium 变体同时进入 `Dev` 与 `Core`，后续在 `Dev` 上进化时会引入结构泄漏。
-- 因此我们在整个 `Master-100` 上施加：
-  - `basename <= 1`
-- 最终 `Master-100` 满足：
-  - `max basename multiplicity = 1`
+这就是这版方案的核心理由。
 
-## 数据支撑
+### 2. 为什么先从 200 压到 100
 
-### 原始 200 候选池分布
+原始 `200` 个候选虽然已经比全量 `664` 小很多，但仍然存在三个问题：
 
-- family：
-  - `srsd = 70`
-  - `llm-srbench = 70`
-  - `srbench1.0 = 33`
-  - `korns = 9`
-  - `keijzer = 6`
-  - `nguyen = 6`
-  - `srbench2025 = 6`
-- `selection_mode`：
-  - `strict = 126`
-  - `mid-gap = 40`
-  - `relaxed = 14`
-  - `one-sided = 20`
-- 候选阶段优势标签：
-  - `pysr = 120`
-  - `llmsr = 80`
+1. **大族过重**
+   - `srsd = 70`
+   - `llm-srbench = 70`
+   - 两个大族合起来已经占到 `140 / 200 = 70%`
 
-### `Master-100` 的压缩逻辑
+2. **`strict` 样本过多**
+   - `strict = 126`
+   - 已经超过一半，若直接切 `50/50`，两个集合都会被高 gap 样本主导
 
-- family 目标配额：
-  - `srsd = 34`
-  - `llm-srbench = 30`
-  - `srbench1.0 = 16`
-  - `nguyen = 6`
-  - `keijzer = 6`
-  - `korns = 4`
-  - `srbench2025 = 4`
-- 这组配额的含义是：
-  - 对大族（`srsd` / `llm-srbench`）做近似“减半保留”；
-  - 对中小族（`keijzer / nguyen / srbench2025 / korns`）尽量完整保留；
-  - 保证最终 100 个样本仍覆盖主要题型。
+3. **存在 basename 重复**
+   - 原始 `200` 里有 `12` 组重复 `basename`
+   - 最大重复次数为 `2`
+   - 如果不先清理，后面 `Dev/Core` 很容易出现 dummy / hard / medium 兄弟样本跨集合
 
-- `Master-100` 实际结果：
-  - family：
-    - `srsd = 34`
-    - `llm-srbench = 30`
-    - `srbench1.0 = 16`
-    - `nguyen = 6`
-    - `keijzer = 6`
-    - `korns = 4`
-    - `srbench2025 = 4`
-  - 候选阶段优势标签：
-    - `pysr = 69`
-    - `llmsr = 31`
-  - `selection_mode`：
-    - `strict = 62`
-    - `mid-gap = 23`
-    - `relaxed = 5`
-    - `one-sided = 10`
+因此不能直接在 `200` 上切 `50/50`，必须先压成一个更干净的中间宇宙。
 
-- 这里 `selection_mode` 没有完全达到最初目标值，原因不是脚本失败，而是三个约束共同作用：
-  - `basename <= 1`
-  - family 配额固定
-  - 高优先级样本本身更多集中在 `strict`
+### 3. `Master-100` 是怎么选的
 
-### `Dev-50 / Core-50` 的匹配证据
+#### 3.1 选择原则
 
-- family 分布：
-  - `srsd = 17 / 17`
-  - `llm-srbench = 14 / 16`
-  - `srbench1.0 = 9 / 7`
-  - `nguyen = 3 / 3`
-  - `keijzer = 3 / 3`
-  - `korns = 2 / 2`
-  - `srbench2025 = 2 / 2`
+`Master-100` 阶段允许使用三 seed 正式结果，因为这一步本质上是在回答：
 
-- `selection_mode` 分布：
-  - `strict = 31 / 31`
-  - `mid-gap = 11 / 12`
-  - `relaxed = 3 / 2`
-  - `one-sided = 5 / 5`
+- **“哪些题值得进入最终 benchmark 宇宙？”**
 
-- 候选阶段优势标签：
-  - `Dev-50`: `pysr = 34`, `llmsr = 16`
-  - `Core-50`: `pysr = 35`, `llmsr = 15`
+这里看正式结果是合理的，因为这一步还不是最终测试切分。
 
-- 静态属性均值也比较接近：
-  - `feature_count`：`3.76 vs 3.62`
-  - `train_samples`：`24044.22 vs 23934.44`
-  - `ood_test_samples`：`4930.28 vs 4936.16`
-  - `formula_operator_count`：`220.92 vs 228.18`
+具体做法是：
 
-- 这些数字说明：
-  - `Dev-50` 与 `Core-50` 在来源、标签结构和静态难度代理上都比较接近；
-  - 但 `Core-50` 又没有被正式结果二次定制，因此更适合作最终冻结测试集。
+- 用正式三 seed 结果构造 `priority_score`
+- 高分样本优先
+- 同时施加这三类硬约束：
+  1. family 配额
+  2. `basename <= 1`
+  3. subgroup 软上限
+
+#### 3.2 为什么是这组 family 配额
+
+原始 `200` 的顶层 family 分布是：
+
+- `srsd = 70`
+- `llm-srbench = 70`
+- `srbench1.0 = 33`
+- `korns = 9`
+- `keijzer = 6`
+- `nguyen = 6`
+- `srbench2025 = 6`
+
+我们给 `Master-100` 设定的 family 目标是：
+
+- `srsd = 34`
+- `llm-srbench = 30`
+- `srbench1.0 = 16`
+- `nguyen = 6`
+- `keijzer = 6`
+- `korns = 4`
+- `srbench2025 = 4`
+
+这些数字不是拍脑袋来的，而是基于下面这个缩放逻辑：
+
+- 对**大族**：
+  - `srsd: 70 -> 34`，保留率 `48.6%`
+  - `llm-srbench: 70 -> 30`，保留率 `42.9%`
+  - `srbench1.0: 33 -> 16`，保留率 `48.5%`
+  - 也就是大致“减半保留”，避免前 100 被大族吞掉
+
+- 对**中小族**：
+  - `keijzer: 6 -> 6`，保留率 `100%`
+  - `nguyen: 6 -> 6`，保留率 `100%`
+  - `srbench2025: 6 -> 4`，保留率 `66.7%`
+  - `korns: 9 -> 4`，保留率 `44.4%`
+  - 也就是尽量完整保留本来就不多的题型
+
+这组配额的目的不是“严格按比例抽样”，而是：
+
+- **压缩大族**
+- **保住稀有族**
+- **让最终 100 个样本仍然覆盖主要题型**
+
+#### 3.3 为什么要全局 `basename <= 1`
+
+这是为了防止结构泄漏，不是为了美观。
+
+原始 `200` 个候选里：
+
+- 有 `12` 组重复 `basename`
+- 最大重复次数是 `2`
+
+这些重复大多来自：
+
+- `srsd` 里同一题的 `hard / hard_dummy / medium_dummy` 等变体
+
+如果这些同 basename 变体分散到 `Dev` 和 `Core`，那么：
+
+- 你虽然没有在 `Core-50` 上直接调参
+- 但你在 `Dev-50` 上已经见过几乎同结构的题
+
+这会直接削弱 `Core-50` 的独立性。
+
+因此我们在整个 `Master-100` 上施加：
+
+- **`basename <= 1`**
+
+最终结果也确实满足：
+
+- `Master-100` 中 `duplicate basename groups = 0`
+- `max basename multiplicity = 1`
+
+### 4. 为什么 `Master-100` 的 `selection_mode` 不是原始目标值
+
+原始 `200` 的 `selection_mode` 是：
+
+- `strict = 126`
+- `mid-gap = 40`
+- `relaxed = 14`
+- `one-sided = 20`
+
+最终 `Master-100` 实现成：
+
+- `strict = 62`
+- `mid-gap = 23`
+- `relaxed = 5`
+- `one-sided = 10`
+
+这里很多人第一反应会是：
+
+- “为什么不把 `strict/mid-gap/relaxed/one-sided` 配得更平均？”
+
+答案是：**因为那样会和“去泄漏 + family 覆盖 + 高质量样本优先”直接冲突。**
+
+`strict` 多，不是脚本失控，而是数据本身就更集中在 `strict`：
+
+- 原始 `200` 里就有 `126` 个 `strict`
+- 且高优先级样本大多也集中在 `strict`
+
+如果硬把 `strict` 压得更低，就需要牺牲：
+
+1. family 覆盖
+2. `basename <= 1`
+3. 或者高优先级样本本身
+
+所以这版方案的取舍是：
+
+- **优先守住 family 和 anti-leakage**
+- `selection_mode` 接受“数据自然分布 + 质量优先”后的结果
+
+### 5. 为什么 `Dev/Core` 切分时不能再看正式结果
+
+这一步是整个方案最关键的地方。
+
+如果在切 `Dev-50 / Core-50` 时继续使用：
+
+- `priority_score`
+- `three_seed_gap`
+- `正式 OOD 指标`
+- `final_advantage_side`
+
+那 `Core-50` 就会变成：
+
+- **按正式结果量身定制出来的测试集**
+
+这对后面“在 `Dev-50` 上进化、在 `Core-50` 上评测”的设定是有污染的。
+
+因此切分阶段明确只用**非结果信息**：
+
+- `family`
+- `subgroup`
+- `selection_mode`
+- `candidate_advantage_side`
+- `basename`
+- 特征维度
+- train/valid/id/ood 样本量
+- 静态公式复杂度
+
+换句话说：
+
+- `Master-100` 决定**题值不值得进来**
+- `Dev/Core` 决定**题怎么干净地分开**
+
+### 6. 为什么说 `Dev-50 / Core-50` 是“同分布”的
+
+这里不是空口说“差不多”，而是有明确数据支撑。
+
+#### 6.1 顶层 family 基本对齐
+
+- `srsd = 17 / 17`
+- `llm-srbench = 14 / 16`
+- `srbench1.0 = 9 / 7`
+- `nguyen = 3 / 3`
+- `keijzer = 3 / 3`
+- `korns = 2 / 2`
+- `srbench2025 = 2 / 2`
+
+也就是说：
+
+- 最大差值只有 `2`
+- 大族、中族、小族都没有明显偏到某一侧
+
+#### 6.2 `selection_mode` 基本对齐
+
+- `strict = 31 / 31`
+- `mid-gap = 11 / 12`
+- `relaxed = 3 / 2`
+- `one-sided = 5 / 5`
+
+这说明：
+
+- 两边不仅来源接近
+- 连候选样本在“高 gap / 中 gap / 单边可评估”这类角色上也接近
+
+#### 6.3 候选阶段优势标签基本对齐
+
+- `Dev-50`: `pysr = 34`, `llmsr = 16`
+- `Core-50`: `pysr = 35`, `llmsr = 15`
+
+差值只有 `1`。
+
+所以两边并没有出现：
+
+- 一边几乎全是 `pysr` 主场
+- 一边几乎全是 `llmsr` 主场
+
+#### 6.4 静态难度代理也基本对齐
+
+- `feature_count`: `3.76 vs 3.62`
+- `train_samples`: `24044.22 vs 23934.44`
+- `ood_test_samples`: `4930.28 vs 4936.16`
+- `formula_operator_count`: `220.92 vs 228.18`
+
+这些量虽然不是最终性能，但它们是我们在不看正式结果前提下，能用来近似“问题复杂度”的最稳代理。
+
+这四组数字都很接近，说明：
+
+- 两边的输入维度
+- 数据规模
+- OOD 测试规模
+- 静态公式复杂度
+
+都没有明显偏差。
+
+#### 6.5 `Core-50` 特别控制了 `one-sided`
+
+我们额外加了：
+
+- `Core-50 one-sided <= 5`
+
+最终实现是：
+
+- `Dev-50 one-sided = 5`
+- `Core-50 one-sided = 5`
+
+这样可以避免 `Core-50` 过度变成“稳定性 failure-mode 测试集”，而保留它作为综合 benchmark 的意义。
 
 ## 集合规模
 
