@@ -2,6 +2,8 @@
 import os
 import sys
 from typing import Any, Dict
+from copy import deepcopy
+import tempfile
 
 import numpy as np
 from sympy import sympify, lambdify
@@ -98,22 +100,49 @@ class DSORegressor(BaseWrapper):
             sys.path.insert(0, local_dso_path)
 
         # 仅在需要时导入
-        from dso import DeepSymbolicRegressor
+        from dso import DeepSymbolicOptimizer
         import warnings
         # 过滤掉特定的FutureWarning
         warnings.filterwarnings("ignore", category=FutureWarning, 
                                 message="`BaseEstimator._validate_data` is deprecated")
         
-        if not hasattr(__import__("dso"), "DeepSymbolicRegressor"):
-            raise ImportError("当前 dso 包未提供 DeepSymbolicRegressor，请检查 dso 源码或安装版本。")
+        if not hasattr(__import__("dso"), "DeepSymbolicOptimizer"):
+            raise ImportError("当前 dso 包未提供 DeepSymbolicOptimizer，请检查 dso 源码或安装版本。")
 
         # 创建并训练模型
-        self.model = DeepSymbolicRegressor(config=self.params)
-        self.model.fit(X, y)
+        self.model = DeepSymbolicOptimizer(self.params)
+        fit_config = self._build_fit_config(self.model.config, X, y)
+        self.model.set_config(fit_config)
+        train_result = self.model.train()
+        self.model.program_ = train_result["program"]
         x_arr = np.asarray(X)
         self._dso_n_features = int(x_arr.shape[1]) if x_arr.ndim == 2 else 1
         self._cache_post_fit_state()
         return self
+
+    @staticmethod
+    def _build_fit_config(base_config: Dict[str, Any], X, y) -> Dict[str, Any]:
+        config = deepcopy(base_config)
+        experiment = config.setdefault("experiment", {})
+        logdir = experiment.get("logdir")
+        if not logdir:
+            logdir = tempfile.mkdtemp(prefix="dso-fit-")
+            experiment["logdir"] = logdir
+        os.makedirs(logdir, exist_ok=True)
+        exp_name = experiment.get("exp_name") or "dso_regression"
+        dataset_path = os.path.join(logdir, f"{exp_name}__train.csv")
+        x_arr = np.asarray(X, dtype=float)
+        y_arr = np.asarray(y, dtype=float).reshape(-1, 1)
+        stacked = np.concatenate([x_arr, y_arr], axis=1)
+        np.savetxt(dataset_path, stacked, delimiter=",")
+        config.setdefault("task", {})
+        config["task"]["dataset"] = dataset_path
+        gp_meld = config.get("gp_meld") or {}
+        if gp_meld.get("run_gp_meld"):
+            print("WARNING: GP-meld not yet supported for sklearn interface.")
+        gp_meld["run_gp_meld"] = False
+        config["gp_meld"] = gp_meld
+        return config
 
     def _cache_post_fit_state(self):
         if self.model is None or not hasattr(self.model, "program_"):
@@ -195,7 +224,11 @@ class DSORegressor(BaseWrapper):
             if self._dso_pred_fn is not None:
                 return self._predict_with_cached_fn(X)
             raise ValueError("模型尚未训练，请先调用fit方法")
-        return self.model.predict(X)
+        if hasattr(self.model, "predict"):
+            return self.model.predict(X)
+        if hasattr(self.model, "program_"):
+            return self.model.program_.execute(np.asarray(X))
+        raise ValueError("DSO 模型状态不完整，无法执行 predict")
     
     def get_optimal_equation(self):
         """返回模型拟合的数学方程"""

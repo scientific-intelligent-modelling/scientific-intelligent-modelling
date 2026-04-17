@@ -79,12 +79,13 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 def _load_split(dataset_dir: Path, filename: str, target_name: str) -> DatasetSplit | None:
     split_path = dataset_dir / filename
+    split_name = filename[:-4] if filename.endswith(".csv") else filename
     if not split_path.exists():
         return None
     df = pd.read_csv(split_path)
     if df.empty:
         return DatasetSplit(
-            name=filename.removesuffix(".csv"),
+            name=split_name,
             X=np.empty((0, 0), dtype=float),
             y=np.empty((0,), dtype=float),
             rows=0,
@@ -94,7 +95,7 @@ def _load_split(dataset_dir: Path, filename: str, target_name: str) -> DatasetSp
     X = df.drop(columns=[target_name]).values
     y = df[target_name].values
     return DatasetSplit(
-        name=filename.removesuffix(".csv"),
+        name=split_name,
         X=np.asarray(X),
         y=np.asarray(y).reshape(-1),
         rows=int(len(df)),

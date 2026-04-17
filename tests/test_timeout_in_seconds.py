@@ -17,15 +17,28 @@ def test_strict_wrappers_accept_timeout_meta_param():
     pysr = PySRRegressor(timeout_in_seconds=7, niterations=5, population_size=16)
     assert pysr.params["timeout_in_seconds"] == 7
 
-    operon = OperonRegressor(timeout_in_seconds=9, niterations=4, population_size=16)
+    operon = OperonRegressor(timeout_in_seconds=9.2, niterations=4, population_size=16, allowed_symbols="add,sub,mul,div")
     assert operon.params["max_time"] == 9
     assert operon.params["generations"] == 4
+    assert operon.params["allowed_symbols"] == "add,sub,mul,div,constant,variable"
 
     gplearn = GPLearnRegressor(timeout_in_seconds=11, generations=3, population_size=32)
     assert "timeout_in_seconds" not in gplearn.params
 
     dso = DSORegressor(timeout_in_seconds=13)
     assert "timeout_in_seconds" not in dso.params
+
+
+def test_dso_build_fit_config_preserves_logdir_and_disables_gp_meld():
+    base_config = {
+        "experiment": {"logdir": "/tmp/dso-logdir", "exp_name": "case"},
+        "task": {"task_type": "regression"},
+        "gp_meld": {"run_gp_meld": True},
+    }
+    cfg = DSORegressor._build_fit_config(base_config, [[1.0, 2.0]], [3.0])
+    assert cfg["experiment"]["logdir"] == "/tmp/dso-logdir"
+    assert cfg["task"]["dataset"] == "/tmp/dso-logdir/case__train.csv"
+    assert cfg["gp_meld"]["run_gp_meld"] is False
 
 
 def test_subprocess_runner_handle_fit_strips_timeout_meta_param():

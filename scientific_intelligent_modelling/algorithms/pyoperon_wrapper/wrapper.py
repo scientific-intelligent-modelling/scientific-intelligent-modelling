@@ -127,7 +127,48 @@ class OperonRegressor(BaseWrapper):
             except Exception:
                 pass
 
+        if "max_time" in params:
+            value = params.get("max_time")
+            if value in (None, "", "None"):
+                params.pop("max_time", None)
+            else:
+                try:
+                    value = int(float(value))
+                except Exception as err:
+                    raise TypeError(f"max_time 类型转换失败: {err}") from err
+                if value <= 0:
+                    params.pop("max_time", None)
+                else:
+                    params["max_time"] = value
+
+        if "allowed_symbols" in params:
+            params["allowed_symbols"] = cls._normalize_allowed_symbols(params["allowed_symbols"])
+
         return params
+
+    @staticmethod
+    def _normalize_allowed_symbols(value):
+        if value in (None, "", "None"):
+            return None
+        if isinstance(value, str):
+            items = [item.strip() for item in value.split(",") if item.strip()]
+            if not items:
+                return None
+            if "constant" not in items:
+                items.append("constant")
+            if "variable" not in items:
+                items.append("variable")
+            return ",".join(items)
+        if isinstance(value, (list, tuple, set)):
+            items = [str(item).strip() for item in value if str(item).strip()]
+            if not items:
+                return None
+            if "constant" not in items:
+                items.append("constant")
+            if "variable" not in items:
+                items.append("variable")
+            return ",".join(items)
+        raise TypeError("allowed_symbols 需为逗号分隔字符串或 list/tuple/set")
 
     @classmethod
     def _resolve_progress_state_path(cls, exp_path, exp_name):
