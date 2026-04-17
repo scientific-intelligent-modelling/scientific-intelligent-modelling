@@ -434,3 +434,42 @@ sim-datasets-data/...
 - 这次真实抽样里：
   - 多个“有方程但没指标”的数据集
   - 都能在 `hall_of_fame` 的更低排名候选里找到稳定可评估的公式
+
+### 21. 正式批次巡检前，先确认 `--output-root` 的真实目录布局，不要默认沿用上一轮 probe 的路径模式
+
+- 典型误判：
+  - 看到某台机器的 `task_status.jsonl` 没找到，就以为该机没跑起来
+
+- 这次真实案例里：
+  - probe 批次常见布局是类似：
+
+```text
+.../<host>/<tool>/...
+```
+
+  - 但正式 `formal200_v1_seed520_521_20260417-051058` 这轮，启动脚本传的是：
+
+```text
+--output-root .../pysr/seed520/iaaccn25
+--output-root .../llmsr/seed521/iaaccn29
+```
+
+  - 所以实际目录布局变成了：
+
+```text
+.../<tool>/<seed>/<host>/__launcher__/task_status.jsonl
+```
+
+- 正确排查顺序：
+  1. 先看远端 `/tmp/*_<tool>_seed*.sh` 或 controller 启动脚本里的 `--output-root`
+  2. 再按真实目录模式去找：
+     - `controller.log`
+     - `__launcher__/task_status.jsonl`
+     - `result.json`
+  3. 不要先凭经验假设：
+     - `.../<host>/<tool>/...`
+     - 或 `.../<tool>/<host>/...`
+
+- 结论：
+  - **巡检统计必须以本轮实际 `--output-root` 为准**
+  - 不同批次的目录布局可能不同，不能把上一轮的路径模式直接套到下一轮
