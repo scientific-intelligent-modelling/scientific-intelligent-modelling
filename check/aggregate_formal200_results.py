@@ -83,7 +83,6 @@ def main() -> None:
                 "result_path": str(result_path),
                 "result_status": result.get("status"),
                 "result_error": result.get("error"),
-                "equation": result.get("equation"),
                 "canonical_artifact_present": canonical_artifact is not None,
                 "recovered_after_timeout": result.get("recovered_after_timeout"),
                 "valid_r2": _metric(valid, "r2"),
@@ -252,7 +251,7 @@ def _write_summary(rows: list[dict[str, Any]], output_md: Path, batch_dir: str) 
         family_method[row.get("family") or "unknown"][row["method"]] += 1
         if row.get("id_r2") is not None and row.get("ood_r2") is not None:
             metric_coverage[row["method"]]["full_id_ood"] += 1
-        elif row.get("equation"):
+        elif row.get("canonical_artifact_present"):
             metric_coverage[row["method"]]["equation_only_or_partial"] += 1
         else:
             metric_coverage[row["method"]]["no_equation"] += 1
