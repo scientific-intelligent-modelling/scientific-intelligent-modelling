@@ -413,6 +413,11 @@ def _extract_pysr_periodic_candidate(experiment_dir: str | Path) -> dict[str, An
 
 def _extract_dso_periodic_candidate(experiment_dir: str | Path) -> dict[str, Any] | None:
     base_dir = Path(experiment_dir)
+    state_item = _read_json_file(base_dir / ".dso_current_best.json")
+    if state_item:
+        equation = state_item.get("equation")
+        if isinstance(equation, str) and equation.strip():
+            return state_item
     candidate_paths = sorted(base_dir.glob("*_hof.csv"))
     best_key = None
     best_item = None

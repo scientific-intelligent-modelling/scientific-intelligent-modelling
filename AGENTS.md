@@ -474,6 +474,29 @@ sim-datasets-data/...
   - **巡检统计必须以本轮实际 `--output-root` 为准**
   - 不同批次的目录布局可能不同，不能把上一轮的路径模式直接套到下一轮
 
+### 22. `DSO` 的分钟级快照不要只依赖 `*_hof.csv`，训练中应优先读 `.dso_current_best.json`
+
+- `DSO` 上游默认会在训练结束时一次性写：
+  - `*_hof.csv`
+  - `*_pf.csv`
+- 因此如果 benchmark runner 的周期快照只读 `*_hof.csv`：
+  - 最终结果会有
+  - 但训练中 `minute_0001.json` 往往拿不到候选
+
+- 正确做法：
+  1. 在 `dso_wrapper` 训练循环里，每轮 `train_one_step()` 后把当前 `trainer.p_r_best` 写成：
+
+```text
+.dso_current_best.json
+```
+
+  2. `runner._extract_dso_periodic_candidate(...)` 优先读这个状态文件
+  3. 只有在状态文件不存在时，才退回去读 `*_hof.csv`
+
+- 额外注意：
+  - `DSO` 若要保留日志文件，不能直接复用上游 `DeepSymbolicRegressor.fit()`，因为它会把 `experiment.logdir=None`
+  - benchmark 场景应走 `DeepSymbolicOptimizer.train_one_step()` 循环，并显式保留 `logdir`
+
 ### 22. 验证 `drsr` 落盘时，要把“分钟级中间快照”和“结束结果落盘”分成两个检查点
 
 - 这次在 `iaaccn22` 上的 `drsr` smoke 证明：

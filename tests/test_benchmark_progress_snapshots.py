@@ -179,6 +179,49 @@ class BenchmarkProgressSnapshotsTest(unittest.TestCase):
             self.assertAlmostEqual(payload["id_test"]["rmse"], 0.0, places=10)
             self.assertAlmostEqual(payload["ood_test"]["rmse"], 0.0, places=10)
 
+    def test_build_periodic_snapshot_payload_for_dso_from_state_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_dir = root / "dataset"
+            exp_dir = root / "exp"
+            exp_dir.mkdir(parents=True, exist_ok=True)
+            _write_dataset(dataset_dir)
+
+            (exp_dir / ".dso_current_best.json").write_text(
+                json.dumps(
+                    {
+                        "equation": "2*x0 + 3*x1 + 1",
+                        "score": 1.0,
+                        "complexity": 3,
+                        "iteration": 9,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            dataset = runner.load_canonical_dataset(dataset_dir)
+            payload = runner._build_periodic_snapshot_payload(
+                tool_name="dso",
+                dataset=dataset,
+                params={"training": {"n_samples": 20}},
+                seed=1314,
+                started_at=time.time() - 1800,
+                experiment_dir=exp_dir,
+                checkpoint_index=3,
+            )
+
+            self.assertIsNotNone(payload)
+            self.assertEqual(payload["tool"], "dso")
+            self.assertEqual(payload["status"], "ok")
+            self.assertEqual(payload["source_score"], 1.0)
+            self.assertEqual(payload["source_iteration"], 9)
+            self.assertEqual(
+                payload["canonical_artifact"]["instantiated_expression"],
+                "2*x0 + 3*x1 + 1",
+            )
+            self.assertAlmostEqual(payload["valid"]["rmse"], 0.0, places=10)
+
     def test_build_periodic_snapshot_payload_for_pyoperon_from_state_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -1,9 +1,11 @@
 # tools/gplearn_wrapper/wrapper.py
+import json
 import os
 import sys
 from typing import Any, Dict
 from copy import deepcopy
 import tempfile
+import time
 
 import numpy as np
 from sympy import sympify, lambdify
@@ -13,6 +15,7 @@ from ..base_wrapper import BaseWrapper
 from scientific_intelligent_modelling.benchmarks.normalizers import normalize_dso_artifact
 
 class DSORegressor(BaseWrapper):
+    _PROGRESS_STATE_FILENAME = ".dso_current_best.json"
     _DEFAULT_EXPERIMENT = {
         "logdir": None,
     }
@@ -35,7 +38,10 @@ class DSORegressor(BaseWrapper):
 
     def __init__(self, **kwargs):
         # 延迟导入，避免环境问题
-        self.params = self._build_config(kwargs)
+        raw_kwargs = dict(kwargs or {})
+        self._exp_path = raw_kwargs.get("exp_path")
+        self._exp_name = raw_kwargs.get("exp_name")
+        self.params = self._build_config(raw_kwargs)
         self.model = None
         self._dso_equation = None
         self._dso_expression = None
@@ -43,6 +49,7 @@ class DSORegressor(BaseWrapper):
         self._dso_var_count = 0
         self._dso_input_indices = []
         self._dso_n_features = None
+        self._progress_state_path = self._resolve_progress_state_path(self._exp_path, self._exp_name)
 
     @classmethod
     def _build_config(cls, raw_kwargs):
@@ -113,7 +120,22 @@ class DSORegressor(BaseWrapper):
         self.model = DeepSymbolicOptimizer(self.params)
         fit_config = self._build_fit_config(self.model.config, X, y)
         self.model.set_config(fit_config)
-        train_result = self.model.train()
+        train_result = None
+        if self._progress_state_path:
+            while True:
+                step_result = self.model.train_one_step()
+                self._update_progress_state_from_model()
+                if step_result is not None:
+                    train_result = step_result
+                    break
+                trainer = getattr(self.model, "trainer", None)
+                if trainer is not None and getattr(trainer, "done", False):
+                    break
+        else:
+            train_result = self.model.train()
+
+        if train_result is None and getattr(self.model, "trainer", None) is not None:
+            train_result = self.model.finish()
         self.model.program_ = train_result["program"]
         x_arr = np.asarray(X)
         self._dso_n_features = int(x_arr.shape[1]) if x_arr.ndim == 2 else 1
@@ -143,6 +165,58 @@ class DSORegressor(BaseWrapper):
         gp_meld["run_gp_meld"] = False
         config["gp_meld"] = gp_meld
         return config
+
+    @classmethod
+    def _resolve_progress_state_path(cls, exp_path, exp_name):
+        if not isinstance(exp_path, str) or not exp_path.strip():
+            return None
+        if not isinstance(exp_name, str) or not exp_name.strip():
+            return None
+        return os.path.join(os.path.abspath(exp_path.strip()), exp_name.strip(), cls._PROGRESS_STATE_FILENAME)
+
+    def _write_progress_state(self, payload):
+        if not self._progress_state_path:
+            return
+        try:
+            os.makedirs(os.path.dirname(self._progress_state_path), exist_ok=True)
+            with open(self._progress_state_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    def _refresh_progress_state_path_from_model(self):
+        experiment_cfg = getattr(self.model, "config_experiment", None)
+        if not isinstance(experiment_cfg, dict):
+            return
+        save_path = experiment_cfg.get("save_path")
+        if not isinstance(save_path, str) or not save_path.strip():
+            return
+        self._progress_state_path = os.path.join(os.path.abspath(save_path.strip()), self._PROGRESS_STATE_FILENAME)
+
+    def _update_progress_state_from_model(self):
+        self._refresh_progress_state_path_from_model()
+        trainer = getattr(self.model, "trainer", None)
+        program = getattr(trainer, "p_r_best", None) if trainer is not None else None
+        if program is None:
+            return
+        try:
+            equation = repr(program.sympy_expr)
+        except Exception:
+            equation = None
+        if not isinstance(equation, str) or not equation.strip():
+            return
+        complexity = getattr(program, "complexity", None)
+        reward = getattr(program, "r", None)
+        iteration = getattr(trainer, "iteration", None)
+        self._write_progress_state(
+            {
+                "equation": equation,
+                "score": float(reward) if isinstance(reward, (int, float, np.floating)) else None,
+                "complexity": int(complexity) if isinstance(complexity, (int, float, np.integer, np.floating)) else None,
+                "iteration": int(iteration) if isinstance(iteration, (int, np.integer)) else None,
+                "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
 
     def _cache_post_fit_state(self):
         if self.model is None or not hasattr(self.model, "program_"):
