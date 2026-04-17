@@ -473,3 +473,27 @@ sim-datasets-data/...
 - 结论：
   - **巡检统计必须以本轮实际 `--output-root` 为准**
   - 不同批次的目录布局可能不同，不能把上一轮的路径模式直接套到下一轮
+
+### 22. 验证 `drsr` 落盘时，要把“分钟级中间快照”和“结束结果落盘”分成两个检查点
+
+- 这次在 `iaaccn22` 上的 `drsr` smoke 证明：
+  - 传入 `progress_snapshot_interval_seconds=60` 后，
+  - 外层 `progress/minute_0001.json` 与实验目录内 `progress/minute_0001.json`
+  - 可以正常按分钟落盘
+  - 同时 `drsr` 自身也会持续更新：
+    - `progress.json`
+    - `best_history/`
+
+- 但同一条 smoke 里，`timeout_in_seconds=190` 并**不保证**任务会在约 190 秒时结束并写出 `result.json`。
+  - 真实现象是：
+    - 分钟级快照持续写出
+    - `progress.json` 继续更新
+    - 但超过设定 wall time 后，进程仍可能继续运行，外层 `result.json` 未及时出现
+
+- 因此对 `drsr` 的远程健康检查，至少要拆成两条：
+  1. **长一点的 smoke**：验证 `minute_0001.json / progress.json / best_history` 是否正常出现
+  2. **小预算自然结束 smoke**：单独验证任务能否自然结束并写出最终 `result.json`
+
+- 不要因为“1 分钟快照存在”就默认：
+  - `timeout_in_seconds` 一定已经被正确执行
+  - 或 `result.json` 一定会按时落盘
