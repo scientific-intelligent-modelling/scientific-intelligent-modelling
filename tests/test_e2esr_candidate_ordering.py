@@ -91,3 +91,30 @@ def test_order_candidates_puts_invalid_r2_scores_at_end():
     ordered = reg.order_candidates(None, None, candidates, metric="r2")
 
     assert [item["predicted_tree"] for item in ordered] == ["c", "b", "a", "d"]
+
+
+def test_emit_progress_candidate_can_skip_metric_computation(tmp_path):
+    module = _load_sklearn_wrapper_module()
+    reg = module.SymbolicTransformerRegressor(progress_state_path=str(tmp_path / "state.json"))
+    captured = {}
+
+    class FakeTree:
+        def infix(self):
+            return "x_0 + x_1"
+
+    reg._write_progress_state = lambda payload: captured.update(payload)  # type: ignore[method-assign]
+    reg._safe_tree_metric = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("不应计算指标"))  # type: ignore[method-assign]
+
+    reg._emit_progress_candidate(
+        0,
+        {"predicted_tree": FakeTree(), "refinement_type": "ForwardRaw"},
+        None,
+        None,
+        stage="forward_partial",
+        compute_metrics=False,
+    )
+
+    assert captured["equation"] == "x_0 + x_1"
+    assert captured["loss"] is None
+    assert captured["score"] is None
+    assert captured["stage"] == "forward_partial"
