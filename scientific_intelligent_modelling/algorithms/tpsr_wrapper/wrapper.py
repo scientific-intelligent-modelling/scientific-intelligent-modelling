@@ -11,6 +11,7 @@ import time
 import torch
 import numpy as np
 import shutil
+from typing import Optional
 
 from ..base_wrapper import BaseWrapper
 from scientific_intelligent_modelling.benchmarks.normalizers import normalize_tpsr_artifact
@@ -52,6 +53,10 @@ class TPSRRegressor(BaseWrapper):
         self.params.setdefault("cpu", False)
         self.params.setdefault("train_value", False)
         self.params.setdefault("lam", 0.1)
+        # TPSR 的 reward / refinement 默认会反复在 samples['x_to_fit'] 上做重计算；
+        # 对超大训练集直接使用全量样本会导致内存快速膨胀甚至被 OOM kill。
+        # 这里默认限制用于 reward/refinement 的采样点数，并允许用户显式覆盖。
+        self.params.setdefault("reward_sample_limit", 2048)
 
         # NeSymReS 配置
         self.params.setdefault("nesymres_eq_setting_path", os.path.join("nesymres", "jupyter", "100M", "eq_setting.json"))
@@ -84,6 +89,28 @@ class TPSRRegressor(BaseWrapper):
             tpsr_dir,
             os.path.join(tpsr_dir, "nesymres", "src"),
         ]
+
+    @staticmethod
+    def _downsample_reward_arrays(X, y, limit: Optional[int]):
+        X_arr = np.asarray(X)
+        y_arr = np.asarray(y)
+        if X_arr.ndim == 1:
+            X_arr = X_arr.reshape(-1, 1)
+        if y_arr.ndim > 1:
+            y_arr = y_arr.reshape(-1)
+
+        try:
+            limit_val = int(limit) if limit is not None else None
+        except Exception:
+            limit_val = None
+
+        if not limit_val or limit_val <= 0 or X_arr.shape[0] <= limit_val:
+            return X_arr, y_arr
+
+        # 用等间隔抽样保证可复现，同时避免单纯截前缀导致样本分布偏到训练集头部。
+        indices = np.linspace(0, X_arr.shape[0] - 1, num=limit_val, dtype=int)
+        indices = np.unique(indices)
+        return X_arr[indices], y_arr[indices]
 
     def _set_parser_attr(self, args, name: str, value):
         if value is None:
@@ -811,14 +838,25 @@ class TPSRRegressor(BaseWrapper):
 
             args.cpu = bool(self.params.get("cpu", False))
             args.device = torch.device("cpu") if args.cpu else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            if args.cpu:
+                try:
+                    torch.set_num_threads(1)
+                    torch.set_num_interop_threads(1)
+                except Exception:
+                    pass
 
             equation_env = build_env(args)
 
+            reward_X, reward_y = self._downsample_reward_arrays(
+                X,
+                y,
+                self.params.get("reward_sample_limit"),
+            )
             samples = {
-                "x_to_fit": [np.asarray(X)],
-                "y_to_fit": [np.asarray(y)],
-                "x_to_pred": [np.asarray(X)],
-                "y_to_pred": [np.asarray(y)],
+                "x_to_fit": [np.asarray(reward_X)],
+                "y_to_fit": [np.asarray(reward_y)],
+                "x_to_pred": [np.asarray(reward_X)],
+                "y_to_pred": [np.asarray(reward_y)],
             }
 
             backbone_model = self.params.get("backbone_model", "e2e").lower()
