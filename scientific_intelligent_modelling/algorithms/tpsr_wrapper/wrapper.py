@@ -36,15 +36,17 @@ class TPSRRegressor(BaseWrapper):
 
         # 设置默认参数
         self.params.setdefault("backbone_model", "e2e")
-        self.params.setdefault("max_input_points", 10000)
-        self.params.setdefault("max_number_bags", -1)
+        # 与 vendored 官方 TPSR README / run.sh 对齐：
+        # 默认按 bagging 方式做搜索，每个 bag 200 个点，最多 10 个 bag。
+        self.params.setdefault("max_input_points", 200)
+        self.params.setdefault("max_number_bags", 10)
         self.params.setdefault("stop_refinement_after", 1)
-        self.params.setdefault("n_trees_to_refine", 1)
+        self.params.setdefault("n_trees_to_refine", 10)
         self.params.setdefault("rescale", True)
         self.params.setdefault("beam_size", 10)
         self.params.setdefault("beam_type", "sampling")
         self.params.setdefault("no_seq_cache", False)
-        self.params.setdefault("no_prefix_cache", False)
+        self.params.setdefault("no_prefix_cache", True)
         self.params.setdefault("width", 3)  # Top-k in TPSR's expansion step
         self.params.setdefault("num_beams", 1)  # Beam size in TPSR's evaluation
         self.params.setdefault("rollout", 3)  # Number of rollouts in TPSR
@@ -53,9 +55,9 @@ class TPSRRegressor(BaseWrapper):
         self.params.setdefault("cpu", False)
         self.params.setdefault("train_value", False)
         self.params.setdefault("lam", 0.1)
-        # TPSR 的 reward / refinement 默认会反复在 samples['x_to_fit'] 上做重计算；
-        # 对超大训练集直接使用全量样本会导致内存快速膨胀甚至被 OOM kill。
-        # 这里默认限制用于 reward/refinement 的采样点数，并允许用户显式覆盖。
+        # 这是 benchmark 侧额外加的工程保护，不属于官方 README 的参数：
+        # 即便官方搜索阶段按 bag 运行，我们的 wrapper 仍会在 reward/refinement
+        # 内环做额外稳定性保护，避免超大训练集在 CPU 机上被 OOM kill。
         self.params.setdefault("reward_sample_limit", 2048)
 
         # NeSymReS 配置
@@ -817,11 +819,12 @@ class TPSRRegressor(BaseWrapper):
             self._set_parser_attr(args, "beam_size", int(self.params.get("beam_size", 10)))
             self._set_parser_attr(args, "beam_type", self.params.get("beam_type", "sampling"))
             self._set_parser_attr(args, "no_seq_cache", bool(self.params.get("no_seq_cache", False)))
-            self._set_parser_attr(args, "no_prefix_cache", bool(self.params.get("no_prefix_cache", False)))
+            self._set_parser_attr(args, "no_prefix_cache", bool(self.params.get("no_prefix_cache", True)))
             self._set_parser_attr(args, "width", int(self.params.get("width", 3)))
             self._set_parser_attr(args, "num_beams", int(self.params.get("num_beams", 1)))
             self._set_parser_attr(args, "rollout", int(self.params.get("rollout", 3)))
             self._set_parser_attr(args, "horizon", int(self.params.get("horizon", 200)))
+            self._set_parser_attr(args, "n_trees_to_refine", int(self.params.get("n_trees_to_refine", 10)))
             self._set_parser_attr(args, "seed", int(self.params.get("seed", 23)))
             self._set_parser_attr(args, "debug", bool(self.params.get("debug", False)))
             self._set_parser_attr(args, "beam_length_penalty", float(self.params.get("beam_length_penalty", 1.0)))
@@ -831,7 +834,7 @@ class TPSRRegressor(BaseWrapper):
             self._set_parser_attr(args, "ucb_base", float(self.params.get("ucb_base", 4.0)))
             self._set_parser_attr(args, "cpu", bool(self.params.get("cpu", False)))
             self._set_parser_attr(args, "lam", float(self.params.get("lam", 0.1)))
-            self._set_parser_attr(args, "max_input_points", int(self.params.get("max_input_points", 10000)))
+            self._set_parser_attr(args, "max_input_points", int(self.params.get("max_input_points", 200)))
             self._set_parser_attr(args, "max_number_bags", int(self.params.get("max_number_bags", 10)))
             self._set_parser_attr(args, "rescale", bool(self.params.get("rescale", True)))
             self._set_parser_attr(args, "sample_only", bool(self.params.get("sample_only", False)))

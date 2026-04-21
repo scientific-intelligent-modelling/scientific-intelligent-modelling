@@ -69,3 +69,20 @@ def test_downsample_reward_arrays_keeps_small_inputs_unchanged():
 
     np.testing.assert_array_equal(sampled_X, X)
     np.testing.assert_array_equal(sampled_y, y)
+
+
+def test_tpsr_wrapper_defaults_align_official_bagging_config():
+    module = _load_tpsr_wrapper_module()
+
+    reg = module.TPSRRegressor()
+
+    assert reg.params["max_input_points"] == 200
+    assert reg.params["max_number_bags"] == 10
+    assert reg.params["n_trees_to_refine"] == 10
+    assert reg.params["no_seq_cache"] is False
+    assert reg.params["no_prefix_cache"] is True
+    assert reg.params["width"] == 3
+    assert reg.params["num_beams"] == 1
+    assert reg.params["rollout"] == 3
+    assert reg.params["horizon"] == 200
+    assert reg.params["lam"] == 0.1
