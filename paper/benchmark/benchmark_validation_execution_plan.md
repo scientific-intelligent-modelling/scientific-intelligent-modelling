@@ -53,6 +53,10 @@
 - Hybrid / DSR
 - Transformer-planning
 
+对应的执行与分发建议见：
+
+- [E1_run_matrix.md](./E1_run_matrix.md)
+
 ### 第二层：用于最终 leaderboard 的 10 个算法
 
 - `gplearn`
