@@ -221,7 +221,9 @@ def _controller(args: argparse.Namespace) -> None:
 
 
 def _run_task(args: argparse.Namespace) -> None:
-    from scientific_intelligent_modelling.benchmarks import run_benchmark_task
+    # 直接从 runner 模块导入，避免远端 benchmarks/__init__.py 未及时同步时
+    # 无法从包入口 re-export `run_benchmark_task`。
+    from scientific_intelligent_modelling.benchmarks.runner import run_benchmark_task
 
     output_root = Path(args.output_root).resolve()
     params = json.loads(Path(args.params_json).read_text(encoding="utf-8"))
