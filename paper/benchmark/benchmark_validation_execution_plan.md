@@ -127,6 +127,150 @@
   - `dummy / non-dummy`
   - `source benchmark`
 
+#### `E0` 的方法学边界
+
+`E0` 的默认定位不是：
+
+- **“从 `Candidate-200` 里重新挑一遍 `100`”**
+
+而是：
+
+- **“对当前 `Master-100` 做最小扰动清洗，并在必要时局部补位”**
+
+也就是说，`E0` 的输入固定是当前这版：
+
+- `experiment-results/benchmark_formal200_20260417/dev_core_split_v1/master100_candidates.csv`
+
+`E0` 的职责是把这版 `Master-100` 清洗成：
+
+- `Clean-Master-100`
+
+而不是重新发明一套新的 `200 -> 100` 选择器。
+
+#### 为什么 `E0` 不能直接重选 100
+
+如果 `E0` 一上来就重新从 `Candidate-200` 里整套选 `100`，会导致两个问题：
+
+1. **清洗和重选题边界混淆**
+   - 后面无法清楚回答：到底是在“修正坏样本”，还是在“偷偷改 benchmark”。
+
+2. **测试链路不可追溯**
+   - 一旦 `Master-100` 的成员大范围变化，后续 `E2 / E4` 的解释都会变弱。
+
+因此 `E0` 采用：
+
+- **最小扰动原则**
+
+即：
+
+1. 先把当前 `Master-100` 当作基线；
+2. 只删除明确不该保留的样本；
+3. 再从 `Candidate-200 \\ Master-100` 里做等量补位。
+
+#### `E0` 的标准工作流
+
+1. **冻结当前 `Master-100`**
+   - 不先动 `Candidate-200`
+   - 不先重算 `priority_score`
+
+2. **对整个 `Candidate-200` 做 semantic dedup 审计**
+   - 因为后面补位也要从剩余 `Candidate-200` 中挑
+   - 所以必须先在全局范围知道哪些题本质上是同一公式
+
+3. **在当前 `Master-100` 中标记必须删除的样本**
+   - 这一步默认只删：
+     - semantic duplicate
+     - 明确坏样本 / 结构性异常样本
+
+4. **在剩余 `Candidate-200` 中做局部补位**
+   - 每删一个补一个
+   - 优先保持原来的：
+     - `family`
+     - `subgroup`
+     - `selection_mode`
+     - `candidate_advantage_side`
+     - 静态属性分布
+
+5. **输出 `Clean-Master-100` 并冻结**
+   - 之后的 `E1~E7` 都只基于这版 clean 结果继续做
+
+#### 哪些样本应该在 `E0` 阶段删除
+
+默认只删除两类：
+
+1. **semantic duplicate**
+   - 同一公式在不同 benchmark 源中的重复出现
+   - 例如跨来源 `feynman-i.*` / `feynman_I_*` 这类本质同题样本
+
+2. **结构性坏样本**
+   - 元数据损坏
+   - 公式无法 canonicalize
+   - 数据目录异常
+   - 无法进入后续切分与评估流程
+
+#### 哪些理由不属于 `E0` 的删除条件
+
+以下问题不在 `E0` 阶段处理：
+
+- `quality_score` 不够高
+- `strict` 太多
+- `srsd` 太多
+- `PySR` 优势太强
+- 某个算法单独在这题上表现差
+
+这些属于：
+
+- `E2` 的 selection ablation
+- 或 `E4` 的 representativeness validation
+
+而不是 `E0` 的清洗职责。
+
+#### duplicate group 里保留谁
+
+如果一个 duplicate group 里有多个样本，保留顺序为：
+
+1. `priority_score` 更高
+2. `quality_score` 更高
+3. `stability_score` 更高
+4. `selection_mode` 更优先保留 `strict / mid-gap`
+5. 静态属性更规范、元数据更完整
+6. 若仍相同，再人工选择 benchmark 来源更规范的一项
+
+#### 补位时如何从 `Candidate-200` 里选替补
+
+替补不是简单选“下一个 `priority_score` 最高”，而是做**约束下最近邻补位**。
+
+优先满足：
+
+1. 同 `family`
+2. 同 `subgroup`
+3. 同 `selection_mode`
+4. 同 `candidate_advantage_side`
+5. `feature_count` 接近
+6. `train / id / ood` 样本量接近
+7. `formula_operator_count` 接近
+8. `priority_score` 尽量高
+9. 不与当前 `Clean-Master-100` 形成新的 duplicate
+
+#### `E0` 必须产出的文件
+
+- `clean_master100.csv`
+- `duplicate_groups.csv`
+- `replacement_log.csv`
+- `status_semantics_map.csv`
+- `clean_master100_audit.md`
+
+这些文件分别回答：
+
+- 哪些题被判成同组重复；
+- 哪些题被删、删的理由是什么；
+- 用谁补了回来、为什么是它；
+- 清洗前后 `family / subgroup / selection_mode / advantage` 分布有没有漂移。
+
+#### 一句话定义
+
+> `E0 = 当前 Master-100 的最小扰动清洗与补位，不是重新从 200 里整套挑一遍 100。`
+
 ### `E1`：selection ablation 数据生成
 
 运行对象固定是 `Candidate-200`，因为：
