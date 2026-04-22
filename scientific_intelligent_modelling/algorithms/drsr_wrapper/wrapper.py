@@ -263,6 +263,13 @@ class DRSRRegressor(BaseWrapper):
         }
 
     def fit(self, X, y):
+        self._validate_explicit_dataset_contract(
+            X,
+            n_features=self._n_features,
+            feature_names=self._feature_names,
+            target_name=self._target_name,
+            context="DRSRRegressor.fit",
+        )
         X = np.asarray(X)
         y = np.asarray(y).reshape(-1)
         

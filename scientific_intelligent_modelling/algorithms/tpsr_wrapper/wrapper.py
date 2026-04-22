@@ -23,6 +23,9 @@ class TPSRRegressor(BaseWrapper):
     def __init__(self, **kwargs):
         # 延迟导入，避免环境问题
         self.params = kwargs
+        self._contract_n_features = self.params.get("n_features")
+        self._contract_feature_names = self.params.get("feature_names")
+        self._contract_target_name = self.params.get("target_name")
         self.model = None
         self.best_tree = None
         self.all_trees = []
@@ -900,6 +903,13 @@ class TPSRRegressor(BaseWrapper):
             X: 特征矩阵，形状 (n_samples, n_features)
             y: 目标向量，形状 (n_samples,) 或 (n_samples, 1)
         """
+        self._validate_explicit_dataset_contract(
+            X,
+            n_features=self._contract_n_features,
+            feature_names=self._contract_feature_names,
+            target_name=self._contract_target_name,
+            context="TPSRRegressor.fit",
+        )
         if y.ndim == 1:
             y = y.reshape(-1, 1)
 

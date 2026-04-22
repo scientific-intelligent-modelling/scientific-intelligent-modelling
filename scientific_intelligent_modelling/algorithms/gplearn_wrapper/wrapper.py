@@ -68,6 +68,9 @@ class GPLearnRegressor(BaseWrapper):
         kwargs = dict(kwargs)
         self._exp_path = kwargs.get("exp_path")
         self._exp_name = kwargs.get("exp_name")
+        self._contract_n_features = kwargs.get("n_features")
+        self._contract_feature_names = kwargs.get("feature_names")
+        self._contract_target_name = kwargs.get("target_name")
         # 延迟导入，避免环境问题
         self.params = self._validate_and_normalize_params(kwargs)
         self.model = None
@@ -307,6 +310,13 @@ class GPLearnRegressor(BaseWrapper):
             pass
 
     def fit(self, X, y):
+        self._validate_explicit_dataset_contract(
+            X,
+            n_features=self._contract_n_features,
+            feature_names=self._contract_feature_names,
+            target_name=self._contract_target_name,
+            context="GPLearnRegressor.fit",
+        )
         # 仅在需要时导入
         from gplearn.genetic import SymbolicRegressor as GPLearnSR
         import warnings

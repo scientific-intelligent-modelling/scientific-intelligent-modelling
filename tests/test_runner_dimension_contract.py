@@ -1,5 +1,7 @@
 import unittest
 
+import numpy as np
+
 from scientific_intelligent_modelling.algorithms.drsr_wrapper.wrapper import DRSRRegressor
 from scientific_intelligent_modelling.algorithms.dso_wrapper.wrapper import DSORegressor
 from scientific_intelligent_modelling.algorithms.gplearn_wrapper.wrapper import GPLearnRegressor
@@ -58,6 +60,32 @@ class RunnerDimensionContractTest(unittest.TestCase):
         self.assertEqual(drsr._n_features, 3)
         self.assertEqual(drsr._feature_names, ["x0", "x1", "x2"])
         self.assertEqual(drsr._target_name, "target")
+
+    def test_explicit_contract_rejects_n_features_mismatch(self):
+        X = np.ones((4, 2))
+        y = np.ones(4)
+        reg = LLMSRRegressor(
+            exp_path="/tmp/bench",
+            exp_name="demo",
+            n_features=3,
+            feature_names=["x0", "x1", "x2"],
+            target_name="y",
+        )
+        with self.assertRaisesRegex(ValueError, "显式维度契约不一致"):
+            reg.fit(X, y)
+
+    def test_explicit_contract_rejects_feature_name_length_mismatch(self):
+        X = np.ones((4, 2))
+        y = np.ones(4)
+        reg = DRSRRegressor(
+            exp_path="/tmp/bench",
+            exp_name="demo",
+            n_features=2,
+            feature_names=["x0"],
+            target_name="y",
+        )
+        with self.assertRaisesRegex(ValueError, "feature_names 长度与输入维度不一致"):
+            reg.fit(X, y)
 
 
 if __name__ == "__main__":

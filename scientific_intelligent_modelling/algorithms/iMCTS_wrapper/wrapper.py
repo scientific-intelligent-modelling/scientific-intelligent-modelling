@@ -52,6 +52,9 @@ class iMCTSRegressor(BaseWrapper):
         self.params: Dict[str, Any] = dict(kwargs) if kwargs else {}
         self._exp_path = self.params.get('exp_path')
         self._exp_name = self.params.get('exp_name')
+        self._contract_n_features = self.params.pop("n_features", None)
+        self._contract_feature_names = self.params.pop("feature_names", None)
+        self._contract_target_name = self.params.pop("target_name", None)
 
         # 训练所得的表达式
         self._best_expr_simplified: Optional[str] = None
@@ -99,6 +102,13 @@ class iMCTSRegressor(BaseWrapper):
 
     # ============ 标准 API ============
     def fit(self, X, y):
+        self._validate_explicit_dataset_contract(
+            X,
+            n_features=self._contract_n_features,
+            feature_names=self._contract_feature_names,
+            target_name=self._contract_target_name,
+            context="iMCTSRegressor.fit",
+        )
         X = np.asarray(X)
         y = np.asarray(y).reshape(-1)
         if X.ndim != 2:

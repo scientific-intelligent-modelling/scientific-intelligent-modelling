@@ -53,6 +53,9 @@ class PySRRegressor(BaseWrapper):
     
     def __init__(self, **kwargs):
         kwargs = dict(kwargs)
+        self._contract_n_features = kwargs.get("n_features")
+        self._contract_feature_names = kwargs.get("feature_names")
+        self._contract_target_name = kwargs.get("target_name")
         existing_exp_dir = kwargs.pop("existing_exp_dir", None)
         self.params = self._validate_and_normalize_params(kwargs)
         self.model = None
@@ -156,6 +159,13 @@ class PySRRegressor(BaseWrapper):
         return self.model
     
     def fit(self, X, y):
+        self._validate_explicit_dataset_contract(
+            X,
+            n_features=self._contract_n_features,
+            feature_names=self._contract_feature_names,
+            target_name=self._contract_target_name,
+            context="PySRRegressor.fit",
+        )
         # 必须在导入 pysr/juliacall 前固定线程环境，否则远程多核环境容易过度订阅。
         self._apply_fixed_thread_env()
         # 仅在需要时导入

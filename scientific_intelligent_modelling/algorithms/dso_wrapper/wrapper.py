@@ -41,6 +41,9 @@ class DSORegressor(BaseWrapper):
         raw_kwargs = dict(kwargs or {})
         self._exp_path = raw_kwargs.get("exp_path")
         self._exp_name = raw_kwargs.get("exp_name")
+        self._contract_n_features = raw_kwargs.get("n_features")
+        self._contract_feature_names = raw_kwargs.get("feature_names")
+        self._contract_target_name = raw_kwargs.get("target_name")
         self.params = self._build_config(raw_kwargs)
         self.model = None
         self._dso_equation = None
@@ -103,6 +106,13 @@ class DSORegressor(BaseWrapper):
         return config
     
     def fit(self, X, y):
+        self._validate_explicit_dataset_contract(
+            X,
+            n_features=self._contract_n_features,
+            feature_names=self._contract_feature_names,
+            target_name=self._contract_target_name,
+            context="DSORegressor.fit",
+        )
         # 优先使用子仓库源码，避免环境可复现性差异导致的 editable 安装问题
         repo_root = os.path.dirname(os.path.abspath(__file__))
         local_dso_path = os.path.join(repo_root, "dso", "dso")

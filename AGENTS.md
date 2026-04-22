@@ -551,3 +551,24 @@ max_input_dimension = 4
 - 不要因为“1 分钟快照存在”就默认：
   - `timeout_in_seconds` 一定已经被正确执行
   - 或 `result.json` 一定会按时落盘
+
+### 23. runner 必须显式注入数据契约，wrapper 必须在 `fit()` 入口校验契约与真实输入一致
+
+- 对所有 benchmark 任务：
+  - `runner.build_runner_params()` 必须统一显式注入：
+    - `n_features`
+    - `feature_names`
+    - `target_name`
+
+- 不要只依赖：
+  - wrapper 从 `X.shape[1]` 隐式猜维度
+
+- 对所有 wrapper：
+  - 若接收到上述字段，必须在 `fit(X, y)` 入口先校验：
+    - `n_features == X.shape[1]`
+    - `len(feature_names) == X.shape[1]`
+    - `target_name` 为非空字符串
+
+- 对严格白名单或会透传到底层库的 wrapper：
+  - 必须先显式吸收这些元参数
+  - 不要让它们作为未知参数透传给第三方库

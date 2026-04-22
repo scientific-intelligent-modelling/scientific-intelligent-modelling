@@ -32,6 +32,9 @@ class QLatticeRegressor(BaseWrapper):
 
     def __init__(self, **kwargs) -> None:
         self.params = dict(kwargs)
+        self._contract_n_features = self.params.pop("n_features", None)
+        self._contract_feature_names = self.params.pop("feature_names", None)
+        self._contract_target_name = self.params.pop("target_name", None)
         self.model = None
         self._exp_path = self.params.get("exp_path")
         self._exp_name = self.params.get("exp_name")
@@ -151,6 +154,13 @@ class QLatticeRegressor(BaseWrapper):
     def fit(self, X, y):
         """训练 QLattice 模型并缓存最优与候选表达式。"""
         import feyn
+        self._validate_explicit_dataset_contract(
+            X,
+            n_features=self._contract_n_features,
+            feature_names=self._contract_feature_names,
+            target_name=self._contract_target_name,
+            context="QLatticeRegressor.fit",
+        )
 
         X = np.asarray(X)
         y = np.asarray(y).reshape(-1)
@@ -160,7 +170,7 @@ class QLatticeRegressor(BaseWrapper):
         # 构造 DataFrame
         n_features = X.shape[1]
         self._input_vars = [f"x{i}" for i in range(n_features)]
-        self._output_name = self.params.get('output_name', 'y')
+        self._output_name = self.params.get('output_name', self._contract_target_name or 'y')
         df = pd.DataFrame(X, columns=self._input_vars)
         df[self._output_name] = y
 

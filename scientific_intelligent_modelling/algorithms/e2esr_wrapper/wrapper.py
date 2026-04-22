@@ -65,6 +65,9 @@ class E2ESRRegressor(BaseWrapper):
             'force_cpu': force_cpu,
             **kwargs
         }
+        self._contract_n_features = self.params.pop("n_features", None)
+        self._contract_feature_names = self.params.pop("feature_names", None)
+        self._contract_target_name = self.params.pop("target_name", None)
         self.model = None
         self.regressor = None
         self.best_tree = None
@@ -140,6 +143,13 @@ class E2ESRRegressor(BaseWrapper):
         否则创建一个新模型
         """
         try:
+            self._validate_explicit_dataset_contract(
+                X,
+                n_features=self._contract_n_features,
+                feature_names=self._contract_feature_names,
+                target_name=self._contract_target_name,
+                context="E2ESRRegressor.fit",
+            )
             self.n_features_ = int(np.asarray(X).shape[1]) if np.asarray(X).ndim == 2 else 1
             # 导入E2ESR相关模块
             from symbolicregression.model import SymbolicTransformerRegressor

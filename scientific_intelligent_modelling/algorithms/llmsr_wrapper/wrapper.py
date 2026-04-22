@@ -212,6 +212,13 @@ class LLMSRRegressor(BaseWrapper):
         2. 构造子仓库 LLMSRRegressor 并调用其 fit()；
         3. 记录实验目录 exp_dir，后续通过 serialize()/deserialize() 持久化。
         """
+        self._validate_explicit_dataset_contract(
+            X,
+            n_features=self._n_features,
+            feature_names=self._feature_names,
+            target_name=self._target_name,
+            context="LLMSRRegressor.fit",
+        )
         X_arr = np.asarray(X)
         y_arr = np.asarray(y).reshape(-1)
         if X_arr.ndim == 1:

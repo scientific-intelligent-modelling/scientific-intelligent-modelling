@@ -70,6 +70,9 @@ class OperonRegressor(BaseWrapper):
         raw_kwargs = dict(kwargs)
         self._exp_path = raw_kwargs.get("exp_path")
         self._exp_name = raw_kwargs.get("exp_name")
+        self._contract_n_features = raw_kwargs.get("n_features")
+        self._contract_feature_names = raw_kwargs.get("feature_names")
+        self._contract_target_name = raw_kwargs.get("target_name")
         self.params = self._validate_and_normalize_params(raw_kwargs)
         self.model = None
         self._progress_state_path = self._resolve_progress_state_path(self._exp_path, self._exp_name)
@@ -237,6 +240,13 @@ class OperonRegressor(BaseWrapper):
 
     def fit(self, X, y):
         from pyoperon.sklearn import SymbolicRegressor
+        self._validate_explicit_dataset_contract(
+            X,
+            n_features=self._contract_n_features,
+            feature_names=self._contract_feature_names,
+            target_name=self._contract_target_name,
+            context="OperonRegressor.fit",
+        )
         X = np.asarray(X)
         self.n_features_ = int(X.shape[1]) if X.ndim == 2 else 1
         params = dict(self.params)
