@@ -252,11 +252,97 @@ class TPSRRegressor(BaseWrapper):
         except Exception:
             return None
 
+    @staticmethod
+    def _resolve_feature_dimension(X) -> int:
+        X_arr = np.asarray(X)
+        if X_arr.ndim <= 1:
+            return 1
+        return int(X_arr.shape[1])
+
+    @staticmethod
+    def _extract_variable_indices(equation: str) -> set[int]:
+        text = "" if equation is None else str(equation)
+        matches = set()
+        for match in re.finditer(r"\bx_(\d+)\b|\bx(\d+)\b", text):
+            idx_text = match.group(1) or match.group(2)
+            try:
+                matches.add(int(idx_text))
+            except Exception:
+                continue
+        # 兼容 one-based 变量表示：若表达式中完全没有 x0/x_0，
+        # 但存在 x1/x_1, x2/x_2 ...，则统一平移为零基索引再做合法性检查。
+        has_zero_based = bool(re.search(r"\bx_?0\b", text))
+        if matches and not has_zero_based and min(matches) >= 1:
+            matches = {idx - 1 for idx in matches}
+        return matches
+
+    @classmethod
+    def _equation_within_feature_budget(cls, equation: str, n_features: Optional[int]) -> bool:
+        if n_features is None:
+            return True
+        if n_features <= 0:
+            return False
+        indices = cls._extract_variable_indices(equation)
+        return all(idx < int(n_features) for idx in indices)
+
+    @classmethod
+    def _project_equation_to_feature_budget(cls, equation: str, n_features: Optional[int]) -> str:
+        """将超出当前任务维度的变量投影为 0。
+
+        TPSR 预训练模型工作在固定的大词表上，候选里可能出现 `x_9` 这类
+        当前任务并不存在的变量。集成层不应把这类 token 直接暴露给 runner；
+        这里按 wrapper 现有预测语义，把越界变量视为缺失特征并投影为 0。
+        """
+        text = "" if equation is None else str(equation)
+        if n_features is None:
+            return text
+        try:
+            budget = int(n_features)
+        except Exception:
+            return text
+        if budget <= 0:
+            return text
+
+        has_zero_based = bool(re.search(r"\bx_?0\b", text))
+
+        def _replace(match):
+            original = match.group(0)
+            idx_text = match.group(1) or match.group(2)
+            try:
+                idx = int(idx_text)
+            except Exception:
+                return original
+
+            if has_zero_based:
+                return original if idx < budget else "0"
+            return original if idx <= budget else "0"
+
+        return re.sub(r"\bx_(\d+)\b|\bx(\d+)\b", _replace, text)
+
+    def _capture_runtime_feature_context(self, X) -> int:
+        """记录当前任务的真实输入维度。
+
+        注意：TPSR 的预训练模型与环境词表绑定，不能直接把环境词表从
+        默认 10 维强行缩到当前数据集维度，否则会破坏解码器与词表的一致性。
+        因此这里仅记录真实特征数，后续在集成层过滤越界变量候选。
+        """
+        n_features = self._resolve_feature_dimension(X)
+        self._n_features = n_features
+        self._predict_variable_names = [f"x_{i}" for i in range(n_features)]
+        return n_features
+
+    def _is_current_task_equation_valid(self, equation: str) -> bool:
+        return self._equation_within_feature_budget(equation, self._n_features)
+
     def _emit_progress_equation(self, *, equation, score=None, complexity=None, source=None):
         if not isinstance(equation, str) or not equation.strip():
             return
+        projected = self._project_equation_to_feature_budget(equation, self._n_features)
+        normalized = self._normalize_equation(projected)
+        if not self._is_current_task_equation_valid(normalized):
+            return
         payload = {
-            "equation": self._normalize_equation(equation),
+            "equation": normalized,
             "score": float(score) if isinstance(score, (int, float, np.floating)) else None,
             "complexity": int(complexity) if isinstance(complexity, (int, float, np.integer, np.floating)) else None,
             "source": source,
@@ -349,7 +435,11 @@ class TPSRRegressor(BaseWrapper):
         if not expr_text:
             return None
 
+        expr_text = self._project_equation_to_feature_budget(expr_text, len(variable_names))
         expr_text = self._normalize_equation(expr_text)
+        if not self._equation_within_feature_budget(expr_text, len(variable_names)):
+            print("TPSR 表达式变量索引越界，拒绝构造在线预测函数")
+            return None
         try:
             import sympy as sp
 
@@ -549,13 +639,16 @@ class TPSRRegressor(BaseWrapper):
         seen = set()
         self.all_trees = []
         for expr in candidate_exprs:
-            normalized = self._normalize_equation(expr)
+            projected = self._project_equation_to_feature_budget(expr, self._n_features)
+            normalized = self._normalize_equation(projected)
+            if not self._is_current_task_equation_valid(normalized):
+                continue
             if normalized not in seen:
                 seen.add(normalized)
                 self.all_trees.append(normalized)
 
         if not self.all_trees:
-            raise RuntimeError("TPSR 未生成任何有效候选方程")
+            raise RuntimeError("TPSR 未生成任何当前任务维度下合法的候选方程")
 
         self.best_tree = self.all_trees[0]
         self.model = model
@@ -757,12 +850,30 @@ class TPSRRegressor(BaseWrapper):
             print("NeSymReS 奖励无法计算，回退到预训练候选表达式")
 
         self.best_tree = mcts_expr
-        self.all_trees = self._normalize_equation_list(all_preds)
+        self.all_trees = []
+        for expr in self._normalize_equation_list(all_preds):
+            projected = self._project_equation_to_feature_budget(expr, self._n_features)
+            normalized = self._normalize_equation(projected)
+            if self._is_current_task_equation_valid(normalized):
+                self.all_trees.append(normalized)
         if baseline_expr and baseline_expr not in self.all_trees:
-            self.all_trees.append(self._normalize_equation(baseline_expr))
+            normalized_baseline = self._normalize_equation(
+                self._project_equation_to_feature_budget(baseline_expr, self._n_features)
+            )
+            if self._is_current_task_equation_valid(normalized_baseline):
+                self.all_trees.append(normalized_baseline)
 
         if mcts_expr is None and self.all_trees:
             mcts_expr = self.all_trees[0]
+
+        if isinstance(mcts_expr, str):
+            normalized_mcts = self._normalize_equation(
+                self._project_equation_to_feature_budget(mcts_expr, self._n_features)
+            )
+            if self._is_current_task_equation_valid(normalized_mcts):
+                mcts_expr = normalized_mcts
+            else:
+                mcts_expr = self.all_trees[0] if self.all_trees else None
 
         self.model = model
         self._n_features = X.shape[1]
@@ -838,6 +949,7 @@ class TPSRRegressor(BaseWrapper):
             self._set_parser_attr(args, "max_number_bags", int(self.params.get("max_number_bags", 10)))
             self._set_parser_attr(args, "rescale", bool(self.params.get("rescale", True)))
             self._set_parser_attr(args, "sample_only", bool(self.params.get("sample_only", False)))
+            self._capture_runtime_feature_context(X)
 
             args.cpu = bool(self.params.get("cpu", False))
             args.device = torch.device("cpu") if args.cpu else torch.device("cuda" if torch.cuda.is_available() else "cpu")

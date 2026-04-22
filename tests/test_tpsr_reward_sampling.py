@@ -86,3 +86,57 @@ def test_tpsr_wrapper_defaults_align_official_bagging_config():
     assert reg.params["rollout"] == 3
     assert reg.params["horizon"] == 200
     assert reg.params["lam"] == 0.1
+
+
+def test_tpsr_runtime_feature_context_tracks_current_dataset():
+    module = _load_tpsr_wrapper_module()
+
+    reg = module.TPSRRegressor(max_input_dimension=10)
+    X = np.arange(20, dtype=float).reshape(5, 4)
+
+    n_features = reg._capture_runtime_feature_context(X)
+
+    assert n_features == 4
+    assert reg._n_features == 4
+    assert reg._predict_variable_names == ["x_0", "x_1", "x_2", "x_3"]
+
+
+def test_tpsr_progress_state_projects_out_of_range_variables_to_zero():
+    module = _load_tpsr_wrapper_module()
+
+    reg = module.TPSRRegressor()
+    reg._n_features = 4
+    written = []
+    reg._write_progress_state = written.append
+
+    reg._emit_progress_equation(
+        equation="x_0 + x_9",
+        score=1.0,
+        complexity=3,
+        source="unit_test",
+    )
+    assert len(written) == 1
+    assert written[0]["equation"] == "x_0 + 0"
+
+    written.clear()
+    reg._emit_progress_equation(
+        equation="x_0 + x_3",
+        score=1.0,
+        complexity=3,
+        source="unit_test",
+    )
+    assert len(written) == 1
+    assert written[0]["equation"] == "x_0 + x_3"
+
+
+def test_tpsr_variable_budget_accepts_one_based_tokens():
+    module = _load_tpsr_wrapper_module()
+
+    assert module.TPSRRegressor._equation_within_feature_budget("x_1 + x_4", 4) is True
+    assert module.TPSRRegressor._equation_within_feature_budget("x_1 + x_5", 4) is False
+
+
+def test_tpsr_projects_out_of_range_one_based_tokens_to_zero():
+    module = _load_tpsr_wrapper_module()
+
+    assert module.TPSRRegressor._project_equation_to_feature_budget("x_1 + x_5", 4) == "x_1 + 0"
