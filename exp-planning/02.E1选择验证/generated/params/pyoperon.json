@@ -1,0 +1,7 @@
+{
+  "timeout_in_seconds": 3600,
+  "progress_snapshot_interval_seconds": 60,
+  "population_size": 1000,
+  "niterations": 1000000,
+  "n_threads": 1
+}
