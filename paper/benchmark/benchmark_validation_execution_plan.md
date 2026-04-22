@@ -1,0 +1,322 @@
+# Benchmark 验证阶段执行计划表
+
+## 目标
+
+这份计划不是再解释 `664 → 200 → 100` 的原则，而是把后续真正要做的验证实验落成**可执行任务表**。
+
+核心目标有三个：
+
+1. 证明 `664 → 200 → 100` 这条筛选链不是拍脑袋；
+2. 证明未来的 `Core-50` 能代表 `Clean-Master-100`；
+3. 在不污染测试集的前提下，冻结 `Dev-50 / Core-50` 并跑出最终 benchmark leaderboard。
+
+## 冻结输入
+
+以下输入在进入本计划后默认冻结，不再边跑边改：
+
+- `Candidate-200`
+  - 来源：`/tmp/candidate_seeds_200_v3.json`
+- 正式三种子结果
+  - `experiment-results/benchmark_formal200_20260417/three_seed_formal_task_results.csv`
+  - `experiment-results/benchmark_formal200_20260417/three_seed_formal_dataset_method_summary.csv`
+  - `experiment-results/benchmark_formal200_20260417/three_seed_formal_dataset_compare.csv`
+- 当前 `Master-100 / Dev-50 / Core-50`
+  - `experiment-results/benchmark_formal200_20260417/dev_core_split_v1/`
+
+后续允许新生成：
+
+- `Clean-Master-100`
+- `benchmark_dev50_v2`
+- `benchmark_core50_v2`
+
+但**不允许**在看到下游实验结果后，再回头改 `Candidate-200` 的成员。
+
+## 算法分层
+
+### 第一层：用于 selection ablation 的 6 个代表性算法
+
+这一步不需要 10 个算法全上，只需要覆盖主要方法家族：
+
+- `gplearn`：经典 GP 基线
+- `pysr`：现代演化/符号回归主力
+- `pyoperon`：现代树搜索 EA
+- `llmsr`：LLM-based SR
+- `drsr`：LLM-hybrid / DSR
+- `tpsr`：Transformer + planning
+
+这 6 个算法足以覆盖：
+
+- GP / EA
+- LLM-based
+- Hybrid / DSR
+- Transformer-planning
+
+### 第二层：用于最终 leaderboard 的 10 个算法
+
+- `gplearn`
+- `pysr`
+- `pyoperon`
+- `llmsr`
+- `drsr`
+- `dso`
+- `tpsr`
+- `e2esr`
+- `QLattice`
+- `iMCTS`
+
+## 统一运行口径
+
+除非某个算法后续经验证必须例外，否则统一使用：
+
+- `seed`
+  - selection / representativeness 阶段：`1 seed`
+  - final leaderboard 阶段：`3 seeds`
+- `timeout_in_seconds = 3600`
+- `progress_snapshot_interval_seconds = 60`
+- 统一记录：
+  - `task_status.jsonl`
+  - `experiment_dir/result.json`
+  - 每分钟快照
+
+说明：
+
+- `3600s` 不是因为它绝对最优，而是因为当前已有：
+  - `pysr / llmsr` 三种子正式结果
+  - 是按统一 `1h` 口径整理过的
+- 为了保证和现有材料可比，后续验证优先沿用这套统一预算。
+
+## 实验计划表
+
+| 实验ID | 名称 | 目的 | 输入 | 算法 | seeds | 预算 | 新任务量 | 主要输出 | 通过/停止准则 |
+|---|---|---|---|---|---|---|---:|---|---|
+| `E0` | `Clean-Master-100` 清洗 | 去掉 semantic duplicate，统一状态语义，补非结果标签 | `Master-100` | 无新训练 | 无 | 无 | `0` | `clean_master100.csv`、`duplicate_report.csv`、状态重标表 | `basename` 全局唯一；semantic duplicate=0；状态标签统一 |
+| `E1` | `100` 选择 ablation 数据生成 | 为 `Current-100 / Gap-only-100 / Quality-first-100 / Metadata-diverse-100` 提供统一评估底座 | `Candidate-200` | 6 算法 | `1` | `1h` | `1200` | `candidate200_6algo_1seed_task_results.csv` | 6 算法在 200 上至少 `95%` 任务有有效结果；否则先修工具再继续 |
+| `E2` | `100` 选择策略离线比较 | 证明当前 `Master-100` 不是随便挑的，而是在 discrimination / stability / coverage 上 trade-off 最优 | `E1` 输出 + `Clean-Master-100` | 离线 | 无 | 无 | `0` | `selection_ablation_summary.csv`、`selection_ablation.md` | `Current-100` 不被其它策略在主要指标上严格支配 |
+| `E3` | `Clean-Master-100` 轻量全算法验证 | 生成 “50 是否代表 100” 的参考母集 | `Clean-Master-100` | 10 算法 | `1` | `1h` | `400*` | `clean_master100_10algo_1seed_*` | 10 算法中大多数可完成；允许少量超时，但必须有可用输出 |
+| `E4` | `50` 代表性离线验证 | 比较 `Core-50` 与其它 `50` 选法是否最能代表 `Clean-Master-100` | `E3` 输出 | 离线 | 无 | 无 | `0` | `core50_representativeness.csv`、相关性图、bootstrap CI 图 | `Core-50` 在 `Spearman/Kendall/pairwise agreement` 上优于基线 `50` |
+| `E5` | 冻结 `Dev-50 / Core-50` | 基于 `Clean-Master-100` 的非结果属性重新切分并冻结正式集合 | `Clean-Master-100` | 无新训练 | 无 | 无 | `0` | `benchmark_dev50_v2.csv`、`benchmark_core50_v2.csv`、`split_audit_report.md` | family 精确半分或差值 `<=1`；`Core one-sided <=5`；静态属性分布匹配 |
+| `E6` | 最终 leaderboard | 在冻结后的 `Core-50` 上跑论文主榜 | `benchmark_core50_v2.csv` | 10 算法 | `3` | `1h` | `1500` | `leaderboard_core50.csv`、radar、Pareto、family breakdown 图 | 所有算法结果收齐；主榜和分解图可复现 |
+| `E7` | robustness ablation | 回答 reviewer 会问的“是不是被某类题主导了” | `E6` 输出 | 离线 | 无 | 无 | `0` | leave-one-family-out、去掉 `one-sided`、去掉 `srsd` 的对照表和图 | 排名主结论不应在单一 ablation 下完全翻转 |
+
+> `E3` 的新任务量写成 `400*`，因为它默认复用 `E1` 里已经在 `Candidate-200` 上跑过的 6 算法结果。  
+> 对 `Clean-Master-100` 而言，新增只需要补：
+> - 剩余 `4` 个算法
+> - `4 × 100 × 1 seed = 400` 个新任务  
+> 若复用失败，则 `E3` 上限为 `1000` 个新任务。
+
+## 每个实验的详细交付物
+
+### `E0`：`Clean-Master-100`
+
+必须额外交付：
+
+- `canonical_formula_hash`
+- `structure_hash`
+- `semantic_duplicate_group`
+- `status_semantics`
+  - `ok_full`
+  - `budget_exhausted_with_output`
+  - `partial_output`
+  - `no_valid_output`
+- 静态标签：
+  - `family`
+  - `subgroup`
+  - `feature_count`
+  - `train/valid/id/ood samples`
+  - `formula_operator_count`
+  - `dummy / non-dummy`
+  - `source benchmark`
+
+### `E1`：selection ablation 数据生成
+
+运行对象固定是 `Candidate-200`，因为：
+
+- 不同 `100` 版本都只是 `Candidate-200` 的子集；
+- 先在 `200` 上把 6 算法跑齐，后面比较不同 `100` 版本就能完全离线完成。
+
+这一步的关键图表：
+
+- 各算法在 `200` 上的完成率 / 有效率条形图
+- family × algorithm 的覆盖热图
+
+### `E2`：`100` 选择策略离线比较
+
+要比较的 `100` 版本：
+
+1. `Current-100`
+2. `Gap-only-100`
+3. `Quality-first-100`
+4. `Metadata-diverse-100`
+
+比较指标：
+
+- 排名区分度
+- 排名稳定性
+- family / subgroup 覆盖
+- 方法家族排序一致性
+
+建议图表：
+
+- 4 个 `100` 版本的 family 覆盖条形图
+- 排名相关热图
+- 各策略 aggregate score 的误差箱线图
+
+### `E3`：`Clean-Master-100` 轻量全算法验证
+
+这是后续 `50` 代表性验证的母集。
+
+建议输出：
+
+- `dataset × algorithm` 的单 seed 聚合表
+- 每个算法在 `100` 上的：
+  - `ID/OOD NMSE`
+  - `ID/OOD R²`
+  - symbolic fidelity
+  - complexity
+  - time / timeout ratio
+
+### `E4`：`50` 是否代表 `100`
+
+离线比较这些 `50`：
+
+1. `Core-50`
+2. `random-50`（`20` 次）
+3. `family-stratified random-50`（`20` 次）
+4. `gap-top50`
+5. `metadata-diverse-50`
+
+主指标：
+
+- `Spearman ρ`
+- `Kendall τ`
+- `pairwise win agreement`
+- `aggregate score error`
+- `family-wise leaderboard drift`
+
+建议输出：
+
+- `Core-50` vs 其它 `50` 的相关性箱线图
+- `pairwise agreement` 条形图
+- `bootstrap 95% CI` 误差条图
+
+### `E5`：冻结 `Dev-50 / Core-50`
+
+切分规则保持：
+
+- 切分时**不用正式结果**
+- 只用：
+  - `family`
+  - `subgroup`
+  - `selection_mode`
+  - `candidate_advantage_side`
+  - `basename`
+  - `feature_count`
+  - 各 split 样本量
+  - 公式静态复杂度
+
+验收标准：
+
+- family 配额精确半分或差值 `<=1`
+- `Core-50 one-sided <= 5`
+- `basename <= 1` 在整个 `Clean-Master-100` 上成立
+- 静态属性的分布匹配报告齐全
+
+### `E6`：最终 leaderboard
+
+最终主榜在 `Core-50` 上跑：
+
+- `10 algorithms × 50 datasets × 3 seeds = 1500 tasks`
+
+建议输出图：
+
+- 总 leaderboard
+- 六维雷达图
+- Pareto 图
+- family / subgroup breakdown
+- 稳定性（跨 seed 方差）图
+
+### `E7`：robustness
+
+至少做这 4 组：
+
+1. 去掉 `one-sided`
+2. 去掉 `srsd`
+3. `leave-one-family-out`
+4. 只保留 `quality_score = 1.0`
+
+目的不是追求完全不变，而是证明：
+
+- 主结论不是被某一来源或某一类“异常题”单独驱动的。
+
+## 推荐执行顺序
+
+### Phase A：不新增太多算力，先把 benchmark 设计站稳
+
+1. `E0` 清洗 `Master-100`
+2. `E1` 跑 `Candidate-200 × 6 algorithms × 1 seed`
+3. `E2` 离线做 `100` 选择 ablation
+
+### Phase B：验证 `50` 是否能代表 `100`
+
+4. `E3` 补齐 `Clean-Master-100 × 10 algorithms × 1 seed`
+5. `E4` 离线比较不同 `50`
+6. `E5` 冻结 `Dev-50 / Core-50`
+
+### Phase C：跑最终榜单
+
+7. `E6` 在 `Core-50` 上跑 `10 algorithms × 3 seeds`
+8. `E7` 做 robustness ablation
+
+## 预计新增任务量
+
+按“能复用 `E1` 结果”的主方案估算：
+
+- `E0`: `0`
+- `E1`: `1200`
+- `E2`: `0`
+- `E3`: `400`
+- `E4`: `0`
+- `E5`: `0`
+- `E6`: `1500`
+- `E7`: `0`
+
+总计新增：
+
+- **`3100` 个训练任务**
+
+如果 `E3` 无法有效复用 `E1` 的 6 算法结果，则上限变成：
+
+- **`3700` 个训练任务**
+
+## 最小停止准则
+
+### 可以提前停止并进入下一阶段的条件
+
+- `E0` 完成且 semantic duplicate 清零；
+- `E2` 证明 `Current-100` 不被替代策略严格支配；
+- `E4` 证明 `Core-50` 在代表性指标上优于随机与简单 top-k 基线；
+
+只要这三条成立，就可以冻结 `Core-50` 并进入最终 leaderboard 阶段。
+
+### 必须回滚重做的条件
+
+- `Clean-Master-100` 仍存在 semantic duplicate；
+- `Current-100` 在 selection ablation 中被简单策略系统性击败；
+- `Core-50` 无法稳定代表 `Clean-Master-100`（例如排名相关显著低于随机分层基线）。
+
+## 建议配套输出文件
+
+建议最终形成下面这些文件，方便论文和复现实验同时引用：
+
+- `paper/benchmark/selection_ablation.md`
+- `paper/benchmark/representative50_validation.md`
+- `paper/benchmark/final_core50_leaderboard.md`
+- `experiment-results/benchmark_clean_master100_*`
+- `experiment-results/core50_validation_*`
+- `experiment-results/core50_leaderboard_*`
+
+## 一句话版本
+
+这份计划的核心不是“赶紧定 50”，而是：
+
+> **先证明 `100` 选得合理，再证明 `50` 能代表 `100`，最后才冻结 `Core-50` 跑正式榜单。**
