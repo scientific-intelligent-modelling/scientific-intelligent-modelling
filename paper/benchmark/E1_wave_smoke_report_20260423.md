@@ -35,7 +35,7 @@
 | `W2` | `drsr` | `iaaccn26~29` | `4/4` 启动正常，`minute_0001.json` 正常；最终收口仍受已知 timeout 行为影响 | 可分发，但需接受已知收口边界 |
 | `W3` | `pysr` | `iaaccn22~25` | `4/4 timed_out`，但都有 `minute_0001.json` 和完整输出 | 可直接分发 |
 | `W4` | `dso` | `iaaccn22~28` | `7/7 ok` | 可直接分发 |
-| `W5` | `tpsr` | `iaaccn22`（保守方案） | `timed_out`，`minute_0001.json` 正常，最终结果正常 | 当前可按单机保守方案分发 |
+| `W5` | `tpsr` | `iaaccn22~25` | `4/4 timed_out`，`minute_0001.json` 正常，最终结果正常 | 可按四机推荐方案分发 |
 
 ## 分 wave 细节
 
@@ -136,10 +136,20 @@
 
 ### W5
 
-#### `tpsr` on `iaaccn22`（保守方案）
+#### `tpsr` on `iaaccn22~25`
 
-- 当前只验证了保守单机方案
-- 结果：
+- 已先把 `sim_tpsr` 从 `iaaccn22` 同步到：
+  - `iaaccn23`
+  - `iaaccn24`
+  - `iaaccn25`
+- 同步后验收：
+  - `conda run -n sim_tpsr python -V`
+  - 三台都返回 `Python 3.9.23`
+
+四机 smoke 结果：
+
+- `4/4` 都运行至预算结束
+- 全部：
   - `outer minute_0001.json = true`
   - `result.json = true`
   - `status = timed_out`
@@ -147,18 +157,19 @@
   - `canonical_artifact = true`
   - `valid / id / ood = false`
 - 运行时长约：
-  - `154.3s`
+  - `154.2s ~ 160.9s`
 
 解释：
-- 这条 smoke 证明：
+- 这轮 smoke 证明：
+  - 推荐版四机对称分发已经可行
   - 默认配置下 `TPSR` 能稳定活过 60 秒
   - 不再复现之前的 OOM / `SIGKILL`
   - timeout 后能写最终 `result.json`
-- 但在 `150s` 短预算下，指标恢复不保证完整
+- 但在 `150s` 短预算下，指标恢复仍不保证完整
 
 结论：
-- `W5` 当前可以按保守单机方案使用
-- 若要验证推荐版 `iaaccn22~25` 四机对称分发，必须先把 `sim_tpsr` 补到 `iaaccn23~25`
+- `W5` 已经通过四机推荐版 smoke
+- 后续若进入正式 `E1`，`tpsr` 可以按 `iaaccn22~25` 四机方案分发
 
 ## 总结判断
 
@@ -172,14 +183,12 @@
 
 - `W2`
   - `drsr` 收口行为已有已知边界
-- `W5`
-  - 当前只验证到单机保守方案
 
 ## 对 E1 的直接建议
 
 1. `W1 / W3 / W4` 可以直接进入正式分发准备
 2. `W2` 可以保留，但文档中要明确：
    - `drsr` 已知 timeout 收口边界不作为 blocker
-3. `W5` 若要进入推荐版分发方案：
-   - 先补 `sim_tpsr` 到 `iaaccn23~25`
-   - 再补一轮四机 smoke
+3. `W5` 可以按四机推荐版推进，但文档中要明确：
+   - 当前 `150s` smoke 只验证到 `minute_0001.json + 最终落盘`
+   - 指标恢复完整性仍需在更长预算下继续观察
