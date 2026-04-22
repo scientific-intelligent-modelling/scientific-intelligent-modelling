@@ -24,6 +24,9 @@ class GPLearnRegressor(BaseWrapper):
         "problem_name",
         "seed",
         "timeout_in_seconds",
+        "n_features",
+        "feature_names",
+        "target_name",
     }
 
     _ALLOWED_PARAMS = {

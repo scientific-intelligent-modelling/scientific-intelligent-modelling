@@ -58,7 +58,9 @@ class DRSRRegressor(BaseWrapper):
         self._all_bodies: List[str] = []
         self._equation_entries: List[dict] = []
         self._best_params: Optional[np.ndarray] = None
-        self._n_features: Optional[int] = None  # 记录特征数量
+        self._n_features: Optional[int] = self.params.pop("n_features", None)  # 记录特征数量
+        self._feature_names: Optional[List[str]] = self.params.pop("feature_names", None)
+        self._target_name: Optional[str] = self.params.pop("target_name", None)
 
     def _resolve_experiment_layout(self) -> Tuple[str, str, str]:
         """
@@ -134,7 +136,9 @@ class DRSRRegressor(BaseWrapper):
         - 若 metadata 中存在 description，则优先使用 description
         - 否则退化到 name
         """
-        feature_names = [f"x{i}" for i in range(n_features)]
+        feature_names = self._feature_names
+        if not isinstance(feature_names, list) or len(feature_names) != n_features:
+            feature_names = [f"x{i}" for i in range(n_features)]
         feature_descriptions = self.params.get("feature_descriptions")
         target_description = self.params.get("target_description")
         metadata_path = self.params.get("metadata_path")
@@ -363,7 +367,7 @@ class DRSRRegressor(BaseWrapper):
         prompt_ctx = prompt_config_lib.PromptContext(
             n_features=self._n_features or 0,
             feature_names=feature_names or None,
-            dependent_name="y",
+            dependent_name=self._target_name or "y",
             problem_name=self.params.get("problem_name"),
             background=background,
             feature_descriptions=feature_descriptions,

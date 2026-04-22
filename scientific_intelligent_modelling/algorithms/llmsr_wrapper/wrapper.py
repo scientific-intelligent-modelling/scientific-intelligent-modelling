@@ -146,6 +146,8 @@ class LLMSRRegressor(BaseWrapper):
         self._exp_dir: Optional[str] = self.params.pop("existing_exp_dir", None) or self.params.pop("exp_dir", None)
         self._problem_name: Optional[str] = self.params.get("problem_name")
         self._n_features: Optional[int] = self.params.pop("n_features", None)
+        self._feature_names: Optional[list[str]] = self.params.pop("feature_names", None)
+        self._target_name: Optional[str] = self.params.pop("target_name", None)
 
     # ------------------------------------------------------------------
     # 序列化 / 反序列化：只记录元信息与实验目录
@@ -164,6 +166,8 @@ class LLMSRRegressor(BaseWrapper):
             "exp_dir": self._exp_dir,
             "problem_name": self._problem_name,
             "n_features": self._n_features,
+            "feature_names": self._feature_names,
+            "target_name": self._target_name,
         }
         return json.dumps(state, ensure_ascii=False)
 
@@ -181,6 +185,8 @@ class LLMSRRegressor(BaseWrapper):
         inst._exp_dir = obj.get("exp_dir")
         inst._problem_name = obj.get("problem_name") or inst.params.get("problem_name")
         inst._n_features = obj.get("n_features")
+        inst._feature_names = obj.get("feature_names")
+        inst._target_name = obj.get("target_name")
         return inst
 
     # ------------------------------------------------------------------

@@ -343,9 +343,14 @@
 
 > **“每个算法在进入核心逻辑前，都应该被工具集显式告知当前数据维度”**
 
-那当前答案是：
+当前最新实现已经做到：
 
-- **还没有完全做到**
+- `runner/build_runner_params()` 会统一显式注入：
+  - `n_features = len(dataset.feature_names)`
+  - `feature_names = dataset.feature_names`
+  - `target_name = dataset.target_name`
+- 严格白名单或可能透传到底层库的 wrapper 已显式吸收这些元参数，
+  避免出现“未知参数”或污染第三方配置的情况。
 
 ---
 
@@ -358,15 +363,13 @@
    - `TPSR` 的非法变量问题属于工具集集成缺口，已修复
 
 ### 推荐做
+后续可以继续把“显式维度契约”从**仅注入**升级到**统一校验**：
 
-在 `runner/build_runner_params()` 层统一加上：
+- 对收到 `n_features` 的 wrapper，在 `fit()` 入口比对：
+  - 注入的 `n_features`
+  - 实际 `X.shape[1]`
+- 若不一致，直接抛出契约错误
 
-- `n_features = len(dataset.feature_names)`
-- `feature_names = dataset.feature_names`
-- `target_name = dataset.target_name`
+这样就不只是“给到了”，还变成：
 
-让所有 wrapper 都能收到一份**显式维度契约**，而不只是隐式依赖 `X.shape[1]`。
-
-这一步做完之后，才能真正满足你的标准：
-
-> “输入到每个算法之前，都应该给到每个算法它的数据维度。”
+> **“工具集会验证给到的维度契约与真实数据一致。”**

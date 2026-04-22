@@ -12,7 +12,7 @@ from scientific_intelligent_modelling.benchmarks.normalizers import normalize_op
 
 
 class OperonRegressor(BaseWrapper):
-    _META_PARAMS = {"exp_name", "exp_path", "problem_name", "seed"}
+    _META_PARAMS = {"exp_name", "exp_path", "problem_name", "seed", "n_features", "feature_names", "target_name"}
     _PROGRESS_STATE_FILENAME = ".pyoperon_current_best.json"
     _ALLOWED_PARAMS = {
         "allowed_symbols",

@@ -1,0 +1,64 @@
+import unittest
+
+from scientific_intelligent_modelling.algorithms.drsr_wrapper.wrapper import DRSRRegressor
+from scientific_intelligent_modelling.algorithms.dso_wrapper.wrapper import DSORegressor
+from scientific_intelligent_modelling.algorithms.gplearn_wrapper.wrapper import GPLearnRegressor
+from scientific_intelligent_modelling.algorithms.llmsr_wrapper.wrapper import LLMSRRegressor
+from scientific_intelligent_modelling.algorithms.pyoperon_wrapper.wrapper import OperonRegressor
+from scientific_intelligent_modelling.algorithms.pysr_wrapper.wrapper import PySRRegressor
+
+
+class RunnerDimensionContractTest(unittest.TestCase):
+    def test_strict_wrappers_accept_runner_dataset_contract_meta(self):
+        shared = {
+            "exp_path": "/tmp/bench",
+            "exp_name": "demo",
+            "seed": 1314,
+            "n_features": 2,
+            "feature_names": ["x0", "x1"],
+            "target_name": "y",
+        }
+
+        pysr = PySRRegressor(**shared)
+        self.assertNotIn("n_features", pysr.params)
+        self.assertNotIn("feature_names", pysr.params)
+        self.assertNotIn("target_name", pysr.params)
+
+        gplearn = GPLearnRegressor(**shared)
+        self.assertNotIn("n_features", gplearn.params)
+        self.assertNotIn("feature_names", gplearn.params)
+        self.assertNotIn("target_name", gplearn.params)
+
+        operon = OperonRegressor(**shared)
+        self.assertNotIn("n_features", operon.params)
+        self.assertNotIn("feature_names", operon.params)
+        self.assertNotIn("target_name", operon.params)
+
+        dso = DSORegressor(**shared)
+        self.assertNotIn("n_features", dso.params)
+        self.assertNotIn("feature_names", dso.params)
+        self.assertNotIn("target_name", dso.params)
+
+    def test_llm_wrappers_capture_runner_dataset_contract_meta(self):
+        shared = {
+            "exp_path": "/tmp/bench",
+            "exp_name": "demo",
+            "seed": 1314,
+            "n_features": 3,
+            "feature_names": ["x0", "x1", "x2"],
+            "target_name": "target",
+        }
+
+        llmsr = LLMSRRegressor(**shared)
+        self.assertEqual(llmsr._n_features, 3)
+        self.assertEqual(llmsr._feature_names, ["x0", "x1", "x2"])
+        self.assertEqual(llmsr._target_name, "target")
+
+        drsr = DRSRRegressor(**shared)
+        self.assertEqual(drsr._n_features, 3)
+        self.assertEqual(drsr._feature_names, ["x0", "x1", "x2"])
+        self.assertEqual(drsr._target_name, "target")
+
+
+if __name__ == "__main__":
+    unittest.main()

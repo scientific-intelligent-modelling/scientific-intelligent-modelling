@@ -273,6 +273,37 @@ dataset:
                 "This is a symbolic regression task. Find a compact mathematical equation that predicts the target from the observed variables.",
             )
 
+    def test_build_runner_params_injects_explicit_dataset_contract(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_dir = root / "dataset"
+            dataset_dir.mkdir()
+            (dataset_dir / "metadata.yaml").write_text(
+                """
+dataset:
+  description: explicit contract dataset
+  target:
+    name: output
+  features:
+    - name: feature_a
+    - name: feature_b
+""".strip(),
+                encoding="utf-8",
+            )
+            (dataset_dir / "train.csv").write_text("feature_a,feature_b,output\n1,2,3\n", encoding="utf-8")
+
+            dataset = runner.load_canonical_dataset(dataset_dir)
+            params = runner.build_runner_params(
+                "gplearn",
+                dataset,
+                root / "bench_results",
+                seed=1314,
+            )
+
+            self.assertEqual(params["n_features"], 2)
+            self.assertEqual(params["feature_names"], ["feature_a", "feature_b"])
+            self.assertEqual(params["target_name"], "output")
+
 
 if __name__ == "__main__":
     unittest.main()

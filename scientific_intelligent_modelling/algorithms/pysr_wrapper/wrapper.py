@@ -7,7 +7,7 @@ from ..base_wrapper import BaseWrapper
 from scientific_intelligent_modelling.benchmarks.normalizers import normalize_pysr_artifact
 
 class PySRRegressor(BaseWrapper):
-    _META_PARAMS = {"exp_name", "exp_path", "problem_name", "seed"}
+    _META_PARAMS = {"exp_name", "exp_path", "problem_name", "seed", "n_features", "feature_names", "target_name"}
     _THREAD_ENV_VARS = (
         "PYTHON_JULIACALL_THREADS",
         "JULIA_NUM_THREADS",

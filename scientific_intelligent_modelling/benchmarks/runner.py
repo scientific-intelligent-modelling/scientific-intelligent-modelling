@@ -773,6 +773,11 @@ def build_runner_params(
     params.pop("seed", None)
     params.setdefault("exp_path", str(output_path / "experiments"))
     params.setdefault("exp_name", f"{dataset.dataset_name}_{tool_name}_seed{seed}")
+    # 显式注入当前任务的数据契约，避免 wrapper 只能从 X.shape[1] 隐式猜维度。
+    # 这些字段属于框架元参数；具体算法可选择消费或忽略，但不应再缺席。
+    params.setdefault("n_features", len(dataset.feature_names))
+    params.setdefault("feature_names", list(dataset.feature_names))
+    params.setdefault("target_name", dataset.target_name)
 
     if tool_name in {"llmsr", "drsr"}:
         inject_prompt_semantics = _as_bool(params.get("inject_prompt_semantics"), default=True)
