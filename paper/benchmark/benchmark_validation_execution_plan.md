@@ -33,20 +33,22 @@
 
 ## 算法分层
 
-### 第一层：用于 selection ablation 的 6 个代表性算法
+### 第一层：用于 selection ablation 的 7 个代表性算法
 
-这一步不需要 10 个算法全上，只需要覆盖主要方法家族：
+这一步不需要 10 个算法全上，但必须覆盖主要方法家族，尤其要显式覆盖**纯强化学习 SR**：
 
 - `gplearn`：经典 GP 基线
 - `pysr`：现代演化/符号回归主力
 - `pyoperon`：现代树搜索 EA
 - `llmsr`：LLM-based SR
 - `drsr`：LLM-hybrid / DSR
+- `dso`：纯 RL-based symbolic regression
 - `tpsr`：Transformer + planning
 
-这 6 个算法足以覆盖：
+这 7 个算法足以覆盖：
 
 - GP / EA
+- 纯 RL-based SR
 - LLM-based
 - Hybrid / DSR
 - Transformer-planning
@@ -90,18 +92,18 @@
 | 实验ID | 名称 | 目的 | 输入 | 算法 | seeds | 预算 | 新任务量 | 主要输出 | 通过/停止准则 |
 |---|---|---|---|---|---|---|---:|---|---|
 | `E0` | `Clean-Master-100` 清洗 | 去掉 semantic duplicate，统一状态语义，补非结果标签 | `Master-100` | 无新训练 | 无 | 无 | `0` | `clean_master100.csv`、`duplicate_report.csv`、状态重标表 | `basename` 全局唯一；semantic duplicate=0；状态标签统一 |
-| `E1` | `100` 选择 ablation 数据生成 | 为 `Current-100 / Gap-only-100 / Quality-first-100 / Metadata-diverse-100` 提供统一评估底座 | `Candidate-200` | 6 算法 | `1` | `1h` | `1200` | `candidate200_6algo_1seed_task_results.csv` | 6 算法在 200 上至少 `95%` 任务有有效结果；否则先修工具再继续 |
+| `E1` | `100` 选择 ablation 数据生成 | 为 `Current-100 / Gap-only-100 / Quality-first-100 / Metadata-diverse-100` 提供统一评估底座 | `Candidate-200` | 7 算法 | `1` | `1h` | `1400` | `candidate200_7algo_1seed_task_results.csv` | 7 算法在 200 上至少 `95%` 任务有有效结果；否则先修工具再继续 |
 | `E2` | `100` 选择策略离线比较 | 证明当前 `Master-100` 不是随便挑的，而是在 discrimination / stability / coverage 上 trade-off 最优 | `E1` 输出 + `Clean-Master-100` | 离线 | 无 | 无 | `0` | `selection_ablation_summary.csv`、`selection_ablation.md` | `Current-100` 不被其它策略在主要指标上严格支配 |
-| `E3` | `Clean-Master-100` 轻量全算法验证 | 生成 “50 是否代表 100” 的参考母集 | `Clean-Master-100` | 10 算法 | `1` | `1h` | `400*` | `clean_master100_10algo_1seed_*` | 10 算法中大多数可完成；允许少量超时，但必须有可用输出 |
+| `E3` | `Clean-Master-100` 轻量全算法验证 | 生成 “50 是否代表 100” 的参考母集 | `Clean-Master-100` | 10 算法 | `1` | `1h` | `300*` | `clean_master100_10algo_1seed_*` | 10 算法中大多数可完成；允许少量超时，但必须有可用输出 |
 | `E4` | `50` 代表性离线验证 | 比较 `Core-50` 与其它 `50` 选法是否最能代表 `Clean-Master-100` | `E3` 输出 | 离线 | 无 | 无 | `0` | `core50_representativeness.csv`、相关性图、bootstrap CI 图 | `Core-50` 在 `Spearman/Kendall/pairwise agreement` 上优于基线 `50` |
 | `E5` | 冻结 `Dev-50 / Core-50` | 基于 `Clean-Master-100` 的非结果属性重新切分并冻结正式集合 | `Clean-Master-100` | 无新训练 | 无 | 无 | `0` | `benchmark_dev50_v2.csv`、`benchmark_core50_v2.csv`、`split_audit_report.md` | family 精确半分或差值 `<=1`；`Core one-sided <=5`；静态属性分布匹配 |
 | `E6` | 最终 leaderboard | 在冻结后的 `Core-50` 上跑论文主榜 | `benchmark_core50_v2.csv` | 10 算法 | `3` | `1h` | `1500` | `leaderboard_core50.csv`、radar、Pareto、family breakdown 图 | 所有算法结果收齐；主榜和分解图可复现 |
 | `E7` | robustness ablation | 回答 reviewer 会问的“是不是被某类题主导了” | `E6` 输出 | 离线 | 无 | 无 | `0` | leave-one-family-out、去掉 `one-sided`、去掉 `srsd` 的对照表和图 | 排名主结论不应在单一 ablation 下完全翻转 |
 
-> `E3` 的新任务量写成 `400*`，因为它默认复用 `E1` 里已经在 `Candidate-200` 上跑过的 6 算法结果。  
+> `E3` 的新任务量写成 `300*`，因为它默认复用 `E1` 里已经在 `Candidate-200` 上跑过的 7 算法结果。  
 > 对 `Clean-Master-100` 而言，新增只需要补：
-> - 剩余 `4` 个算法
-> - `4 × 100 × 1 seed = 400` 个新任务  
+> - 剩余 `3` 个算法
+> - `3 × 100 × 1 seed = 300` 个新任务  
 > 若复用失败，则 `E3` 上限为 `1000` 个新任务。
 
 ## 每个实验的详细交付物
@@ -276,7 +278,7 @@
 运行对象固定是 `Candidate-200`，因为：
 
 - 不同 `100` 版本都只是 `Candidate-200` 的子集；
-- 先在 `200` 上把 6 算法跑齐，后面比较不同 `100` 版本就能完全离线完成。
+- 先在 `200` 上把 7 算法跑齐，后面比较不同 `100` 版本就能完全离线完成。
 
 这一步的关键图表：
 
@@ -416,9 +418,9 @@
 按“能复用 `E1` 结果”的主方案估算：
 
 - `E0`: `0`
-- `E1`: `1200`
+- `E1`: `1400`
 - `E2`: `0`
-- `E3`: `400`
+- `E3`: `300`
 - `E4`: `0`
 - `E5`: `0`
 - `E6`: `1500`
@@ -426,11 +428,11 @@
 
 总计新增：
 
-- **`3100` 个训练任务**
+- **`3200` 个训练任务**
 
-如果 `E3` 无法有效复用 `E1` 的 6 算法结果，则上限变成：
+如果 `E3` 无法有效复用 `E1` 的 7 算法结果，则上限变成：
 
-- **`3700` 个训练任务**
+- **`3900` 个训练任务**
 
 ## 最小停止准则
 
