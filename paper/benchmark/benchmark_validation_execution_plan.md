@@ -106,6 +106,45 @@
    - `timeout_in_seconds = 3600`
    - 以统一 wall-clock 预算参与比较
 
+#### `pyoperon` 参数口径说明
+
+`pyoperon` 在 `E1` 中不再使用“仅给 population / iterations / threads”的稀疏占位配置。
+
+原因是 `Operon / PyOperon` 在 benchmark 文献里更常见的写法，是显式冻结其搜索空间和评估预算，例如：
+
+- `population_size`
+- `pool_size`
+- `max_length`
+- `allowed_symbols`
+- `tournament_size`
+- `max_evaluations`
+- `offspring_generator`
+- `reinserter`
+
+因此，`E1` 中采用更接近 benchmark 文献的 `pyoperon` 配置：
+
+- `population_size = 500`
+- `pool_size = 500`
+- `max_length = 50`
+- `max_depth = 10`
+- `tournament_size = 5`
+- `allowed_symbols = add,mul,aq,exp,log,sin,tanh,constant,variable`
+- `offspring_generator = basic`
+- `reinserter = keep-best`
+- `optimizer = lm`
+- `local_search_probability = 1.0`
+- `max_evaluations = 500000`
+- `n_threads = 1`
+
+这版配置的定位是：
+
+- **接近 Operon benchmark 文献常见口径的 explicit baseline**
+
+而不是：
+
+- 只依赖官方默认值的稀疏 baseline
+- 或单纯依赖超大 `generations` + `1h timeout` 的预算占位配置
+
 ### 第二层：用于最终 leaderboard 的 10 个算法
 
 - `gplearn`

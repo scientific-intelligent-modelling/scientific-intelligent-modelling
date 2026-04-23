@@ -61,3 +61,11 @@
   - `add,sub,mul,div,sqrt,log,sin,cos`
   - 目标是在 `E1` 中避免因表达能力过弱而系统性低估 GP 家族
   - 同时不直接放开 `tan / max / min / neg / inv` 这类更激进或冗余 primitive
+- `pyoperon` 当前不再使用稀疏占位参数，而采用更接近 benchmark 文献的显式口径：
+  - `population_size = 500`
+  - `pool_size = 500`
+  - `max_length = 50`
+  - `tournament_size = 5`
+  - `allowed_symbols = add,mul,aq,exp,log,sin,tanh,constant,variable`
+  - `max_evaluations = 500000`
+  - 目标是在 `E1` 中显式冻结 EA / tree-search 家族代表的搜索空间
