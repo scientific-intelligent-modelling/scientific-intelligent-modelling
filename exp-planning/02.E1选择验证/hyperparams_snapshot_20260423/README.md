@@ -6,7 +6,7 @@
 
 - 避免后续重新运行 `generate_e1_formal_assets.py` 时覆盖当前参数口径
 - 为 `W1~W5` 分发、复查和论文复现实验提供一份稳定快照
-- 明确当前 `E1` 采用的是一套**可执行的保守基线**，不是最终调优版
+- 明确当前 `E1` 采用的是一套**可执行的工程基线**，不是最终调优版
 
 ## 当前包含的算法
 
@@ -57,4 +57,7 @@
 - `llmsr / drsr` 使用远端：
   - `/home/zhangziwen/projects/scientific-intelligent-modelling/llm.config`
 - `tpsr` 当前参数是官方主配置对齐后的 benchmark 安全口径
-
+- `gplearn` 当前不再使用“仅四则运算”的极保守配置，而采用：
+  - `add,sub,mul,div,sqrt,log,sin,cos`
+  - 目标是在 `E1` 中避免因表达能力过弱而系统性低估 GP 家族
+  - 同时不直接放开 `tan / max / min / neg / inv` 这类更激进或冗余 primitive

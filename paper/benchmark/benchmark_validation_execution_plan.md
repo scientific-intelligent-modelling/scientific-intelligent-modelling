@@ -57,6 +57,55 @@
 
 - [E1_run_matrix.md](./E1_run_matrix.md)
 
+#### `gplearn` 参数口径说明
+
+`gplearn` 在 `E1` 中不再使用“仅四则运算”的极保守配置。
+
+原因是当前 `Candidate-200 / Master-100` 中包含大量科学型任务，真实结构经常涉及：
+
+- `sqrt`
+- `log`
+- `sin`
+- `cos`
+
+如果仍将 `gplearn` 的 `function_set` 限制为：
+
+- `add,sub,mul,div`
+
+那么 `gplearn` 在 `E1` 中会因为表达能力过弱而被系统性低估，进而污染：
+
+- `Current-100` 是否优于其它 `100` 选择策略
+- `Core-50` 是否真的代表 `Clean-Master-100`
+
+因此，`E1` 采用的 `gplearn` 口径是：
+
+- 保留官方默认的核心搜索强度参数
+  - `population_size = 1000`
+  - `tournament_size = 20`
+  - `parsimony_coefficient = 0.001`
+  - 默认 mutation / crossover 比例
+- 但将 `function_set` 扩展为更适合科学型数据集的：
+  - `add,sub,mul,div,sqrt,log,sin,cos`
+
+这版配置的定位是：
+
+- **scientific baseline**
+
+而不是：
+
+- 严格官方默认 baseline
+- 或 14 个内置 primitive 全开的 aggressive baseline
+
+选择这版口径的理由是：
+
+1. 不再明显削弱 `gplearn`
+2. 又不把 `tan / max / min / neg / inv` 这类更激进或冗余 primitive 全部放开
+3. 便于在 `E1` 阶段把 `gplearn` 当作真正的 GP 家族代表
+4. 同时仍保持：
+   - `n_jobs = 1`
+   - `timeout_in_seconds = 3600`
+   - 以统一 wall-clock 预算参与比较
+
 ### 第二层：用于最终 leaderboard 的 10 个算法
 
 - `gplearn`
