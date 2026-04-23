@@ -9,6 +9,7 @@ import os
 import time
 import warnings
 import numpy as np
+from copy import deepcopy
 from typing import Any, Dict, Tuple
 
 from ..base_wrapper import BaseWrapper
@@ -18,6 +19,28 @@ from scientific_intelligent_modelling.benchmarks.normalizers import normalize_gp
 class GPLearnRegressor(BaseWrapper):
     """gplearn SymbolicRegressor 的参数化适配层。"""
     _PROGRESS_STATE_FILENAME = ".gplearn_current_best.json"
+    _DEFAULT_PARAMS = {
+        "population_size": 1000,
+        "generations": 1000000,
+        "tournament_size": 20,
+        "stopping_criteria": 0.0,
+        "const_range": (-1.0, 1.0),
+        "function_set": ("add", "sub", "mul", "div", "sqrt", "log", "sin", "cos"),
+        "init_depth": (2, 6),
+        "init_method": "half and half",
+        "metric": "mean absolute error",
+        "parsimony_coefficient": 0.001,
+        "p_crossover": 0.9,
+        "p_subtree_mutation": 0.01,
+        "p_hoist_mutation": 0.01,
+        "p_point_mutation": 0.01,
+        "p_point_replace": 0.05,
+        "max_samples": 1.0,
+        "n_jobs": 1,
+        "verbose": 0,
+        "low_memory": False,
+        "warm_start": False,
+    }
     _META_PARAMS = {
         "exp_name",
         "exp_path",
@@ -85,6 +108,9 @@ class GPLearnRegressor(BaseWrapper):
             raw_params.pop(key, None)
         if "random_state" not in raw_params and seed is not None:
             raw_params["random_state"] = int(seed)
+
+        for key, value in cls._DEFAULT_PARAMS.items():
+            raw_params.setdefault(key, deepcopy(value))
 
         unknown = sorted(set(raw_params.keys()) - set(cls._ALLOWED_PARAMS))
         if unknown:

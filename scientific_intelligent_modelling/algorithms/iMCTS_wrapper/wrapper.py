@@ -50,6 +50,19 @@ class iMCTSRegressor(BaseWrapper):
     def __init__(self, **kwargs):
         # 存储用户传入参数，部分会透传给 iMCTS.Regressor
         self.params: Dict[str, Any] = dict(kwargs) if kwargs else {}
+        self.params.setdefault("ops", ["+", "-", "*", "/", "sin", "cos", "exp", "log"])
+        self.params.setdefault("max_depth", 6)
+        self.params.setdefault("K", 500)
+        self.params.setdefault("c", 4.0)
+        self.params.setdefault("gamma", 0.5)
+        self.params.setdefault("gp_rate", 0.2)
+        self.params.setdefault("mutation_rate", 0.1)
+        self.params.setdefault("exploration_rate", 0.2)
+        self.params.setdefault("max_single_arity_ops", 999)
+        self.params.setdefault("max_constants", 10)
+        self.params.setdefault("max_expressions", 2000000)
+        self.params.setdefault("verbose", False)
+        self.params.setdefault("optimization_method", "LN_NELDERMEAD")
         self._exp_path = self.params.get('exp_path')
         self._exp_name = self.params.get('exp_name')
         self._contract_n_features = self.params.pop("n_features", None)

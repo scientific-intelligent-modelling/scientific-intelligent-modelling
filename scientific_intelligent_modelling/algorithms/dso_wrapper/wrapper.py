@@ -21,20 +21,37 @@ class DSORegressor(BaseWrapper):
     }
     _DEFAULT_TASK = {
         "task_type": "regression",
-        "function_set": ["add", "sub", "mul", "div"],
+        "function_set": ["add", "sub", "mul", "div", "sin", "cos", "exp", "log"],
         "metric": "inv_nrmse",
         "metric_params": [1.0],
         "threshold": 1e-12,
         "protected": False,
     }
     _DEFAULT_TRAINING = {
-        "batch_size": 1,
-        "n_samples": 20,
+        "batch_size": 1000,
+        "n_samples": 2000000,
         "epsilon": 0.05,
+        "n_cores_batch": 1,
+    }
+    _DEFAULT_POLICY_OPTIMIZER = {
+        "learning_rate": 0.0005,
+        "entropy_weight": 0.03,
+        "entropy_gamma": 0.7,
+    }
+    _DEFAULT_PRIOR = {
+        "length": {"min_": 4, "max_": 64, "on": True},
+        "repeat": {"tokens": "const", "min_": None, "max_": 3, "on": True},
+        "inverse": {"on": True},
+        "trig": {"on": True},
+        "const": {"on": True},
+        "no_inputs": {"on": True},
+        "uniform_arity": {"on": True},
+        "soft_length": {"loc": 10, "scale": 5, "on": True},
+        "domain_range": {"on": False},
     }
     _EXPERIMENT_KEYS = {"logdir", "exp_name", "seed"}
     _TASK_KEYS = {"task_type", "function_set", "metric", "metric_params", "threshold", "protected"}
-    _TRAINING_KEYS = {"batch_size", "n_samples", "epsilon"}
+    _TRAINING_KEYS = {"batch_size", "n_samples", "epsilon", "n_cores_batch"}
 
     def __init__(self, **kwargs):
         # 延迟导入，避免环境问题
@@ -60,6 +77,8 @@ class DSORegressor(BaseWrapper):
         experiment = dict(cls._DEFAULT_EXPERIMENT)
         task = dict(cls._DEFAULT_TASK)
         training = dict(cls._DEFAULT_TRAINING)
+        policy_optimizer = deepcopy(cls._DEFAULT_POLICY_OPTIMIZER)
+        prior = deepcopy(cls._DEFAULT_PRIOR)
 
         for key in list(params.keys()):
             value = params[key]
@@ -71,6 +90,16 @@ class DSORegressor(BaseWrapper):
                 params.pop(key)
             elif key == "training" and isinstance(value, dict):
                 training.update(value)
+                params.pop(key)
+            elif key == "policy_optimizer" and isinstance(value, dict):
+                policy_optimizer.update(value)
+                params.pop(key)
+            elif key == "prior" and isinstance(value, dict):
+                for prior_key, prior_value in value.items():
+                    if isinstance(prior_value, dict) and isinstance(prior.get(prior_key), dict):
+                        prior[prior_key].update(prior_value)
+                    else:
+                        prior[prior_key] = prior_value
                 params.pop(key)
 
         for key in list(params.keys()):
@@ -103,6 +132,8 @@ class DSORegressor(BaseWrapper):
         config["experiment"] = experiment
         config["task"] = task
         config["training"] = training
+        config["policy_optimizer"] = policy_optimizer
+        config["prior"] = prior
         return config
     
     def fit(self, X, y):

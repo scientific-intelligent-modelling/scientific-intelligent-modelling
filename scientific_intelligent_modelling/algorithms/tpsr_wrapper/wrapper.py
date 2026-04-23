@@ -55,7 +55,7 @@ class TPSRRegressor(BaseWrapper):
         self.params.setdefault("rollout", 3)  # Number of rollouts in TPSR
         self.params.setdefault("horizon", 200)  # Horizon of lookahead planning
         self.params.setdefault("seed", 23)
-        self.params.setdefault("cpu", False)
+        self.params.setdefault("cpu", True)
         self.params.setdefault("train_value", False)
         self.params.setdefault("lam", 0.1)
         # 这是 benchmark 侧额外加的工程保护，不属于官方 README 的参数：

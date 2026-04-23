@@ -16,12 +16,25 @@ from scientific_intelligent_modelling.benchmarks.normalizers import normalize_dr
 from scientific_intelligent_modelling.srkit.llm import ClientFactory, parse_provider_model
 from scientific_intelligent_modelling.srkit.spec_builder import build_specification as build_shared_specification
 from typing import Tuple
+
 try:
     # 可选：用于参数拟合（与评估一致的 BFGS）
     from scipy.optimize import minimize
     _SCIPY_OK = True
 except Exception:
     _SCIPY_OK = False
+
+
+def _default_benchmark_llm_config_path() -> str:
+    """返回 drsr / llmsr 共享的 benchmark LLM 配置路径。"""
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
+    return os.path.join(
+        repo_root,
+        "exp-planning",
+        "02.E1选择验证",
+        "llm_configs",
+        "benchmark_llm.config",
+    )
 
 
 class DRSRRegressor(BaseWrapper):
@@ -50,6 +63,16 @@ class DRSRRegressor(BaseWrapper):
 
     def __init__(self, **kwargs):
         self.params = dict(kwargs) if kwargs else {}
+        self.params.setdefault("timeout_in_seconds", 3600)
+        self.params.setdefault("niterations", 100000)
+        self.params.setdefault("samples_per_iteration", 4)
+        self.params.setdefault("max_params", self._DEFAULT_MAX_PARAMS)
+        self.params.setdefault("persist_all_samples", False)
+        self.params.setdefault(
+            "background",
+            "This is a symbolic regression task. Find a compact mathematical equation that predicts the target from the observed variables.",
+        )
+        self.params.setdefault("llm_config_path", _default_benchmark_llm_config_path())
         self.model_ready = False
         self._workdir: Optional[str] = None
         self._existing_exp_dir: Optional[str] = self.params.get("existing_exp_dir") or self.params.get("exp_dir")

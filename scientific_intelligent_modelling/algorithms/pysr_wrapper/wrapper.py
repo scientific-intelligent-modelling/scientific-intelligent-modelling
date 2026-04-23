@@ -2,11 +2,57 @@
 import os
 import json
 import numpy as np
+from copy import deepcopy
 
 from ..base_wrapper import BaseWrapper 
 from scientific_intelligent_modelling.benchmarks.normalizers import normalize_pysr_artifact
 
 class PySRRegressor(BaseWrapper):
+    _DEFAULT_PARAMS = {
+        "timeout_in_seconds": 3600,
+        "niterations": 10000000,
+        "population_size": 64,
+        "populations": 8,
+        "ncycles_per_iteration": 500,
+        "maxsize": 30,
+        "maxdepth": 10,
+        "parsimony": 0.001,
+        "constraints": {
+            "/": [-1, 9],
+            "square": 9,
+            "cube": 9,
+            "exp": 7,
+            "log": 7,
+            "sin": 9,
+            "cos": 9,
+        },
+        "nested_constraints": {
+            "exp": {"exp": 0, "log": 1},
+            "log": {"exp": 0, "log": 0},
+            "square": {"square": 1, "cube": 1, "exp": 0, "log": 0},
+            "cube": {"square": 1, "cube": 1, "exp": 0, "log": 0},
+        },
+        "complexity_of_operators": {
+            "/": 2,
+            "square": 2,
+            "cube": 3,
+            "sin": 2,
+            "cos": 2,
+            "exp": 3,
+            "log": 3,
+        },
+        "complexity_of_constants": 2,
+        "complexity_of_variables": 1,
+        "binary_operators": ["+", "-", "*", "/"],
+        "unary_operators": ["square", "cube", "exp", "log", "sin", "cos"],
+        "precision": 32,
+        "deterministic": True,
+        "parallelism": "serial",
+        "model_selection": "best",
+        "progress": True,
+        "verbosity": 1,
+        "procs": 1,
+    }
     _META_PARAMS = {"exp_name", "exp_path", "problem_name", "seed", "n_features", "feature_names", "target_name"}
     _THREAD_ENV_VARS = (
         "PYTHON_JULIACALL_THREADS",
@@ -81,6 +127,9 @@ class PySRRegressor(BaseWrapper):
             params["run_id"] = exp_name.strip()
         if "output_directory" not in raw_params and isinstance(exp_path, str) and exp_path.strip():
             params["output_directory"] = os.path.abspath(exp_path.strip())
+
+        for key, value in cls._DEFAULT_PARAMS.items():
+            raw_params.setdefault(key, deepcopy(value))
 
         unknown = sorted(set(raw_params) - cls._ALLOWED_PARAMS)
         if unknown:

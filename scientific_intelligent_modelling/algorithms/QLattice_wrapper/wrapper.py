@@ -32,6 +32,11 @@ class QLatticeRegressor(BaseWrapper):
 
     def __init__(self, **kwargs) -> None:
         self.params = dict(kwargs)
+        self.params.setdefault("n_epochs", 100)
+        self.params.setdefault("kind", "regression")
+        self.params.setdefault("criterion", "bic")
+        self.params.setdefault("signif", 4)
+        self.params.setdefault("threads", 1)
         self._contract_n_features = self.params.pop("n_features", None)
         self._contract_feature_names = self.params.pop("feature_names", None)
         self._contract_target_name = self.params.pop("target_name", None)

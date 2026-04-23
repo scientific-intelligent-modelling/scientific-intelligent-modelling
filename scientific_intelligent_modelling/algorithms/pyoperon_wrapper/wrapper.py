@@ -4,6 +4,7 @@ import json
 import os
 import pickle
 import time
+from copy import deepcopy
 
 import numpy as np
 
@@ -12,6 +13,21 @@ from scientific_intelligent_modelling.benchmarks.normalizers import normalize_op
 
 
 class OperonRegressor(BaseWrapper):
+    _DEFAULT_PARAMS = {
+        "max_time": 3600,
+        "population_size": 500,
+        "pool_size": 500,
+        "max_length": 50,
+        "max_depth": 10,
+        "tournament_size": 5,
+        "allowed_symbols": "add,mul,aq,exp,log,sin,tanh,constant,variable",
+        "offspring_generator": "basic",
+        "reinserter": "keep-best",
+        "optimizer": "lm",
+        "local_search_probability": 1.0,
+        "max_evaluations": 500000,
+        "n_threads": 1,
+    }
     _META_PARAMS = {"exp_name", "exp_path", "problem_name", "seed", "n_features", "feature_names", "target_name"}
     _PROGRESS_STATE_FILENAME = ".pyoperon_current_best.json"
     _ALLOWED_PARAMS = {
@@ -100,6 +116,9 @@ class OperonRegressor(BaseWrapper):
                 raw_params[new] = raw_params.pop(old)
 
         raw_params.pop("seed", None)
+
+        for key, value in cls._DEFAULT_PARAMS.items():
+            raw_params.setdefault(key, deepcopy(value))
 
         unknown = sorted(set(raw_params) - cls._ALLOWED_PARAMS)
         if unknown:

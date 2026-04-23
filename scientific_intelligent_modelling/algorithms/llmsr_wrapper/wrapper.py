@@ -39,10 +39,17 @@ def _default_llm_config_path() -> str:
     """
     默认的 llm.config 路径。
 
-    如果你希望使用项目根目录下自定义的配置，可以在调用 SymbolicRegressor 时
-    通过参数传入 `llm_config_path`。
+    默认固定为 benchmark 统一配置路径，保证 llmsr / drsr 共享同一份
+    LLM 采样口径。
     """
-    return os.path.join(_llmsr_root_dir(), "llm.config")
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
+    return os.path.join(
+        repo_root,
+        "exp-planning",
+        "02.E1选择验证",
+        "llm_configs",
+        "benchmark_llm.config",
+    )
 
 
 def _import_core_regressor():
@@ -138,6 +145,17 @@ class LLMSRRegressor(BaseWrapper):
     def __init__(self, **kwargs: Any):
         # 保留原始参数，便于反序列化和重复使用
         self.params: Dict[str, Any] = dict(kwargs) if kwargs else {}
+        self.params.setdefault("timeout_in_seconds", 3600)
+        self.params.setdefault("max_params", 10)
+        self.params.setdefault("niterations", 100000)
+        self.params.setdefault("samples_per_iteration", 4)
+        self.params.setdefault("inject_prompt_semantics", False)
+        self.params.setdefault(
+            "background",
+            "This is a symbolic regression task. Find a compact mathematical equation that predicts the target from the observed variables.",
+        )
+        self.params.setdefault("persist_all_samples", False)
+        self.params.setdefault("llm_config_path", _default_llm_config_path())
 
         # 子仓库的核心回归器实例（惰性创建）
         self._core: Optional[Any] = None
