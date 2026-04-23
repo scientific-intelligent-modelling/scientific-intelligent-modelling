@@ -95,7 +95,7 @@ WAVE_CONFIGS = [
             "p_point_mutation": 0.01,
             "p_point_replace": 0.05,
             "max_samples": 1.0,
-            "n_jobs": 1,
+            "n_jobs": 4,
             "low_memory": False,
             "warm_start": False,
             "verbose": 0,
@@ -141,7 +141,7 @@ WAVE_CONFIGS = [
             "optimizer": "lm",
             "local_search_probability": 1.0,
             "max_evaluations": 500000,
-            "n_threads": 1,
+            "n_threads": 4,
         },
     },
     {
@@ -238,7 +238,7 @@ WAVE_CONFIGS = [
                 "n_samples": 2_000_000,
                 "batch_size": 1000,
                 "epsilon": 0.05,
-                "n_cores_batch": 1,
+                "n_cores_batch": 4,
             },
             "policy_optimizer": {
                 "learning_rate": 0.0005,
@@ -264,7 +264,7 @@ WAVE_CONFIGS = [
         "machines": ["iaaccn22", "iaaccn23", "iaaccn24", "iaaccn25"],
         "sizes": [50, 50, 50, 50],
         "conda_env": "sim_tpsr",
-        "default_workers": 8,
+        "default_workers": 24,
         "params": {
             "timeout_in_seconds": 3600,
             "progress_snapshot_interval_seconds": 60,
@@ -287,6 +287,8 @@ WAVE_CONFIGS = [
             "seed": 23,
             "reward_sample_limit": 2048,
             "cpu": True,
+            "cpu_num_threads": 4,
+            "cpu_interop_threads": 1,
         },
     },
 ]
@@ -314,7 +316,7 @@ def _write_csv(path: Path, rows: list[dict[str, str | int]]) -> None:
 
 def _dump_json(path: Path, obj: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+    path.write_text(json.dumps(obj, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def _rel(path: Path) -> str:
