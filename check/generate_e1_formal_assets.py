@@ -156,6 +156,8 @@ WAVE_CONFIGS = [
             "progress_snapshot_interval_seconds": 60,
             "niterations": 100000,
             "samples_per_iteration": 4,
+            "max_params": 10,
+            "persist_all_samples": False,
             "background": NEUTRAL_SR_BACKGROUND,
             "llm_config_path": f"{REMOTE_PROJECT_ROOT}/exp-planning/02.E1选择验证/llm_configs/benchmark_llm.config",
         },
