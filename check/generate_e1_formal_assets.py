@@ -335,13 +335,18 @@ def _render_remote_job_script(
 set -euo pipefail
 
 if [ "$#" -lt 2 ]; then
-  echo "Usage: $0 <BATCH_NAME> <WORKERS>" >&2
+  echo "Usage: $0 <BATCH_NAME> <WORKERS> [retry]" >&2
   exit 2
 fi
 
 BATCH_NAME="$1"
 WORKERS="$2"
+RETRY_MODE="${{3:-}}"
 REMOTE_ROOT="{REMOTE_PROJECT_ROOT}"
+EXTRA_ARGS=()
+if [ "$RETRY_MODE" = "retry" ]; then
+  EXTRA_ARGS+=(--retry-failed)
+fi
 
 cd "$REMOTE_ROOT"
 export PYTHONPATH=.
@@ -352,7 +357,8 @@ conda run -n {conda_env} python check/launch_e1_benchmark.py run \\
   --params-json "$REMOTE_ROOT/{rel_params_json}" \\
   --output-root "$REMOTE_ROOT/experiments/${{BATCH_NAME}}/{host}" \\
   --seed {SEED} \\
-  --workers "$WORKERS"
+  --workers "$WORKERS" \\
+  "${{EXTRA_ARGS[@]}}"
 """
 
 
