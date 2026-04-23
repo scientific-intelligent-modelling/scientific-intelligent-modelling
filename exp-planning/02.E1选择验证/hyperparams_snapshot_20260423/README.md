@@ -54,8 +54,11 @@
 
 - 当前默认 `timeout_in_seconds = 3600`
 - 当前默认 `progress_snapshot_interval_seconds = 60`
-- `llmsr / drsr` 使用远端：
-  - `/home/zhangziwen/projects/scientific-intelligent-modelling/llm.config`
+- `llmsr / drsr` 使用固定 benchmark 配置：
+  - `/home/zhangziwen/projects/scientific-intelligent-modelling/exp-planning/02.E1选择验证/llm_configs/benchmark_llm.config`
+  - 仓库内只提交：
+    - `benchmark_llm.config.example`
+  - 真实 `benchmark_llm.config` 仅保留在本地与远端磁盘，不进入 Git
 - `tpsr` 当前参数是官方主配置对齐后的 benchmark 安全口径
 - `gplearn` 当前不再使用“仅四则运算”的极保守配置，而采用：
   - `add,sub,mul,div,sqrt,log,sin,cos`

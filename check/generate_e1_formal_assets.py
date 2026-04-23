@@ -117,7 +117,7 @@ WAVE_CONFIGS = [
             "inject_prompt_semantics": False,
             "background": NEUTRAL_SR_BACKGROUND,
             "persist_all_samples": False,
-            "llm_config_path": f"{REMOTE_PROJECT_ROOT}/llm.config",
+            "llm_config_path": f"{REMOTE_PROJECT_ROOT}/exp-planning/02.E1选择验证/llm_configs/benchmark_llm.config",
         },
     },
     {
@@ -157,7 +157,7 @@ WAVE_CONFIGS = [
             "niterations": 100000,
             "samples_per_iteration": 4,
             "background": NEUTRAL_SR_BACKGROUND,
-            "llm_config_path": f"{REMOTE_PROJECT_ROOT}/llm.config",
+            "llm_config_path": f"{REMOTE_PROJECT_ROOT}/exp-planning/02.E1选择验证/llm_configs/benchmark_llm.config",
         },
     },
     {
