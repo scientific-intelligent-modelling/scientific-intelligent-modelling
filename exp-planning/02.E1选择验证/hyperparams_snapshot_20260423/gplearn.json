@@ -1,0 +1,10 @@
+{
+  "timeout_in_seconds": 3600,
+  "progress_snapshot_interval_seconds": 60,
+  "population_size": 1000,
+  "generations": 1000000,
+  "tournament_size": 20,
+  "function_set": "add,sub,mul,div",
+  "n_jobs": 1,
+  "verbose": 0
+}
