@@ -50,7 +50,15 @@ def _run(host: str, command: str, *, timeout: int = 60) -> subprocess.CompletedP
             addr,
             command,
         ]
-    return subprocess.run(cmd, text=True, capture_output=True, timeout=timeout, check=False)
+    try:
+        return subprocess.run(cmd, text=True, capture_output=True, timeout=timeout, check=False)
+    except subprocess.TimeoutExpired as exc:
+        return subprocess.CompletedProcess(
+            args=cmd,
+            returncode=124,
+            stdout=exc.stdout or "",
+            stderr=exc.stderr or "command timeout",
+        )
 
 
 def _load_manifest(path: Path) -> list[dict[str, str]]:
@@ -104,11 +112,26 @@ def _summarize_job(job: dict[str, str], batch_name: str) -> dict[str, Any]:
 
 
 def _tmux_running(job: dict[str, str]) -> bool:
+    return _tmux_state(job) != "absent"
+
+
+def _tmux_state(job: dict[str, str]) -> str:
     result = _run(job["host"], f"tmux has-session -t {shlex.quote(job['session'])}", timeout=20)
-    return result.returncode == 0
+    if result.returncode == 0:
+        return "running"
+    if result.returncode == 1:
+        return "absent"
+    return "unknown"
 
 
 def _start_job(job: dict[str, str], batch_name: str, *, retry: bool) -> None:
+    state = _tmux_state(job)
+    if not retry and state == "running":
+        print(json.dumps({"event": "job_already_running", "host": job["host"], "session": job["session"]}, ensure_ascii=False), flush=True)
+        return
+    if state == "unknown":
+        print(json.dumps({"event": "job_state_unknown", "host": job["host"], "session": job["session"]}, ensure_ascii=False), flush=True)
+        return
     remote_job = REMOTE_ROOT / job["remote_job_rel"]
     args = [
         "/bin/bash",
