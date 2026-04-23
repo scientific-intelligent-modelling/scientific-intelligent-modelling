@@ -31,7 +31,7 @@ class DSORegressor(BaseWrapper):
         "batch_size": 1000,
         "n_samples": 2000000,
         "epsilon": 0.05,
-        "n_cores_batch": 1,
+        "n_cores_batch": 4,
     }
     _DEFAULT_POLICY_OPTIMIZER = {
         "learning_rate": 0.0005,

@@ -12,5 +12,5 @@
   "optimizer": "lm",
   "local_search_probability": 1.0,
   "max_evaluations": 500000,
-  "n_threads": 1
+  "n_threads": 4
 }

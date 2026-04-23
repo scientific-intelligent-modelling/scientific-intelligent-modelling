@@ -36,7 +36,7 @@ class QLatticeRegressor(BaseWrapper):
         self.params.setdefault("kind", "regression")
         self.params.setdefault("criterion", "bic")
         self.params.setdefault("signif", 4)
-        self.params.setdefault("threads", 1)
+        self.params.setdefault("threads", 4)
         self._contract_n_features = self.params.pop("n_features", None)
         self._contract_feature_names = self.params.pop("feature_names", None)
         self._contract_target_name = self.params.pop("target_name", None)

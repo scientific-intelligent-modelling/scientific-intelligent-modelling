@@ -19,5 +19,7 @@
   "train_value": false,
   "seed": 23,
   "reward_sample_limit": 2048,
+  "cpu_num_threads": 4,
+  "cpu_interop_threads": 1,
   "cpu": true
 }

@@ -26,7 +26,7 @@ class OperonRegressor(BaseWrapper):
         "optimizer": "lm",
         "local_search_probability": 1.0,
         "max_evaluations": 500000,
-        "n_threads": 1,
+        "n_threads": 4,
     }
     _META_PARAMS = {"exp_name", "exp_path", "problem_name", "seed", "n_features", "feature_names", "target_name"}
     _PROGRESS_STATE_FILENAME = ".pyoperon_current_best.json"

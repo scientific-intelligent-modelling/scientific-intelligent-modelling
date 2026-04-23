@@ -56,6 +56,8 @@ class TPSRRegressor(BaseWrapper):
         self.params.setdefault("horizon", 200)  # Horizon of lookahead planning
         self.params.setdefault("seed", 23)
         self.params.setdefault("cpu", True)
+        self.params.setdefault("cpu_num_threads", 4)
+        self.params.setdefault("cpu_interop_threads", 1)
         self.params.setdefault("train_value", False)
         self.params.setdefault("lam", 0.1)
         # 这是 benchmark 侧额外加的工程保护，不属于官方 README 的参数：
@@ -965,8 +967,8 @@ class TPSRRegressor(BaseWrapper):
             args.device = torch.device("cpu") if args.cpu else torch.device("cuda" if torch.cuda.is_available() else "cpu")
             if args.cpu:
                 try:
-                    torch.set_num_threads(1)
-                    torch.set_num_interop_threads(1)
+                    torch.set_num_threads(int(self.params.get("cpu_num_threads", 4)))
+                    torch.set_num_interop_threads(int(self.params.get("cpu_interop_threads", 1)))
                 except Exception:
                     pass
 

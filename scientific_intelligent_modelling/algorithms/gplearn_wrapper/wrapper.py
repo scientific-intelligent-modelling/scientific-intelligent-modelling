@@ -36,7 +36,7 @@ class GPLearnRegressor(BaseWrapper):
         "p_point_mutation": 0.01,
         "p_point_replace": 0.05,
         "max_samples": 1.0,
-        "n_jobs": 1,
+        "n_jobs": 4,
         "verbose": 0,
         "low_memory": False,
         "warm_start": False,

@@ -11,6 +11,7 @@ def test_gplearn_defaults_are_aligned():
     assert reg.params["generations"] == 1000000
     assert reg.params["function_set"] == ("add", "sub", "mul", "div", "sqrt", "log", "sin", "cos")
     assert reg.params["metric"] == "mean absolute error"
+    assert reg.params["n_jobs"] == 4
 
 
 def test_pysr_defaults_are_aligned():
@@ -34,6 +35,7 @@ def test_pyoperon_defaults_are_aligned():
     assert reg.params["pool_size"] == 500
     assert reg.params["allowed_symbols"] == "add,mul,aq,exp,log,sin,tanh,constant,variable"
     assert reg.params["max_evaluations"] == 500000
+    assert reg.params["n_threads"] == 4
 
 
 def test_llmsr_defaults_are_aligned():
@@ -68,6 +70,7 @@ def test_dso_defaults_are_aligned():
     assert reg.params["task"]["function_set"] == ["add", "sub", "mul", "div", "sin", "cos", "exp", "log"]
     assert reg.params["training"]["batch_size"] == 1000
     assert reg.params["training"]["n_samples"] == 2000000
+    assert reg.params["training"]["n_cores_batch"] == 4
     assert reg.params["policy_optimizer"]["learning_rate"] == 0.0005
     assert reg.params["prior"]["soft_length"]["loc"] == 10
 
@@ -82,6 +85,7 @@ def test_tpsr_defaults_are_aligned():
     assert reg.params["max_number_bags"] == 10
     assert reg.params["rollout"] == 3
     assert reg.params["reward_sample_limit"] == 2048
+    assert reg.params["cpu_num_threads"] == 4
 
 
 def test_e2esr_defaults_are_aligned(monkeypatch):
@@ -104,7 +108,7 @@ def test_qlattice_defaults_are_aligned():
     assert reg.params["n_epochs"] == 100
     assert reg.params["kind"] == "regression"
     assert reg.params["criterion"] == "bic"
-    assert reg.params["threads"] == 1
+    assert reg.params["threads"] == 4
 
 
 def test_imcts_defaults_are_aligned():
