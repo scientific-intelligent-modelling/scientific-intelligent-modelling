@@ -1,8 +1,8 @@
 {
-  "snapshot_name": "E1 七算法超参数快照",
+  "snapshot_name": "基准算法超参数快照",
   "snapshot_date": "2026-04-23",
   "source_dir": "exp-planning/02.E1选择验证/generated/params",
-  "purpose": "固定保存当前 E1 选择验证使用的七算法超参数口径",
+  "purpose": "固定保存当前 E1 与后续 10 算法验证阶段使用的超参数口径",
   "algorithms": [
     {
       "tool": "gplearn",
@@ -45,6 +45,24 @@
       "wave": "W5",
       "family": "Transformer + planning",
       "file": "tpsr.json"
+    },
+    {
+      "tool": "e2esr",
+      "phase": "E3/E6",
+      "family": "E2E Transformer-based SR",
+      "file": "e2esr.json"
+    },
+    {
+      "tool": "QLattice",
+      "phase": "E3/E6",
+      "family": "图结构搜索",
+      "file": "qlattice.json"
+    },
+    {
+      "tool": "iMCTS",
+      "phase": "E3/E6",
+      "family": "MCTS-based SR",
+      "file": "imcts.json"
     }
   ],
   "global_defaults": {
