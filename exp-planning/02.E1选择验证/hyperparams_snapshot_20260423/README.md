@@ -7,6 +7,8 @@
 - 避免后续重新运行 `generate_e1_formal_assets.py` 时覆盖当前参数口径
 - 为 `W1~W5` 分发、复查和论文复现实验提供一份稳定快照
 - 明确当前 `E1 / E3 / E6` 采用的是一套**可执行的工程基线**，不是最终调优版
+- 10 算法总览表见：
+  - [hyperparams_overview.md](./hyperparams_overview.md)
 
 ## 当前包含的算法
 
