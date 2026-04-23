@@ -145,6 +145,46 @@
 - 只依赖官方默认值的稀疏 baseline
 - 或单纯依赖超大 `generations` + `1h timeout` 的预算占位配置
 
+#### `dso` 参数口径说明
+
+`dso` 在 `E1` 中不再使用 wrapper 里的弱默认值。
+
+原因是当前 wrapper 默认：
+
+- `task.function_set = add,sub,mul,div`
+- `training.n_samples = 20`
+- `training.batch_size = 1`
+
+这与官方 regression 配置相比明显过弱，会把 `DSO` 系统性低估成“很快结束但几乎没训练”的状态，从而污染：
+
+- `Current-100` 与其它 `100` 选择策略的比较
+- `Core-50` 代表性验证中 RL-based 家族的真实位置
+
+因此，`E1` 中采用更接近官方 `config_regression.json` 的 `dso` 显式口径：
+
+- `task.function_set = add,sub,mul,div,sin,cos,exp,log`
+- `task.metric = inv_nrmse`
+- `task.metric_params = [1.0]`
+- `task.threshold = 1e-12`
+- `task.protected = false`
+- `training.n_samples = 2000000`
+- `training.batch_size = 1000`
+- `training.epsilon = 0.05`
+- `training.n_cores_batch = 1`
+- `policy_optimizer.learning_rate = 0.0005`
+- `policy_optimizer.entropy_weight = 0.03`
+- `policy_optimizer.entropy_gamma = 0.7`
+- 以及官方 regression 配置中的核心 `prior`
+
+这版配置的定位是：
+
+- **接近官方 regression benchmark 的 explicit DSO baseline**
+
+而不是：
+
+- 只依赖 wrapper 弱默认值的占位 baseline
+- 或进一步扩展到 `poly` / `const` 等更重、更慢的增强版口径
+
 ### 第二层：用于最终 leaderboard 的 10 个算法
 
 - `gplearn`

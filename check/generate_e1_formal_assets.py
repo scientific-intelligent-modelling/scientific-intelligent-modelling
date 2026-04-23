@@ -226,6 +226,36 @@ WAVE_CONFIGS = [
         "params": {
             "timeout_in_seconds": 3600,
             "progress_snapshot_interval_seconds": 60,
+            "task": {
+                "task_type": "regression",
+                "function_set": ["add", "sub", "mul", "div", "sin", "cos", "exp", "log"],
+                "metric": "inv_nrmse",
+                "metric_params": [1.0],
+                "threshold": 1e-12,
+                "protected": False,
+            },
+            "training": {
+                "n_samples": 2_000_000,
+                "batch_size": 1000,
+                "epsilon": 0.05,
+                "n_cores_batch": 1,
+            },
+            "policy_optimizer": {
+                "learning_rate": 0.0005,
+                "entropy_weight": 0.03,
+                "entropy_gamma": 0.7,
+            },
+            "prior": {
+                "length": {"min_": 4, "max_": 64, "on": True},
+                "repeat": {"tokens": "const", "min_": None, "max_": 3, "on": True},
+                "inverse": {"on": True},
+                "trig": {"on": True},
+                "const": {"on": True},
+                "no_inputs": {"on": True},
+                "uniform_arity": {"on": True},
+                "soft_length": {"loc": 10, "scale": 5, "on": True},
+                "domain_range": {"on": False},
+            },
         },
     },
     {

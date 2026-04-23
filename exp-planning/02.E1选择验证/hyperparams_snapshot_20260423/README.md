@@ -72,3 +72,13 @@
   - `allowed_symbols = add,mul,aq,exp,log,sin,tanh,constant,variable`
   - `max_evaluations = 500000`
   - 目标是在 `E1` 中显式冻结 EA / tree-search 家族代表的搜索空间
+- `dso` 当前不再使用 wrapper 中的弱默认值，而采用更接近官方 regression benchmark 的显式口径：
+  - `function_set = add,sub,mul,div,sin,cos,exp,log`
+  - `training.n_samples = 2000000`
+  - `training.batch_size = 1000`
+  - `training.epsilon = 0.05`
+  - `policy_optimizer.learning_rate = 0.0005`
+  - `policy_optimizer.entropy_weight = 0.03`
+  - `policy_optimizer.entropy_gamma = 0.7`
+  - 以及官方 regression 配置中的核心 `prior`
+  - 目标是在 `E1` 中避免因 wrapper 过弱默认值而系统性低估 DSO
