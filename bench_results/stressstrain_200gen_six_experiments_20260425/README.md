@@ -11,6 +11,8 @@ Layout:
 - experiment_config.json: full bundle manifest with source paths and effective parameters.
 - shared/dataset_config.json: common dataset contract.
 - shared/llm.config.redacted.json: shared LLM config with credentials redacted.
+- environment_and_best_formulas.md: human-readable environment, dependency, key-parameter, and best-formula record.
+- environment_and_best_formulas.json: machine-readable environment, dependency, key-parameter, and best-formula record.
 - runs/<batch>/<tool>/result.json: copied final result.
 - runs/<batch>/<tool>/config.json: per-experiment reproducibility config extracted from result.json and wrapper defaults.
 - runs/<batch>/<tool>/artifacts/: key available artifacts, such as specs, progress, top samples, and PySR hall_of_fame.
