@@ -23,9 +23,9 @@ start_job() {
   echo "STARTED ${host} ${session}"
 }
 
-start_job "iaaccn22" "e1_w5_tpsr_22" "exp-planning/02.E1选择验证/generated/remote_jobs/W5/tpsr_iaaccn22.sh" "exp-planning/02.E1选择验证/generated/slices/W5/tpsr/iaaccn22.csv" "exp-planning/02.E1选择验证/generated/params/tpsr.json" "24"
-start_job "iaaccn23" "e1_w5_tpsr_23" "exp-planning/02.E1选择验证/generated/remote_jobs/W5/tpsr_iaaccn23.sh" "exp-planning/02.E1选择验证/generated/slices/W5/tpsr/iaaccn23.csv" "exp-planning/02.E1选择验证/generated/params/tpsr.json" "24"
-start_job "iaaccn24" "e1_w5_tpsr_24" "exp-planning/02.E1选择验证/generated/remote_jobs/W5/tpsr_iaaccn24.sh" "exp-planning/02.E1选择验证/generated/slices/W5/tpsr/iaaccn24.csv" "exp-planning/02.E1选择验证/generated/params/tpsr.json" "24"
-start_job "iaaccn25" "e1_w5_tpsr_25" "exp-planning/02.E1选择验证/generated/remote_jobs/W5/tpsr_iaaccn25.sh" "exp-planning/02.E1选择验证/generated/slices/W5/tpsr/iaaccn25.csv" "exp-planning/02.E1选择验证/generated/params/tpsr.json" "24"
+start_job "iaaccn22" "e1_w5_tpsr_22" "exp-planning/02.E1选择验证/generated/remote_jobs/W5/tpsr_iaaccn22.sh" "exp-planning/02.E1选择验证/generated/slices/W5/tpsr/iaaccn22.csv" "exp-planning/02.E1选择验证/generated/params/tpsr.json" "25"
+start_job "iaaccn23" "e1_w5_tpsr_23" "exp-planning/02.E1选择验证/generated/remote_jobs/W5/tpsr_iaaccn23.sh" "exp-planning/02.E1选择验证/generated/slices/W5/tpsr/iaaccn23.csv" "exp-planning/02.E1选择验证/generated/params/tpsr.json" "25"
+start_job "iaaccn24" "e1_w5_tpsr_24" "exp-planning/02.E1选择验证/generated/remote_jobs/W5/tpsr_iaaccn24.sh" "exp-planning/02.E1选择验证/generated/slices/W5/tpsr/iaaccn24.csv" "exp-planning/02.E1选择验证/generated/params/tpsr.json" "25"
+start_job "iaaccn25" "e1_w5_tpsr_25" "exp-planning/02.E1选择验证/generated/remote_jobs/W5/tpsr_iaaccn25.sh" "exp-planning/02.E1选择验证/generated/slices/W5/tpsr/iaaccn25.csv" "exp-planning/02.E1选择验证/generated/params/tpsr.json" "25"
 
 echo "WAVE_DONE W5"

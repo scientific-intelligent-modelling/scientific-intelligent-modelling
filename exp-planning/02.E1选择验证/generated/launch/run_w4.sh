@@ -23,12 +23,12 @@ start_job() {
   echo "STARTED ${host} ${session}"
 }
 
-start_job "iaaccn22" "e1_w4_dso_22" "exp-planning/02.E1选择验证/generated/remote_jobs/W4/dso_iaaccn22.sh" "exp-planning/02.E1选择验证/generated/slices/W4/dso/iaaccn22.csv" "exp-planning/02.E1选择验证/generated/params/dso.json" "12"
-start_job "iaaccn23" "e1_w4_dso_23" "exp-planning/02.E1选择验证/generated/remote_jobs/W4/dso_iaaccn23.sh" "exp-planning/02.E1选择验证/generated/slices/W4/dso/iaaccn23.csv" "exp-planning/02.E1选择验证/generated/params/dso.json" "12"
-start_job "iaaccn24" "e1_w4_dso_24" "exp-planning/02.E1选择验证/generated/remote_jobs/W4/dso_iaaccn24.sh" "exp-planning/02.E1选择验证/generated/slices/W4/dso/iaaccn24.csv" "exp-planning/02.E1选择验证/generated/params/dso.json" "12"
-start_job "iaaccn25" "e1_w4_dso_25" "exp-planning/02.E1选择验证/generated/remote_jobs/W4/dso_iaaccn25.sh" "exp-planning/02.E1选择验证/generated/slices/W4/dso/iaaccn25.csv" "exp-planning/02.E1选择验证/generated/params/dso.json" "12"
-start_job "iaaccn26" "e1_w4_dso_26" "exp-planning/02.E1选择验证/generated/remote_jobs/W4/dso_iaaccn26.sh" "exp-planning/02.E1选择验证/generated/slices/W4/dso/iaaccn26.csv" "exp-planning/02.E1选择验证/generated/params/dso.json" "12"
-start_job "iaaccn27" "e1_w4_dso_27" "exp-planning/02.E1选择验证/generated/remote_jobs/W4/dso_iaaccn27.sh" "exp-planning/02.E1选择验证/generated/slices/W4/dso/iaaccn27.csv" "exp-planning/02.E1选择验证/generated/params/dso.json" "12"
-start_job "iaaccn28" "e1_w4_dso_28" "exp-planning/02.E1选择验证/generated/remote_jobs/W4/dso_iaaccn28.sh" "exp-planning/02.E1选择验证/generated/slices/W4/dso/iaaccn28.csv" "exp-planning/02.E1选择验证/generated/params/dso.json" "12"
+start_job "iaaccn22" "e1_w4_dso_22" "exp-planning/02.E1选择验证/generated/remote_jobs/W4/dso_iaaccn22.sh" "exp-planning/02.E1选择验证/generated/slices/W4/dso/iaaccn22.csv" "exp-planning/02.E1选择验证/generated/params/dso.json" "15"
+start_job "iaaccn23" "e1_w4_dso_23" "exp-planning/02.E1选择验证/generated/remote_jobs/W4/dso_iaaccn23.sh" "exp-planning/02.E1选择验证/generated/slices/W4/dso/iaaccn23.csv" "exp-planning/02.E1选择验证/generated/params/dso.json" "15"
+start_job "iaaccn24" "e1_w4_dso_24" "exp-planning/02.E1选择验证/generated/remote_jobs/W4/dso_iaaccn24.sh" "exp-planning/02.E1选择验证/generated/slices/W4/dso/iaaccn24.csv" "exp-planning/02.E1选择验证/generated/params/dso.json" "15"
+start_job "iaaccn25" "e1_w4_dso_25" "exp-planning/02.E1选择验证/generated/remote_jobs/W4/dso_iaaccn25.sh" "exp-planning/02.E1选择验证/generated/slices/W4/dso/iaaccn25.csv" "exp-planning/02.E1选择验证/generated/params/dso.json" "15"
+start_job "iaaccn26" "e1_w4_dso_26" "exp-planning/02.E1选择验证/generated/remote_jobs/W4/dso_iaaccn26.sh" "exp-planning/02.E1选择验证/generated/slices/W4/dso/iaaccn26.csv" "exp-planning/02.E1选择验证/generated/params/dso.json" "15"
+start_job "iaaccn27" "e1_w4_dso_27" "exp-planning/02.E1选择验证/generated/remote_jobs/W4/dso_iaaccn27.sh" "exp-planning/02.E1选择验证/generated/slices/W4/dso/iaaccn27.csv" "exp-planning/02.E1选择验证/generated/params/dso.json" "15"
+start_job "iaaccn28" "e1_w4_dso_28" "exp-planning/02.E1选择验证/generated/remote_jobs/W4/dso_iaaccn28.sh" "exp-planning/02.E1选择验证/generated/slices/W4/dso/iaaccn28.csv" "exp-planning/02.E1选择验证/generated/params/dso.json" "15"
 
 echo "WAVE_DONE W4"

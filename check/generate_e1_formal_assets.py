@@ -222,7 +222,7 @@ WAVE_CONFIGS = [
         "machines": ["iaaccn22", "iaaccn23", "iaaccn24", "iaaccn25", "iaaccn26", "iaaccn27", "iaaccn28"],
         "sizes": [29, 29, 29, 29, 28, 28, 28],
         "conda_env": "sim_dso",
-        "default_workers": 12,
+        "default_workers": 15,
         "params": {
             "timeout_in_seconds": 3600,
             "progress_snapshot_interval_seconds": 60,
@@ -264,7 +264,7 @@ WAVE_CONFIGS = [
         "machines": ["iaaccn22", "iaaccn23", "iaaccn24", "iaaccn25"],
         "sizes": [50, 50, 50, 50],
         "conda_env": "sim_tpsr",
-        "default_workers": 24,
+        "default_workers": 25,
         "params": {
             "timeout_in_seconds": 3600,
             "progress_snapshot_interval_seconds": 60,
