@@ -73,6 +73,23 @@ def _fmt_counter(counter: Counter[str]) -> str:
     return ", ".join(f"`{k}={v}`" for k, v in sorted(counter.items()))
 
 
+def _family_from_dataset_dir(dataset_dir: str) -> str:
+    parts = [part for part in dataset_dir.replace("\\", "/").split("/") if part]
+    if "sim-datasets-data" in parts:
+        idx = parts.index("sim-datasets-data")
+        if idx + 1 < len(parts):
+            return parts[idx + 1]
+    raise ValueError(f"无法从 dataset_dir 推断 family: {dataset_dir!r}")
+
+
+def _probe_row_family(row: dict[str, str]) -> str:
+    # 非候选 probe 行没有 candidate_family；这些 family 仍应从真实数据路径解析。
+    family = (row.get("candidate_family") or "").strip()
+    if family:
+        return family
+    return _family_from_dataset_dir(row.get("dataset_dir", ""))
+
+
 def _probe_stage_payload() -> dict[str, Any]:
     task_rows = _load_csv(RESULT_ROOT / "one_seed_probe_task_results.csv")
     compare_rows = _load_csv(RESULT_ROOT / "one_seed_probe_dataset_compare.csv")
@@ -92,7 +109,7 @@ def _probe_stage_payload() -> dict[str, Any]:
         ll = (float(row["llmsr_id_nmse"]) + float(row["llmsr_ood_nmse"])) / 2.0
         side = "pysr" if py < ll else "llmsr"
         win_counter[side] += 1
-        family = row.get("candidate_family") or "unknown"
+        family = _probe_row_family(row)
         family_wins[family][side] += 1
 
     candidate_family = Counter(r["family"] for r in candidate_rows)
