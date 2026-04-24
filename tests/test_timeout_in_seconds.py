@@ -1,5 +1,6 @@
 import json
 import sys
+import types
 from pathlib import Path
 
 import numpy as np
@@ -27,6 +28,43 @@ def test_strict_wrappers_accept_timeout_meta_param():
 
     dso = DSORegressor(timeout_in_seconds=13)
     assert "timeout_in_seconds" not in dso.params
+
+
+def test_pyoperon_progress_loop_keeps_max_time_as_int(monkeypatch, tmp_path):
+    seen_max_time_types = []
+
+    class FakeSymbolicRegressor:
+        def __init__(self, **kwargs):
+            self.max_time = kwargs.get("max_time")
+            self.generations = kwargs.get("generations")
+            self.warm_start = kwargs.get("warm_start", False)
+            self.model_ = "X1"
+            self.stats_ = {"model_complexity": 1}
+            self.pareto_front_ = [{"model": "X1", "minimum_description_length": 0.0, "mean_squared_error": 0.0}]
+
+        def fit(self, X, y):
+            seen_max_time_types.append(type(self.max_time))
+            assert isinstance(self.max_time, int)
+
+        def get_model_string(self, model):
+            return "X1"
+
+    pyoperon_module = types.ModuleType("pyoperon")
+    sklearn_module = types.ModuleType("pyoperon.sklearn")
+    sklearn_module.SymbolicRegressor = FakeSymbolicRegressor
+    monkeypatch.setitem(sys.modules, "pyoperon", pyoperon_module)
+    monkeypatch.setitem(sys.modules, "pyoperon.sklearn", sklearn_module)
+
+    reg = OperonRegressor(
+        exp_path=str(tmp_path),
+        exp_name="case",
+        timeout_in_seconds=2,
+        niterations=1,
+        allowed_symbols="add,mul,constant,variable",
+    )
+    reg.fit(np.array([[1.0], [2.0]]), np.array([1.0, 2.0]))
+
+    assert seen_max_time_types == [int]
 
 
 def test_dso_build_fit_config_preserves_logdir_and_disables_gp_meld():

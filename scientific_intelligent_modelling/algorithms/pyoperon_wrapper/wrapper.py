@@ -1,6 +1,7 @@
 # algorithms/pyoperon_wrapper/wrapper.py
 import base64
 import json
+import math
 import os
 import pickle
 import time
@@ -292,7 +293,7 @@ class OperonRegressor(BaseWrapper):
                     remaining = max_time - (time.time() - started_at)
                     if remaining <= 0:
                         break
-                    model.max_time = remaining
+                    model.max_time = max(1, int(math.ceil(remaining)))
                 model.fit(X, y)
                 completed += 1
                 self._update_progress_state_from_model(model, completed)
