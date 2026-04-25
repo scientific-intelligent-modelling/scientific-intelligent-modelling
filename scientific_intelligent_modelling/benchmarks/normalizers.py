@@ -154,14 +154,15 @@ def _strip_numpy_prefix(expr: str) -> str:
     return expr
 
 
-def _sanitize_expression(expr: str) -> str:
+def _sanitize_expression(expr: str, *, shift_one_based: bool = True) -> str:
     text = str(expr).strip()
     if text.startswith("lambda x:"):
         text = text.split(":", 1)[1].strip()
     text = _strip_numpy_prefix(text)
     text = _replace_x_bracket_tokens(text)
     text = _replace_x_underscore_tokens(text)
-    text = _shift_one_based_x_tokens(text)
+    if shift_one_based:
+        text = _shift_one_based_x_tokens(text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
@@ -228,8 +229,8 @@ def _collect_operator_set(expr) -> list[str]:
     return sorted(ops)
 
 
-def _normalize_common_expression(expr: str) -> tuple[str, Any | None]:
-    sanitized = _sanitize_expression(expr)
+def _normalize_common_expression(expr: str, *, shift_one_based: bool = True) -> tuple[str, Any | None]:
+    sanitized = _sanitize_expression(expr, shift_one_based=shift_one_based)
     parsed = None
     if sp is not None:
         parsed = _parse_sympy_expr(sanitized)
@@ -322,10 +323,77 @@ def _gplearn_ast_to_infix(node: ast.AST) -> str:
     raise ValueError(f"不支持的 gplearn 表达式节点: {ast.dump(node)}")
 
 
+def _infer_gplearn_prefix_variables(raw_equation: str) -> list[str]:
+    indices = sorted({int(m.group(1)) for m in re.finditer(r"\bX(\d+)\b", raw_equation)})
+    return [f"x{idx}" for idx in indices]
+
+
+def _infer_gplearn_prefix_operator_set(raw_equation: str) -> list[str]:
+    return sorted({m.group(1) for m in re.finditer(r"\b([A-Za-z_]\w*)\s*\(", raw_equation)})
+
+
+def _estimate_gplearn_prefix_tree_depth(raw_equation: str) -> int | None:
+    max_depth = 0
+    depth = 0
+    for char in raw_equation:
+        if char == "(":
+            depth += 1
+            max_depth = max(max_depth, depth)
+        elif char == ")":
+            depth = max(0, depth - 1)
+    return max_depth + 1 if max_depth else 1
+
+
+def _estimate_gplearn_prefix_node_count(raw_equation: str) -> int | None:
+    tokens = re.findall(
+        r"\b[A-Za-z_]\w*\b|[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?",
+        raw_equation,
+    )
+    return len(tokens) or None
+
+
+def _build_gplearn_prefix_fallback_artifact(
+    raw_equation: str,
+    *,
+    expected_n_features: int | None,
+    error: Exception,
+) -> dict[str, Any]:
+    """保留不可被 Python AST 解析的 gplearn prefix 表达式。
+
+    gplearn 可以生成非常深的 prefix 表达式，`ast.parse` 会先于我们触发
+    `too many nested parentheses`。这类表达式仍可用 gplearn protected 语义
+    回放，因此这里构造一个最小工件，后续由 runner 的专用 evaluator 执行。
+    """
+    variables = _infer_gplearn_prefix_variables(raw_equation)
+    artifact = build_canonical_symbolic_program(
+        tool_name="gplearn",
+        raw_equation=raw_equation,
+        expected_n_features=expected_n_features,
+        normalized_expression="",
+        variables=variables,
+        operator_set=_infer_gplearn_prefix_operator_set(raw_equation),
+        ast_node_count=_estimate_gplearn_prefix_node_count(raw_equation),
+        tree_depth=_estimate_gplearn_prefix_tree_depth(raw_equation),
+        normalization_mode="gplearn_prefix_unparsed",
+        normalization_notes=[f"sympy_parse_skipped:{error.__class__.__name__}:{error}"],
+    )
+    artifact["sympy_parse_ok"] = False
+    artifact["sympy_expression"] = None
+    return validate_canonical_symbolic_program(artifact)
+
+
 def normalize_gplearn_artifact(raw_equation: str, *, expected_n_features: int | None = None) -> dict[str, Any]:
-    tree = ast.parse(str(raw_equation), mode="eval")
+    raw_text = str(raw_equation)
+    try:
+        tree = ast.parse(raw_text, mode="eval")
+    except SyntaxError as exc:
+        return _build_gplearn_prefix_fallback_artifact(
+            raw_text,
+            expected_n_features=expected_n_features,
+            error=exc,
+        )
     infix = _gplearn_ast_to_infix(tree.body)
-    normalized_expression, parsed = _normalize_common_expression(infix)
+    normalized_expression, parsed = _normalize_common_expression(infix, shift_one_based=False)
     variables = sorted({str(sym) for sym in getattr(parsed, "free_symbols", set())}) if parsed is not None else []
     artifact = build_canonical_symbolic_program(
         tool_name="gplearn",

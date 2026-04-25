@@ -76,6 +76,22 @@ class BenchmarkRunnerTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "非标准变量: c0"):
             runner._predict_from_canonical_artifact(artifact, np.asarray([[1.0], [2.0]]))
 
+    def test_predict_from_gplearn_artifact_uses_protected_semantics(self):
+        artifact = {
+            "tool_name": "gplearn",
+            "raw_equation": "add(log(log(div(-0.593, X0))), sqrt(X1))",
+            "raw_equation_kind": "prefix_expression",
+            "normalized_expression": "log(log(-0.593/x0)) + sqrt(x1)",
+            "instantiated_expression": "log(log(-0.593/x0)) + sqrt(x1)",
+        }
+        X = np.asarray([[1.0, -4.0], [0.0, 9.0], [-2.0, 16.0]])
+
+        pred = runner._predict_from_canonical_artifact(artifact, X)
+
+        self.assertEqual(pred.shape, (3,))
+        self.assertTrue(np.all(np.isfinite(pred)))
+        self.assertAlmostEqual(pred[1], 3.0, places=10)
+
     def test_run_benchmark_task_writes_outer_and_experiment_results(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

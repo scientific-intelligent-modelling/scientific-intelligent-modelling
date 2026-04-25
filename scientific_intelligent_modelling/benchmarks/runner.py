@@ -5,6 +5,8 @@ from __future__ import annotations
 import ast
 import json
 import math
+import re
+import sys
 import threading
 import time
 from dataclasses import dataclass
@@ -245,11 +247,170 @@ def _sympy_locals() -> dict[str, Any]:
     return locals_map
 
 
+_GPLEARN_TOKEN_RE = re.compile(
+    r"\s*("
+    r"[A-Za-z_]\w*"
+    r"|[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
+    r"|[(),]"
+    r")"
+)
+
+
+class _GPLearnPrefixParser:
+    """轻量解析 gplearn prefix 表达式，避开 Python AST 括号深度限制。"""
+
+    def __init__(self, text: str):
+        self.text = text
+        self.tokens = self._tokenize(text)
+        self.pos = 0
+
+    @classmethod
+    def _tokenize(cls, text: str) -> list[str]:
+        tokens: list[str] = []
+        pos = 0
+        while pos < len(text):
+            if not text[pos:].strip():
+                break
+            match = _GPLEARN_TOKEN_RE.match(text, pos)
+            if not match:
+                raise ValueError(f"无法解析 gplearn token: {text[pos:pos + 40]!r}")
+            tokens.append(match.group(1))
+            pos = match.end()
+        return tokens
+
+    def parse(self) -> Any:
+        if not self.tokens:
+            raise ValueError("空 gplearn 表达式")
+        node = self._parse_expr()
+        if self.pos != len(self.tokens):
+            raise ValueError(f"gplearn 表达式存在未消费 token: {self.tokens[self.pos]!r}")
+        return node
+
+    def _peek(self) -> str | None:
+        return self.tokens[self.pos] if self.pos < len(self.tokens) else None
+
+    def _consume(self, expected: str | None = None) -> str:
+        token = self._peek()
+        if token is None:
+            raise ValueError("gplearn 表达式意外结束")
+        if expected is not None and token != expected:
+            raise ValueError(f"gplearn 表达式期望 {expected!r}，实际 {token!r}")
+        self.pos += 1
+        return token
+
+    def _parse_expr(self) -> Any:
+        token = self._consume()
+        next_token = self._peek()
+        if re.fullmatch(r"[A-Za-z_]\w*", token) and next_token == "(":
+            self._consume("(")
+            args: list[Any] = []
+            if self._peek() != ")":
+                while True:
+                    args.append(self._parse_expr())
+                    if self._peek() == ",":
+                        self._consume(",")
+                        continue
+                    break
+            self._consume(")")
+            return ("call", token, args)
+        if re.fullmatch(r"[Xx]\d+", token):
+            return ("var", int(token[1:]))
+        try:
+            return ("const", float(token))
+        except Exception as exc:
+            raise ValueError(f"不支持的 gplearn 叶子节点: {token!r}") from exc
+
+
+def _broadcast_gplearn_value(value: Any, rows: int) -> np.ndarray:
+    arr = np.asarray(value, dtype=float)
+    if arr.ndim == 0:
+        return np.full(rows, float(arr), dtype=float)
+    return np.broadcast_to(arr, (rows,)).astype(float)
+
+
+def _eval_gplearn_prefix_node(node: Any, X_arr: np.ndarray) -> Any:
+    kind = node[0]
+    if kind == "const":
+        return float(node[1])
+    if kind == "var":
+        idx = int(node[1])
+        if idx >= X_arr.shape[1]:
+            raise ValueError(f"表达式变量索引越界: x{idx}, 输入维度={X_arr.shape[1]}")
+        return X_arr[:, idx]
+    if kind != "call":
+        raise ValueError(f"不支持的 gplearn 节点类型: {kind!r}")
+
+    op = str(node[1]).lower()
+    values = [_eval_gplearn_prefix_node(arg, X_arr) for arg in node[2]]
+
+    with np.errstate(all="ignore"):
+        if op == "add" and len(values) == 2:
+            return values[0] + values[1]
+        if op == "sub" and len(values) == 2:
+            return values[0] - values[1]
+        if op == "mul" and len(values) == 2:
+            return values[0] * values[1]
+        if op == "div" and len(values) == 2:
+            denominator = values[1]
+            return np.where(np.abs(denominator) > 0.001, np.divide(values[0], denominator), 1.0)
+        if op == "sqrt" and len(values) == 1:
+            return np.sqrt(np.abs(values[0]))
+        if op == "log" and len(values) == 1:
+            value = values[0]
+            return np.where(np.abs(value) > 0.001, np.log(np.abs(value)), 0.0)
+        if op == "inv" and len(values) == 1:
+            value = values[0]
+            return np.where(np.abs(value) > 0.001, np.divide(1.0, value), 0.0)
+        if op == "abs" and len(values) == 1:
+            return np.abs(values[0])
+        if op == "neg" and len(values) == 1:
+            return -values[0]
+        if op == "sin" and len(values) == 1:
+            return np.sin(values[0])
+        if op == "cos" and len(values) == 1:
+            return np.cos(values[0])
+        if op == "tan" and len(values) == 1:
+            return np.tan(values[0])
+        if op == "exp" and len(values) == 1:
+            return np.exp(values[0])
+        if op in {"sig", "sigmoid"} and len(values) == 1:
+            return 1.0 / (1.0 + np.exp(-values[0]))
+        if op == "pow" and len(values) == 2:
+            return np.power(values[0], values[1])
+        if op == "max" and len(values) == 2:
+            return np.maximum(values[0], values[1])
+        if op == "min" and len(values) == 2:
+            return np.minimum(values[0], values[1])
+
+    raise ValueError(f"不支持的 gplearn 算子或参数个数: {op}/{len(values)}")
+
+
+def _predict_gplearn_prefix_expression(raw_equation: str, X: np.ndarray) -> np.ndarray:
+    X_arr = np.asarray(X, dtype=float)
+    if X_arr.ndim != 2:
+        raise ValueError("gplearn prefix 预测要求二维输入")
+    required_recursion_limit = min(50000, max(10000, str(raw_equation).count("(") + 1000))
+    if sys.getrecursionlimit() < required_recursion_limit:
+        sys.setrecursionlimit(required_recursion_limit)
+    node = _GPLearnPrefixParser(str(raw_equation)).parse()
+    pred = _eval_gplearn_prefix_node(node, X_arr)
+    return _broadcast_gplearn_value(pred, X_arr.shape[0]).reshape(-1)
+
+
 def _predict_from_canonical_artifact(artifact: dict[str, Any], X: np.ndarray) -> np.ndarray:
     """基于统一工件中的代值表达式做轻量预测。
 
     这里只服务 runner 的中间最优快照，不依赖具体算法 wrapper 或子进程环境。
     """
+    if str(artifact.get("tool_name") or "").strip().lower() == "gplearn":
+        raw_equation = artifact.get("raw_equation")
+        if isinstance(raw_equation, str) and raw_equation.strip():
+            try:
+                return _predict_gplearn_prefix_expression(raw_equation, X)
+            except Exception:
+                if artifact.get("raw_equation_kind") == "prefix_expression":
+                    raise
+
     expr_text = (
         artifact.get("instantiated_expression")
         or artifact.get("normalized_expression")

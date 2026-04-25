@@ -54,6 +54,23 @@ class SymbolicNormalizersTest(unittest.TestCase):
         self.assertEqual(artifact["normalized_expression"], "x0 + x1**2")
         self.assertTrue(artifact["sympy_parse_ok"])
 
+    def test_normalize_gplearn_keeps_zero_based_feature_indices(self):
+        artifact = normalize_gplearn_artifact("log(X3)", expected_n_features=4)
+        self.assertEqual(artifact["normalized_expression"], "log(x3)")
+        self.assertEqual(artifact["variables"], ["x3"])
+        self.assertTrue(artifact["artifact_valid"])
+
+    def test_normalize_gplearn_deep_prefix_fallback(self):
+        expr = "X0"
+        for _ in range(250):
+            expr = f"add({expr}, 1.0)"
+        artifact = normalize_gplearn_artifact(expr, expected_n_features=1)
+        self.assertEqual(artifact["tool_name"], "gplearn")
+        self.assertEqual(artifact["normalization_mode"], "gplearn_prefix_unparsed")
+        self.assertEqual(artifact["variables"], ["x0"])
+        self.assertFalse(artifact["sympy_parse_ok"])
+        self.assertTrue(artifact["artifact_valid"])
+
     def test_normalize_imcts_artifact(self):
         artifact = normalize_imcts_artifact(
             "lambda x: np.log(x[0] + 1) + np.log(x[0]**2 + 1)",
