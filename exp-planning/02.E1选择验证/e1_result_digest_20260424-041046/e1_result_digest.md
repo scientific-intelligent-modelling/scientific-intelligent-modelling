@@ -10,12 +10,12 @@
 ## Totals
 
 - Total rows: `1400`
-- Valid output rows: `1138`
-- Rows with finite ID/OOD NMSE: `1138`
+- Valid output rows: `1230`
+- Rows with finite ID/OOD NMSE: `1230`
 - Official launcher status: `{'ok': 458, 'timed_out': 942}`
 - Internal result.json status: `{'ok': 461, 'timed_out': 939}`
 - Status mismatch rows: `7`
-- Timeout type: `{'budget_exhausted_with_output': 712, 'no_valid_output': 4, 'not_timeout': 456, 'partial_output': 219, 'unvalidated_expression': 9}`
+- Timeout type: `{'budget_exhausted_with_output': 804, 'no_valid_output': 4, 'not_timeout': 456, 'partial_output': 129, 'unvalidated_expression': 7}`
 
 ## Files
 
@@ -32,7 +32,7 @@
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | drsr | 200 | 101 | 0.505 | 0 | 200 | 0 | 101 | 98 | 0 |
 | dso | 200 | 188 | 0.940 | 28 | 172 | 0 | 161 | 7 | 0 |
-| gplearn | 200 | 106 | 0.530 | 0 | 200 | 0 | 106 | 92 | 0 |
+| gplearn | 200 | 198 | 0.990 | 0 | 200 | 0 | 198 | 2 | 0 |
 | llmsr | 200 | 200 | 1.000 | 193 | 7 | 5 | 7 | 0 | 0 |
 | pyoperon | 200 | 171 | 0.855 | 200 | 0 | 0 | 0 | 0 | 0 |
 | pysr | 200 | 177 | 0.885 | 0 | 200 | 0 | 177 | 21 | 0 |
