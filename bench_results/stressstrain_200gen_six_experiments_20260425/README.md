@@ -13,6 +13,8 @@
 - `shared/llm.config.redacted.json`：已脱敏的共享 LLM 配置。
 - `environment_and_best_formulas.md`：面向阅读的环境配置、依赖版本、关键参数和最优公式记录。
 - `environment_and_best_formulas.json`：机器可读的环境配置、依赖版本、关键参数和最优公式记录。
+- `stressstrain_200gen_improvement_table.md`：200 代同代数 RMSE 提升比例表。
+- `stressstrain_200gen_improvement_table.csv`：200 代同代数 RMSE 提升比例表的 CSV 版本。
 - `runs/<batch>/<tool>/result.json`：复制得到的最终实验结果。
 - `runs/<batch>/<tool>/config.json`：从 `result.json` 和 wrapper 默认值抽取的单实验复现配置。
 - `runs/<batch>/<tool>/artifacts/`：可用的关键实验产物，例如 specs、progress、top samples 和 PySR `hall_of_fame`。
