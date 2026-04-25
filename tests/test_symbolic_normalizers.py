@@ -172,6 +172,21 @@ class SymbolicNormalizersTest(unittest.TestCase):
         self.assertEqual(artifact["variables"], ["x0", "x1", "x2", "x3", "x4"])
         self.assertTrue(artifact["artifact_valid"])
 
+    def test_normalize_drsr_annotated_signature_names(self):
+        raw = (
+            "def equation(t: np.ndarray, a: np.ndarray, params: np.ndarray) -> np.ndarray:\n"
+            "    return params[0] + params[1] * t + params[2] * a\n"
+        )
+        artifact = normalize_drsr_artifact(
+            raw,
+            parameter_values=[0.1, 0.2, 0.3],
+            expected_n_features=2,
+        )
+        self.assertEqual(artifact["normalized_expression"], "c0 + c1*x0 + c2*x1")
+        self.assertEqual(artifact["instantiated_expression"], "0.1 + 0.2*x0 + 0.3*x1")
+        self.assertIn("function_arg_map:a->x1,t->x0", artifact["normalization_notes"])
+        self.assertTrue(artifact["artifact_valid"])
+
     def test_normalize_dso_artifact(self):
         artifact = normalize_dso_artifact("x1 + x2**2", expected_n_features=2)
         self.assertEqual(artifact["tool_name"], "dso")

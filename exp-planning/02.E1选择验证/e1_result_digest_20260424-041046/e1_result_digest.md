@@ -10,12 +10,12 @@
 ## Totals
 
 - Total rows: `1400`
-- Valid output rows: `1181`
-- Rows with finite ID/OOD NMSE: `1230`
+- Valid output rows: `1280`
+- Rows with finite ID/OOD NMSE: `1329`
 - Official launcher status: `{'ok': 458, 'timed_out': 942}`
 - Internal result.json status: `{'ok': 461, 'timed_out': 939}`
 - Status mismatch rows: `7`
-- Timeout type: `{'budget_exhausted_with_output': 765, 'invalid_output': 39, 'no_valid_output': 4, 'not_timeout': 456, 'partial_output': 129, 'unvalidated_expression': 7}`
+- Timeout type: `{'budget_exhausted_with_output': 864, 'invalid_output': 39, 'no_valid_output': 4, 'not_timeout': 456, 'partial_output': 31, 'unvalidated_expression': 6}`
 - Dataset identity status: `{'exact_match': 1337, 'temp_copy_equivalent': 4, 'wrong_dataset_collision': 59}`
 
 ## Files
@@ -34,7 +34,7 @@
 
 | method | total | valid_output | valid_output_rate | status_ok | status_timed_out | status_mismatch | budget_exhausted_with_output | partial_output | no_valid_output |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| drsr | 200 | 92 | 0.460 | 0 | 200 | 0 | 92 | 98 | 0 |
+| drsr | 200 | 191 | 0.955 | 0 | 200 | 0 | 191 | 0 | 0 |
 | dso | 200 | 185 | 0.925 | 28 | 172 | 0 | 159 | 7 | 0 |
 | gplearn | 200 | 191 | 0.955 | 0 | 200 | 0 | 191 | 2 | 0 |
 | llmsr | 200 | 191 | 0.955 | 193 | 7 | 5 | 1 | 0 | 0 |
