@@ -62,6 +62,14 @@ def _task_key(row: dict[str, str], seed: int) -> str:
     return f"{dataset_dir}|seed={seed}"
 
 
+def _task_label(row: dict[str, str]) -> str:
+    dataset_name = row.get("dataset_name") or row.get("dataset") or row.get("basename") or "dataset"
+    try:
+        return f"g{int(row['global_index']):04d}_{dataset_name}"
+    except Exception:
+        return f"g{row.get('global_index', 'x')}_{dataset_name}"
+
+
 def _resolve_dataset_dir(dataset_dir: str) -> str:
     path = Path(dataset_dir)
     candidates: list[Path] = []
@@ -119,6 +127,14 @@ def _run_single_task(
         str(seed),
         "--params-json",
         str(params_json),
+        "--task-label",
+        _task_label(row),
+        "--task-global-index",
+        str(row["global_index"]),
+        "--expected-dataset-rel",
+        row.get("dataset_rel") or "",
+        "--expected-dataset-dir",
+        row.get("dataset_dir") or "",
         "--report-json",
         str(report_path),
     ]
@@ -227,6 +243,14 @@ def _run_task(args: argparse.Namespace) -> None:
 
     output_root = Path(args.output_root).resolve()
     params = json.loads(Path(args.params_json).read_text(encoding="utf-8"))
+    params.update(
+        {
+            "task_label": args.task_label,
+            "task_global_index": args.task_global_index,
+            "expected_dataset_rel": args.expected_dataset_rel,
+            "expected_dataset_dir": args.expected_dataset_dir,
+        }
+    )
     try:
         result_path = run_benchmark_task(
             tool_name=args.tool,
@@ -242,6 +266,11 @@ def _run_task(args: argparse.Namespace) -> None:
             "error": result.get("error"),
             "seconds": result.get("seconds"),
             "experiment_dir": result.get("experiment_dir"),
+            "task_label": result.get("task_label"),
+            "task_global_index": result.get("task_global_index"),
+            "expected_dataset_rel": result.get("expected_dataset_rel"),
+            "expected_dataset_dir": result.get("expected_dataset_dir"),
+            "dataset_identity_check": result.get("dataset_identity_check"),
         }
     except Exception as exc:
         report = {
@@ -273,6 +302,10 @@ def build_parser() -> argparse.ArgumentParser:
     task_parser.add_argument("--params-json", required=True, help="工具参数 JSON 文件")
     task_parser.add_argument("--output-root", required=True, help="本机结果输出根目录")
     task_parser.add_argument("--seed", type=int, default=1314, help="随机种子")
+    task_parser.add_argument("--task-label", default=None, help="唯一任务标签，用于结果目录隔离")
+    task_parser.add_argument("--task-global-index", default=None, help="Candidate-200 全局编号")
+    task_parser.add_argument("--expected-dataset-rel", default=None, help="期望数据集相对身份路径")
+    task_parser.add_argument("--expected-dataset-dir", default=None, help="期望数据集目录")
     task_parser.add_argument("--report-json", required=True, help="单任务报告 JSON 输出路径")
     return parser
 

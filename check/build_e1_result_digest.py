@@ -8,6 +8,8 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 E1_ROOT = REPO_ROOT / "exp-planning" / "02.E1选择验证" / "e1_final_results_20260424-041046_clean"
@@ -72,6 +74,76 @@ def _candidate_index() -> dict[int, dict[str, str]]:
     return {int(row["global_index"]): row for row in rows}
 
 
+_FEATURE_COUNT_CACHE: dict[str, int | None] = {}
+
+
+def _normalize_dataset_identity_path(path: Any) -> str:
+    text = "" if path is None else str(path).strip().replace("\\", "/")
+    marker = "sim-datasets-data/"
+    if marker in text:
+        return marker + text.split(marker, 1)[1].strip("/")
+    return text.rstrip("/")
+
+
+def _candidate_feature_count(candidate: dict[str, str]) -> int | None:
+    rel = candidate.get("dataset_rel") or candidate.get("dataset_dir") or ""
+    if rel in _FEATURE_COUNT_CACHE:
+        return _FEATURE_COUNT_CACHE[rel]
+
+    dataset_dir = REPO_ROOT / rel if not Path(rel).is_absolute() else Path(rel)
+    try:
+        meta = yaml.safe_load((dataset_dir / "metadata.yaml").read_text(encoding="utf-8")) or {}
+        dataset_meta = meta.get("dataset", meta)
+        target = ((dataset_meta.get("target") or {}).get("name") or "").strip()
+        with (dataset_dir / "train.csv").open("r", encoding="utf-8", newline="") as f:
+            header = next(csv.reader(f))
+        count = len([name for name in header if name != target])
+    except Exception:
+        count = None
+    _FEATURE_COUNT_CACHE[rel] = count
+    return count
+
+
+def _identity_fields(
+    raw: dict[str, Any],
+    result: dict[str, Any],
+    candidate: dict[str, str],
+) -> dict[str, Any]:
+    expected_rel = candidate.get("dataset_rel") or candidate.get("dataset_dir") or raw.get("dataset_dir") or ""
+    actual_dir = result.get("dataset_dir") or raw.get("dataset_dir") or ""
+    expected_norm = _normalize_dataset_identity_path(expected_rel)
+    actual_norm = _normalize_dataset_identity_path(actual_dir)
+    expected_feature_count = _candidate_feature_count(candidate)
+    actual_feature_count = len(result.get("feature_names") or [])
+
+    if expected_norm and actual_norm == expected_norm:
+        status = "exact_match"
+        trusted = True
+    elif (
+        "/e1tmp/dso_data/" in str(actual_dir)
+        and expected_feature_count is not None
+        and actual_feature_count == expected_feature_count
+    ):
+        status = "temp_copy_equivalent"
+        trusted = True
+    else:
+        status = "wrong_dataset_collision"
+        trusted = False
+
+    result_check = result.get("dataset_identity_check") if isinstance(result.get("dataset_identity_check"), dict) else {}
+    return {
+        "dataset_identity_status": status,
+        "dataset_identity_trusted": _bool_text(trusted),
+        "expected_dataset_rel": expected_rel,
+        "actual_result_dataset_dir": actual_dir,
+        "expected_feature_count": expected_feature_count,
+        "actual_feature_count": actual_feature_count,
+        "expected_dataset_identity": expected_norm,
+        "actual_dataset_identity": actual_norm,
+        "result_identity_status": result_check.get("status") or "",
+    }
+
+
 def _timeout_type(
     task_status: str,
     result_status: str,
@@ -115,7 +187,9 @@ def _digest_row(raw: dict[str, Any], candidates: dict[int, dict[str, str]]) -> d
     artifact_valid_raw = artifact.get("artifact_valid")
     artifact_valid = "" if artifact_valid_raw is None else _bool_text(bool(artifact_valid_raw))
     artifact_ok = artifact_valid_raw is not False
-    valid_output = bool(has_expression and artifact_ok and has_full_metrics)
+    identity = _identity_fields(raw, result, candidate)
+    identity_trusted = identity["dataset_identity_trusted"] == "true"
+    valid_output = bool(has_expression and artifact_ok and has_full_metrics and identity_trusted)
 
     complexity = artifact.get("ast_node_count")
     tree_depth = artifact.get("tree_depth")
@@ -127,6 +201,7 @@ def _digest_row(raw: dict[str, Any], candidates: dict[int, dict[str, str]]) -> d
         "global_index": global_index,
         "dataset_name": raw.get("dataset_name") or result.get("dataset") or candidate.get("dataset_name", ""),
         "dataset_dir": candidate.get("dataset_rel") or candidate.get("dataset_dir") or raw.get("dataset_dir", ""),
+        **identity,
         "family": candidate.get("family", ""),
         "subgroup": candidate.get("subgroup", ""),
         "basename": candidate.get("basename", ""),
@@ -232,6 +307,43 @@ def _write_summary(rows: list[dict[str, Any]], output_dir: Path) -> None:
     dataset_rows = _dataset_rows(rows)
     status_mismatch_rows = [row for row in rows if row["status_mismatch"] == "true"]
     nonvalid_rows = [row for row in rows if row["valid_output"] != "true"]
+    identity_audit_rows = [
+        {
+            "dataset_id": row["dataset_id"],
+            "global_index": row["global_index"],
+            "dataset_name": row["dataset_name"],
+            "method": row["method"],
+            "host": row["host"],
+            "wave": row["wave"],
+            "dataset_identity_status": row["dataset_identity_status"],
+            "dataset_identity_trusted": row["dataset_identity_trusted"],
+            "expected_dataset_rel": row["expected_dataset_rel"],
+            "actual_result_dataset_dir": row["actual_result_dataset_dir"],
+            "expected_feature_count": row["expected_feature_count"],
+            "actual_feature_count": row["actual_feature_count"],
+            "result_relpath": row["result_relpath"],
+            "source_result_path": row["source_result_path"],
+        }
+        for row in rows
+    ]
+    identity_mismatch_rows = [
+        row for row in identity_audit_rows if row["dataset_identity_status"] == "wrong_dataset_collision"
+    ]
+    identity_rerun_rows = [
+        {
+            "dataset_id": row["dataset_id"],
+            "global_index": row["global_index"],
+            "dataset_name": row["dataset_name"],
+            "method": row["method"],
+            "host": row["host"],
+            "wave": row["wave"],
+            "expected_dataset_rel": row["expected_dataset_rel"],
+            "expected_feature_count": row["expected_feature_count"],
+            "actual_feature_count": row["actual_feature_count"],
+            "result_relpath": row["result_relpath"],
+        }
+        for row in identity_mismatch_rows
+    ]
 
     total = len(rows)
     valid = sum(1 for row in rows if row["valid_output"] == "true")
@@ -239,6 +351,7 @@ def _write_summary(rows: list[dict[str, Any]], output_dir: Path) -> None:
     status_counter = Counter(row["status"] for row in rows)
     result_status_counter = Counter(row["result_status"] for row in rows)
     timeout_counter = Counter(row["timeout_type"] for row in rows)
+    identity_counter = Counter(row["dataset_identity_status"] for row in rows)
     status_mismatch = sum(1 for row in rows if row["status_mismatch"] == "true")
 
     lines = [
@@ -260,6 +373,7 @@ def _write_summary(rows: list[dict[str, Any]], output_dir: Path) -> None:
         f"- Internal result.json status: `{dict(sorted(result_status_counter.items()))}`",
         f"- Status mismatch rows: `{status_mismatch}`",
         f"- Timeout type: `{dict(sorted(timeout_counter.items()))}`",
+        f"- Dataset identity status: `{dict(sorted(identity_counter.items()))}`",
         "",
         "## Files",
         "",
@@ -269,6 +383,9 @@ def _write_summary(rows: list[dict[str, Any]], output_dir: Path) -> None:
         "- `e1_dataset_coverage.csv`: per-dataset valid method coverage.",
         "- `e1_status_mismatch.csv`: rows whose launcher status differs from internal `result.json` status.",
         "- `e1_nonvalid_cases.csv`: rows excluded by `valid_output=false`.",
+        "- `e1_dataset_identity_audit.csv`: expected Candidate-200 dataset identity versus actual `result.json` dataset.",
+        "- `e1_dataset_identity_mismatch.csv`: rows excluded because a same-name dataset collision wrote the wrong result.",
+        "- `e1_dataset_identity_rerun_tasks.csv`: compact rerun checklist for wrong-dataset collision rows.",
         "",
         "## Method Summary",
         "",
@@ -298,6 +415,9 @@ def _write_summary(rows: list[dict[str, Any]], output_dir: Path) -> None:
     _write_csv(output_dir / "e1_dataset_coverage.csv", dataset_rows)
     _write_csv(output_dir / "e1_status_mismatch.csv", status_mismatch_rows)
     _write_csv(output_dir / "e1_nonvalid_cases.csv", nonvalid_rows)
+    _write_csv(output_dir / "e1_dataset_identity_audit.csv", identity_audit_rows)
+    _write_csv(output_dir / "e1_dataset_identity_mismatch.csv", identity_mismatch_rows)
+    _write_csv(output_dir / "e1_dataset_identity_rerun_tasks.csv", identity_rerun_rows)
 
 
 def build() -> None:

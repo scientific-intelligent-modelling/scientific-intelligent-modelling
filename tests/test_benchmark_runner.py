@@ -145,6 +145,66 @@ dataset:
                 result,
             )
 
+    def test_run_benchmark_task_uses_unique_task_label_for_same_basename(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_dirs = []
+            for parent, values in {"hard": "1,1\n2,2\n", "hard_dummy": "3,3\n4,4\n"}.items():
+                dataset_dir = root / parent / "same-name"
+                dataset_dir.mkdir(parents=True)
+                (dataset_dir / "metadata.yaml").write_text(
+                    """
+dataset:
+  target:
+    name: y
+  features:
+    - name: x0
+""".strip(),
+                    encoding="utf-8",
+                )
+                (dataset_dir / "train.csv").write_text(f"x0,y\n{values}", encoding="utf-8")
+                dataset_dirs.append(dataset_dir)
+
+            original_cls = runner.SymbolicRegressor
+            runner.SymbolicRegressor = _FakeRegressor
+            try:
+                result_path_1 = runner.run_benchmark_task(
+                    tool_name="gplearn",
+                    dataset_dir=dataset_dirs[0],
+                    output_root=root / "bench_results",
+                    seed=1314,
+                    params_override={
+                        "task_label": "g0001_same-name",
+                        "task_global_index": 1,
+                        "expected_dataset_dir": str(dataset_dirs[0]),
+                    },
+                )
+                result_path_2 = runner.run_benchmark_task(
+                    tool_name="gplearn",
+                    dataset_dir=dataset_dirs[1],
+                    output_root=root / "bench_results",
+                    seed=1314,
+                    params_override={
+                        "task_label": "g0002_same-name",
+                        "task_global_index": 2,
+                        "expected_dataset_dir": str(dataset_dirs[1]),
+                    },
+                )
+            finally:
+                runner.SymbolicRegressor = original_cls
+
+            self.assertNotEqual(result_path_1, result_path_2)
+            result_1 = json.loads(result_path_1.read_text(encoding="utf-8"))
+            result_2 = json.loads(result_path_2.read_text(encoding="utf-8"))
+            self.assertEqual(result_path_1.parent.name, "g0001_same-name")
+            self.assertEqual(result_path_2.parent.name, "g0002_same-name")
+            self.assertEqual(result_1["task_global_index"], 1)
+            self.assertEqual(result_2["task_global_index"], 2)
+            self.assertTrue(result_1["dataset_identity_check"]["match"])
+            self.assertTrue(result_2["dataset_identity_check"]["match"])
+            self.assertNotIn("task_label", result_1["params"])
+            self.assertNotIn("task_global_index", result_1["params"])
+
     def test_run_benchmark_task_ignores_seed_in_params_override(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

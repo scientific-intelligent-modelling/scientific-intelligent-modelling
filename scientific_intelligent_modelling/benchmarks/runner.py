@@ -30,6 +30,12 @@ from scientific_intelligent_modelling.srkit.regressor import SymbolicRegressor
 _HIDDEN_PARAM_KEYS = {"api_key", "apikey", "token", "password", "secret"}
 _PROGRESS_DIRNAME = "progress"
 _SNAPSHOT_CAPABLE_TOOLS = {"llmsr", "drsr", "pysr", "dso", "pyoperon", "gplearn", "e2esr", "iMCTS", "tpsr", "QLattice"}
+_RUNNER_TASK_IDENTITY_PARAM_KEYS = {
+    "task_label",
+    "task_global_index",
+    "expected_dataset_rel",
+    "expected_dataset_dir",
+}
 _NEUTRAL_SR_BACKGROUND = (
     "This is a symbolic regression task. "
     "Find a compact mathematical equation that predicts the target from the observed variables."
@@ -69,6 +75,76 @@ def _safe_float(value: Any) -> float | None:
     if math.isnan(value) or math.isinf(value):
         return None
     return value
+
+
+def _slug_task_component(text: Any, *, max_len: int = 120) -> str:
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", str(text)).strip("-")
+    return (slug or "task")[:max_len]
+
+
+def _normalize_dataset_identity_path(path: Any) -> str | None:
+    if path is None:
+        return None
+    text = str(path).strip()
+    if not text:
+        return None
+    text = text.replace("\\", "/")
+    marker = "sim-datasets-data/"
+    if marker in text:
+        return marker + text.split(marker, 1)[1].strip("/")
+    try:
+        return str(Path(text).resolve())
+    except Exception:
+        return text.rstrip("/")
+
+
+def _build_task_label(dataset: "LoadedDataset", task_global_index: Any = None, task_label: Any = None) -> str:
+    if isinstance(task_label, str) and task_label.strip():
+        return _slug_task_component(task_label)
+    if task_global_index not in (None, ""):
+        try:
+            return _slug_task_component(f"g{int(task_global_index):04d}_{dataset.dataset_name}")
+        except Exception:
+            return _slug_task_component(f"g{task_global_index}_{dataset.dataset_name}")
+    return _slug_task_component(dataset.dataset_name)
+
+
+def _split_runner_task_identity_params(params: dict[str, Any] | None) -> tuple[dict[str, Any], dict[str, Any]]:
+    rest = dict(params or {})
+    identity: dict[str, Any] = {}
+    for key in _RUNNER_TASK_IDENTITY_PARAM_KEYS:
+        if key in rest:
+            identity[key] = rest.pop(key)
+    return rest, identity
+
+
+def _dataset_identity_check(
+    dataset: "LoadedDataset",
+    *,
+    expected_dataset_rel: Any = None,
+    expected_dataset_dir: Any = None,
+) -> dict[str, Any]:
+    expected = expected_dataset_rel or expected_dataset_dir
+    expected_norm = _normalize_dataset_identity_path(expected)
+    actual_norm = _normalize_dataset_identity_path(dataset.dataset_dir)
+    if expected_norm is None:
+        status = "not_provided"
+        match = None
+    elif expected_norm == actual_norm:
+        status = "match"
+        match = True
+    else:
+        status = "mismatch"
+        match = False
+    return {
+        "status": status,
+        "match": match,
+        "expected_dataset_rel": str(expected_dataset_rel) if expected_dataset_rel not in (None, "") else None,
+        "expected_dataset_dir": str(expected_dataset_dir) if expected_dataset_dir not in (None, "") else None,
+        "expected_normalized": expected_norm,
+        "actual_dataset_dir": str(dataset.dataset_dir),
+        "actual_normalized": actual_norm,
+    }
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -981,6 +1057,7 @@ def build_runner_params(
     output_dir: str | Path,
     *,
     seed: int,
+    task_label: str | None = None,
     params_override: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     output_path = Path(output_dir).resolve()
@@ -988,7 +1065,8 @@ def build_runner_params(
     # runner 在外层统一传 seed，避免 params_override 中重复注入导致构造器冲突。
     params.pop("seed", None)
     params.setdefault("exp_path", str(output_path / "experiments"))
-    params.setdefault("exp_name", f"{dataset.dataset_name}_{tool_name}_seed{seed}")
+    exp_label = task_label or dataset.dataset_name
+    params.setdefault("exp_name", f"{exp_label}_{tool_name}_seed{seed}")
     # 显式注入当前任务的数据契约，避免 wrapper 只能从 X.shape[1] 隐式猜维度。
     # 这些字段属于框架元参数；具体算法可选择消费或忽略，但不应再缺席。
     params.setdefault("n_features", len(dataset.feature_names))
@@ -1029,11 +1107,24 @@ def build_result_payload(
     id_metrics: dict[str, float | None] | None,
     ood_metrics: dict[str, float | None] | None,
     experiment_dir: str | None,
+    task_label: str | None = None,
+    task_global_index: int | None = None,
+    expected_dataset_rel: str | None = None,
+    expected_dataset_dir: str | None = None,
 ) -> dict[str, Any]:
     return {
         "tool": tool_name,
+        "task_label": task_label,
+        "task_global_index": task_global_index,
         "dataset": dataset.dataset_name,
         "dataset_dir": str(dataset.dataset_dir),
+        "expected_dataset_rel": expected_dataset_rel,
+        "expected_dataset_dir": expected_dataset_dir,
+        "dataset_identity_check": _dataset_identity_check(
+            dataset,
+            expected_dataset_rel=expected_dataset_rel,
+            expected_dataset_dir=expected_dataset_dir,
+        ),
         "experiment_dir": str(Path(experiment_dir).resolve()) if experiment_dir else None,
         "status": status,
         "error": error,
@@ -1065,8 +1156,21 @@ def run_benchmark_task(
     seed: int = 1314,
     params_override: dict[str, Any] | None = None,
 ) -> Path:
+    params_override_clean, task_identity = _split_runner_task_identity_params(params_override)
     dataset = load_canonical_dataset(dataset_dir)
-    output_dir = Path(output_root).resolve() / tool_name / dataset.dataset_name
+    raw_global_index = task_identity.get("task_global_index")
+    task_global_index = None
+    if raw_global_index not in (None, ""):
+        try:
+            task_global_index = int(raw_global_index)
+        except Exception:
+            task_global_index = None
+    task_label = _build_task_label(
+        dataset,
+        task_global_index=task_global_index if task_global_index is not None else raw_global_index,
+        task_label=task_identity.get("task_label"),
+    )
+    output_dir = Path(output_root).resolve() / tool_name / task_label
     output_dir.mkdir(parents=True, exist_ok=True)
 
     params = build_runner_params(
@@ -1074,7 +1178,8 @@ def run_benchmark_task(
         dataset,
         output_dir,
         seed=seed,
-        params_override=params_override,
+        task_label=task_label,
+        params_override=params_override_clean,
     )
     progress_snapshot_interval_seconds = _resolve_progress_snapshot_interval_seconds(tool_name, params)
 
@@ -1174,6 +1279,10 @@ def run_benchmark_task(
         id_metrics=id_metrics,
         ood_metrics=ood_metrics,
         experiment_dir=experiment_dir,
+        task_label=task_label,
+        task_global_index=task_global_index,
+        expected_dataset_rel=task_identity.get("expected_dataset_rel"),
+        expected_dataset_dir=task_identity.get("expected_dataset_dir"),
     )
 
     result_path = output_dir / "result.json"
