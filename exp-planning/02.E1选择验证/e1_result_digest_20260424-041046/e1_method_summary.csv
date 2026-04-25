@@ -1,0 +1,8 @@
+method,has_expression,has_full_metrics,result_status_ok,result_status_timed_out,status_mismatch,status_ok,status_timed_out,timeout_type_budget_exhausted_with_output,timeout_type_no_valid_output,timeout_type_not_timeout,timeout_type_partial_output,timeout_type_unvalidated_expression,total,valid_output,valid_output_rate
+drsr,200,101,0,200,0,0,200,101,0,0,98,1,200,101,0.505
+dso,200,188,28,172,0,28,172,161,0,28,7,4,200,188,0.94
+gplearn,200,106,0,200,0,0,200,106,0,0,92,2,200,106,0.53
+llmsr,200,200,198,2,5,193,7,7,0,193,0,0,200,200,1.0
+pyoperon,200,171,200,0,0,200,0,0,0,200,0,0,200,171,0.855
+pysr,200,177,0,200,0,0,200,177,0,0,21,2,200,177,0.885
+tpsr,196,195,35,165,2,37,163,160,4,35,1,0,200,195,0.975
