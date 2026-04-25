@@ -245,6 +245,89 @@ dataset:
             self.assertIsNotNone(result["ood_test"])
             self.assertEqual(result["equation_count"], 1)
 
+    def test_extract_drsr_candidate_backfills_params_from_matching_sample(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            exp_dir = root / "drsr_exp"
+            samples_dir = exp_dir / "samples"
+            best_history_dir = exp_dir / "best_history"
+            samples_dir.mkdir(parents=True)
+            best_history_dir.mkdir(parents=True)
+            function = (
+                "def equation(beta, alpha, params):\n"
+                "    return params[0] + params[1] * beta + params[2] * alpha\n"
+            )
+            (samples_dir / "top01_samples_0.json").write_text(
+                json.dumps({"function": function, "score": 2.0}),
+                encoding="utf-8",
+            )
+            (best_history_dir / "best_sample_0.json").write_text(
+                json.dumps({"function": function, "score": 1.0, "params": [1.0, 2.0, 3.0]}),
+                encoding="utf-8",
+            )
+
+            candidate = runner._extract_drsr_periodic_candidate(exp_dir)
+
+            self.assertIsNotNone(candidate)
+            self.assertEqual(candidate["params"], [1.0, 2.0, 3.0])
+            self.assertEqual(candidate["params_source"], "matched_drsr_candidate")
+
+    def test_recover_drsr_timeout_payload_uses_backfilled_params(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_dir = root / "dataset"
+            dataset_dir.mkdir()
+            (dataset_dir / "metadata.yaml").write_text(
+                """
+dataset:
+  target:
+    name: y
+  features:
+    - name: beta
+    - name: alpha
+""".strip(),
+                encoding="utf-8",
+            )
+            for name, rows in {
+                "train.csv": "beta,alpha,y\n1,2,9\n2,3,14\n",
+                "valid.csv": "beta,alpha,y\n3,4,19\n",
+                "id_test.csv": "beta,alpha,y\n4,5,24\n",
+                "ood_test.csv": "beta,alpha,y\n5,6,29\n",
+            }.items():
+                (dataset_dir / name).write_text(rows, encoding="utf-8")
+
+            exp_dir = root / "drsr_exp"
+            samples_dir = exp_dir / "samples"
+            best_history_dir = exp_dir / "best_history"
+            samples_dir.mkdir(parents=True)
+            best_history_dir.mkdir(parents=True)
+            function = (
+                "def equation(beta, alpha, params):\n"
+                "    return params[0] + params[1] * beta + params[2] * alpha\n"
+            )
+            (samples_dir / "top01_samples_0.json").write_text(
+                json.dumps({"function": function, "score": 2.0}),
+                encoding="utf-8",
+            )
+            (best_history_dir / "best_sample_0.json").write_text(
+                json.dumps({"function": function, "score": 1.0, "params": [1.0, 2.0, 3.0]}),
+                encoding="utf-8",
+            )
+
+            dataset = runner.load_canonical_dataset(dataset_dir)
+            payload = runner._recover_timeout_payload_from_candidate(
+                tool_name="drsr",
+                dataset=dataset,
+                experiment_dir=exp_dir,
+            )
+
+            self.assertIsNotNone(payload)
+            self.assertIsNone(payload["canonical_artifact_error"])
+            self.assertEqual(payload["canonical_artifact"]["parameter_values"], [1.0, 2.0, 3.0])
+            self.assertEqual(payload["canonical_artifact"]["normalized_expression"], "c0 + c1*x0 + c2*x1")
+            self.assertEqual(payload["id_metrics"]["nmse"], 0.0)
+            self.assertEqual(payload["ood_metrics"]["nmse"], 0.0)
+
     def test_build_runner_params_can_disable_prompt_semantics_for_llmsr(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

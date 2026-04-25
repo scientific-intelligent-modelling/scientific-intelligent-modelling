@@ -364,6 +364,7 @@ def _extract_drsr_periodic_candidate(experiment_dir: str | Path) -> dict[str, An
     candidate_paths.extend(sorted((base_dir / "samples").glob("top*.json")))
     candidate_paths.extend(sorted((base_dir / "best_history").glob("best_sample_*.json")))
     candidate_paths.extend(sorted((base_dir / "samples").glob("samples_*.json")))
+    candidates: list[dict[str, Any]] = []
     best_key = None
     best_item = None
     for path in candidate_paths:
@@ -373,6 +374,7 @@ def _extract_drsr_periodic_candidate(experiment_dir: str | Path) -> dict[str, An
         func = item.get("function")
         if not _is_equation_function_text(func):
             continue
+        candidates.append(item)
         score = item.get("score")
         if not isinstance(score, (int, float)):
             continue
@@ -380,7 +382,55 @@ def _extract_drsr_periodic_candidate(experiment_dir: str | Path) -> dict[str, An
         if best_key is None or key_val < best_key:
             best_key = key_val
             best_item = item
-    return best_item
+    if best_item is None:
+        return None
+    return _with_drsr_candidate_params(best_item, candidates)
+
+
+def _candidate_parameter_values(candidate: dict[str, Any] | None) -> list[float] | None:
+    if not isinstance(candidate, dict):
+        return None
+    for key in ("params", "fitted_params", "parameter_values"):
+        values = candidate.get(key)
+        if isinstance(values, list):
+            try:
+                return [float(v) for v in values]
+            except Exception:
+                continue
+    return None
+
+
+def _with_drsr_candidate_params(
+    candidate: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """确保 DRSR best candidate 携带可用于 canonical artifact 的参数。
+
+    历史结果中出现过 best candidate 的公式被写入 `result.json`，但对应 `params`
+    没有随 canonical artifact 带出的问题。这里按 function 精确匹配同目录其它
+    best/sample 文件补齐参数，避免 timeout 恢复时留下未实例化的 c0/c1 常数。
+    """
+    if _candidate_parameter_values(candidate) is not None:
+        out = dict(candidate)
+        out["params"] = _candidate_parameter_values(candidate)
+        return out
+
+    func = candidate.get("function")
+    if not isinstance(func, str) or not func.strip():
+        return candidate
+    for item in candidates:
+        if item is candidate:
+            continue
+        if item.get("function") != func:
+            continue
+        params = _candidate_parameter_values(item)
+        if params is None:
+            continue
+        out = dict(candidate)
+        out["params"] = params
+        out["params_source"] = "matched_drsr_candidate"
+        return out
+    return candidate
 
 
 def _extract_pysr_periodic_candidate(experiment_dir: str | Path) -> dict[str, Any] | None:
@@ -620,7 +670,7 @@ def _build_periodic_snapshot_payload(
     if not candidate:
         return None
 
-    parameter_values = candidate.get("params") if isinstance(candidate.get("params"), list) else None
+    parameter_values = _candidate_parameter_values(candidate)
     canonical_artifact, canonical_artifact_error = safe_build_canonical_artifact(
         tool_name=tool_name,
         equation=candidate.get("function") if "function" in candidate else candidate.get("equation"),
@@ -697,7 +747,7 @@ def _recover_timeout_payload_from_candidate(
     if not equation:
         return None
 
-    parameter_values = candidate.get("params") if isinstance(candidate.get("params"), list) else None
+    parameter_values = _candidate_parameter_values(candidate)
     canonical_artifact, canonical_artifact_error = safe_build_canonical_artifact(
         tool_name=tool_name,
         equation=equation,
