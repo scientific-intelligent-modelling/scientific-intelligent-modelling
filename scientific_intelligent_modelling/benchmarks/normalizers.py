@@ -78,6 +78,75 @@ def _replace_legacy_drsr_tokens(expr: str) -> str:
     return out
 
 
+def _first_function_def(source: str | None) -> ast.FunctionDef | None:
+    if not isinstance(source, str) or not source.strip():
+        return None
+    try:
+        tree = ast.parse(source)
+    except Exception:
+        return None
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef):
+            return node
+    return None
+
+
+class _FunctionArgumentNameNormalizer(ast.NodeTransformer):
+    def __init__(self, arg_map: dict[str, str]):
+        self.arg_map = arg_map
+
+    def visit_Name(self, node: ast.Name) -> ast.AST:  # noqa: N802 - ast API
+        replacement = self.arg_map.get(node.id)
+        if replacement:
+            return ast.copy_location(ast.Name(id=replacement, ctx=node.ctx), node)
+        return node
+
+
+def _standardize_python_function_args_in_return(
+    function_source: str,
+    raw_return_expr: str,
+    *,
+    expected_n_features: int | None = None,
+) -> tuple[str, list[str]]:
+    """按 equation 函数签名把任意特征名映射为 x0/x1/...。
+
+    DRSR 会根据数据集 metadata 在函数签名中生成 `r, m1, kappa` 等变量名。
+    benchmark 后处理只接受标准变量槽位，因此这里基于参数顺序做确定性映射。
+    """
+    func = _first_function_def(function_source)
+    if func is None:
+        return raw_return_expr, []
+
+    feature_args: list[str] = []
+    for arg in func.args.args:
+        name = arg.arg
+        if name == "params":
+            continue
+        feature_args.append(name)
+
+    if expected_n_features is not None:
+        try:
+            feature_args = feature_args[: max(0, int(expected_n_features))]
+        except Exception:
+            pass
+
+    arg_map = {name: f"x{i}" for i, name in enumerate(feature_args)}
+    arg_map = {old: new for old, new in arg_map.items() if old != new}
+    if not arg_map:
+        return raw_return_expr, []
+
+    try:
+        expr_tree = ast.parse(raw_return_expr, mode="eval")
+        transformed = _FunctionArgumentNameNormalizer(arg_map).visit(expr_tree)
+        ast.fix_missing_locations(transformed)
+        return ast.unparse(transformed.body).strip(), [f"{old}->{new}" for old, new in sorted(arg_map.items())]
+    except Exception:
+        text = raw_return_expr
+        for old, new in sorted(arg_map.items(), key=lambda item: len(item[0]), reverse=True):
+            text = re.sub(rf"\b{re.escape(old)}\b", new, text)
+        return text, [f"{old}->{new}" for old, new in sorted(arg_map.items())]
+
+
 def _strip_numpy_prefix(expr: str) -> str:
     expr = expr.replace("numpy.", "")
     expr = expr.replace("np.", "")
@@ -392,11 +461,23 @@ def _normalize_python_function_artifact(
     parameter_values: list[float] | None = None,
     expected_n_features: int | None = None,
     rename_cols: bool = False,
+    rename_function_args: bool = False,
 ) -> dict[str, Any]:
     function_source = str(raw_equation)
-    return_expr = extract_return_expression_from_python_function(function_source)
-    if not return_expr:
+    raw_return_expr = extract_return_expression_from_python_function(function_source)
+    if not raw_return_expr:
         raise ValueError(f"{tool_name} 原始函数中未找到 return 表达式")
+
+    notes: list[str] = []
+    return_expr = raw_return_expr
+    if rename_function_args:
+        return_expr, arg_notes = _standardize_python_function_args_in_return(
+            function_source,
+            raw_return_expr,
+            expected_n_features=expected_n_features,
+        )
+        if arg_notes:
+            notes.append("function_arg_map:" + ",".join(arg_notes))
 
     expr = _sanitize_expression(return_expr)
     if rename_cols:
@@ -412,7 +493,7 @@ def _normalize_python_function_artifact(
         parameter_values=parameter_values,
         expected_n_features=expected_n_features,
         python_function_source=function_source,
-        return_expression_source=return_expr,
+        return_expression_source=raw_return_expr,
         normalized_expression=normalized_expression,
         variables=variables,
         parameter_symbols=parameter_symbols,
@@ -420,6 +501,7 @@ def _normalize_python_function_artifact(
         ast_node_count=_count_sympy_nodes(parsed),
         tree_depth=_sympy_tree_depth(parsed),
         normalization_mode=f"{tool_name}_python_return",
+        normalization_notes=notes,
     )
     artifact["sympy_parse_ok"] = parsed is not None
     artifact["sympy_expression"] = normalized_expression if parsed is not None else None
@@ -453,6 +535,7 @@ def normalize_drsr_artifact(
         parameter_values=parameter_values,
         expected_n_features=expected_n_features,
         rename_cols=True,
+        rename_function_args=True,
     )
     normalized_expression = artifact.get("normalized_expression")
     if isinstance(normalized_expression, str):

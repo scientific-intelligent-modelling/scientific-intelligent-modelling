@@ -127,6 +127,34 @@ class SymbolicNormalizersTest(unittest.TestCase):
         self.assertEqual(artifact["normalized_expression"], "c0*x0 + c1*x1 + c2")
         self.assertTrue(artifact["sympy_parse_ok"])
 
+    def test_normalize_drsr_metadata_feature_names_from_signature(self):
+        raw = (
+            "def equation(r, m1, m2, params):\n"
+            "    return params[0] + params[1] * r + params[2] * m1 + params[3] * m2\n"
+        )
+        artifact = normalize_drsr_artifact(
+            raw,
+            parameter_values=[1.0, 2.0, 3.0, 4.0],
+            expected_n_features=3,
+        )
+        self.assertEqual(artifact["normalized_expression"], "c0 + c1*x0 + c2*x1 + c3*x2")
+        self.assertEqual(artifact["variables"], ["x0", "x1", "x2"])
+        self.assertTrue(artifact["artifact_valid"])
+
+    def test_normalize_drsr_feynman_signature_names(self):
+        raw = (
+            "def equation(kappa, t1, t2, a, d, params):\n"
+            "    return params[0] + params[1] * kappa + params[2] * t1 + params[3] * t2 + params[4] * a + params[5] * d\n"
+        )
+        artifact = normalize_drsr_artifact(
+            raw,
+            parameter_values=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            expected_n_features=5,
+        )
+        self.assertEqual(artifact["normalized_expression"], "c0 + c1*x0 + c2*x1 + c3*x2 + c4*x3 + c5*x4")
+        self.assertEqual(artifact["variables"], ["x0", "x1", "x2", "x3", "x4"])
+        self.assertTrue(artifact["artifact_valid"])
+
     def test_normalize_dso_artifact(self):
         artifact = normalize_dso_artifact("x1 + x2**2", expected_n_features=2)
         self.assertEqual(artifact["tool_name"], "dso")

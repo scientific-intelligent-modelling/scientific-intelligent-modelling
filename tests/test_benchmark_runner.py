@@ -3,6 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import numpy as np
+
 from scientific_intelligent_modelling.benchmarks import runner
 
 
@@ -66,6 +68,14 @@ class _TimeoutRecoverableFakeRegressor(_FakeRegressor):
 
 
 class BenchmarkRunnerTest(unittest.TestCase):
+    def test_predict_from_canonical_artifact_reports_uninstantiated_params(self):
+        artifact = {
+            "normalized_expression": "c0 + x0",
+            "instantiated_expression": "c0 + x0",
+        }
+        with self.assertRaisesRegex(ValueError, "非标准变量: c0"):
+            runner._predict_from_canonical_artifact(artifact, np.asarray([[1.0], [2.0]]))
+
     def test_run_benchmark_task_writes_outer_and_experiment_results(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -265,7 +265,12 @@ def _predict_from_canonical_artifact(artifact: dict[str, Any], X: np.ndarray) ->
     expr = sp.sympify(expr_text, locals=_sympy_locals())
     free_symbols = sorted(
         list(expr.free_symbols),
-        key=lambda sym: int(str(sym)[1:]) if str(sym).startswith("x") and str(sym)[1:].isdigit() else str(sym),
+        key=lambda sym: (
+            0,
+            int(str(sym)[1:]),
+        )
+        if str(sym).startswith("x") and str(sym)[1:].isdigit()
+        else (1, str(sym)),
     )
 
     if not free_symbols:
