@@ -39,7 +39,11 @@ def _find_result(rerun_root: Path, tool: str, global_index: int, dataset_name: s
     for candidate in candidates:
         if candidate.exists():
             return candidate
-    matches = sorted(rerun_root.glob(f"**/g{global_index:04d}_{dataset_name}/result.json"))
+    matches = sorted(
+        path
+        for path in rerun_root.glob(f"**/{label}/result.json")
+        if tool in path.parts
+    )
     return matches[0] if matches else None
 
 

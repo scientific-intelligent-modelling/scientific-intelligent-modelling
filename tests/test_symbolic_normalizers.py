@@ -42,6 +42,12 @@ class SymbolicNormalizersTest(unittest.TestCase):
         self.assertEqual(artifact["instantiated_expression"], "x0 + 2*x1")
         self.assertTrue(artifact["sympy_parse_ok"])
 
+    def test_normalize_pysr_square_cube_artifact(self):
+        artifact = normalize_pysr_artifact("cube(x0) + square(x1)", expected_n_features=2)
+        self.assertEqual(artifact["normalized_expression"], "x0**3 + x1**2")
+        self.assertEqual(artifact["operator_set"], ["add", "pow"])
+        self.assertTrue(artifact["artifact_valid"])
+
     def test_normalize_qlattice_artifact(self):
         artifact = normalize_qlattice_artifact("x0 + 2*x1")
         self.assertEqual(artifact["tool_name"], "QLattice")

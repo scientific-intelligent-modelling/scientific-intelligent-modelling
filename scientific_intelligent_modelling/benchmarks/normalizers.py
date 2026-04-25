@@ -190,6 +190,8 @@ def _sympy_locals() -> dict[str, Any]:
             "asin": sp.asin,
             "acos": sp.acos,
             "atan": sp.atan,
+            "square": lambda x: x**2,
+            "cube": lambda x: x**3,
         }
     )
     return locals_map

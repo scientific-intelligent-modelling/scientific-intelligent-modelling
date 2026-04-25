@@ -317,6 +317,8 @@ def _sympy_locals() -> dict[str, Any]:
         "asin": sp.asin,
         "acos": sp.acos,
         "atan": sp.atan,
+        "square": lambda x: x**2,
+        "cube": lambda x: x**3,
     }
     for i in range(256):
         locals_map[f"x{i}"] = sp.Symbol(f"x{i}")

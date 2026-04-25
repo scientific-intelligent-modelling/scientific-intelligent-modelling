@@ -76,6 +76,14 @@ class BenchmarkRunnerTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "非标准变量: c0"):
             runner._predict_from_canonical_artifact(artifact, np.asarray([[1.0], [2.0]]))
 
+    def test_predict_from_canonical_artifact_supports_pysr_square_cube(self):
+        artifact = {
+            "tool_name": "pysr",
+            "instantiated_expression": "cube(x0) + square(x1)",
+        }
+        pred = runner._predict_from_canonical_artifact(artifact, np.asarray([[2.0, 3.0], [1.0, 4.0]]))
+        np.testing.assert_allclose(pred, np.asarray([17.0, 17.0]))
+
     def test_predict_from_gplearn_artifact_uses_protected_semantics(self):
         artifact = {
             "tool_name": "gplearn",

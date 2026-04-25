@@ -10,13 +10,13 @@
 ## Totals
 
 - Total rows: `1400`
-- Valid output rows: `1280`
-- Rows with finite ID/OOD NMSE: `1329`
-- Official launcher status: `{'ok': 458, 'timed_out': 942}`
-- Internal result.json status: `{'ok': 461, 'timed_out': 939}`
-- Status mismatch rows: `7`
-- Timeout type: `{'budget_exhausted_with_output': 864, 'invalid_output': 39, 'no_valid_output': 4, 'not_timeout': 456, 'partial_output': 31, 'unvalidated_expression': 6}`
-- Dataset identity status: `{'exact_match': 1337, 'temp_copy_equivalent': 4, 'wrong_dataset_collision': 59}`
+- Valid output rows: `1385`
+- Rows with finite ID/OOD NMSE: `1385`
+- Official launcher status: `{'ok': 462, 'timed_out': 938}`
+- Internal result.json status: `{'ok': 462, 'timed_out': 938}`
+- Status mismatch rows: `0`
+- Timeout type: `{'budget_exhausted_with_output': 928, 'no_valid_output': 2, 'not_timeout': 462, 'partial_output': 8}`
+- Dataset identity status: `{'exact_match': 1396, 'temp_copy_equivalent': 4}`
 
 ## Files
 
@@ -34,10 +34,10 @@
 
 | method | total | valid_output | valid_output_rate | status_ok | status_timed_out | status_mismatch | budget_exhausted_with_output | partial_output | no_valid_output |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| drsr | 200 | 191 | 0.955 | 0 | 200 | 0 | 191 | 0 | 0 |
-| dso | 200 | 185 | 0.925 | 28 | 172 | 0 | 159 | 7 | 0 |
-| gplearn | 200 | 191 | 0.955 | 0 | 200 | 0 | 191 | 2 | 0 |
-| llmsr | 200 | 191 | 0.955 | 193 | 7 | 5 | 1 | 0 | 0 |
-| pyoperon | 200 | 166 | 0.830 | 200 | 0 | 0 | 0 | 0 | 0 |
-| pysr | 200 | 169 | 0.845 | 0 | 200 | 0 | 169 | 21 | 0 |
-| tpsr | 200 | 187 | 0.935 | 37 | 163 | 2 | 153 | 1 | 4 |
+| drsr | 200 | 200 | 1.000 | 0 | 200 | 0 | 200 | 0 | 0 |
+| dso | 200 | 198 | 0.990 | 27 | 173 | 0 | 171 | 2 | 0 |
+| gplearn | 200 | 200 | 1.000 | 0 | 200 | 0 | 200 | 0 | 0 |
+| llmsr | 200 | 200 | 1.000 | 199 | 1 | 0 | 1 | 0 | 0 |
+| pyoperon | 200 | 195 | 0.975 | 200 | 0 | 0 | 0 | 0 | 0 |
+| pysr | 200 | 197 | 0.985 | 0 | 200 | 0 | 197 | 3 | 0 |
+| tpsr | 200 | 195 | 0.975 | 36 | 164 | 0 | 159 | 3 | 2 |

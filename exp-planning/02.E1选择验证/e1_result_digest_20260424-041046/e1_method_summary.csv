@@ -1,8 +1,8 @@
-method,has_expression,has_full_metrics,result_status_ok,result_status_timed_out,status_mismatch,status_ok,status_timed_out,timeout_type_budget_exhausted_with_output,timeout_type_invalid_output,timeout_type_no_valid_output,timeout_type_not_timeout,timeout_type_partial_output,timeout_type_unvalidated_expression,total,valid_output,valid_output_rate
-drsr,200,200,0,200,0,0,200,191,9,0,0,0,0,200,191,0.955
-dso,200,188,28,172,0,28,172,159,2,0,28,7,4,200,185,0.925
-gplearn,200,198,0,200,0,0,200,191,7,0,0,2,0,200,191,0.955
-llmsr,200,200,198,2,5,193,7,1,6,0,193,0,0,200,191,0.955
-pyoperon,200,171,200,0,0,200,0,0,0,0,200,0,0,200,166,0.83
-pysr,200,177,0,200,0,0,200,169,8,0,0,21,2,200,169,0.845
-tpsr,196,195,35,165,2,37,163,153,7,4,35,1,0,200,187,0.935
+method,has_expression,has_full_metrics,result_status_ok,result_status_timed_out,status_ok,status_timed_out,timeout_type_budget_exhausted_with_output,timeout_type_no_valid_output,timeout_type_not_timeout,timeout_type_partial_output,total,valid_output,valid_output_rate
+drsr,200,200,0,200,0,200,200,0,0,0,200,200,1.0
+dso,200,198,27,173,27,173,171,0,27,2,200,198,0.99
+gplearn,200,200,0,200,0,200,200,0,0,0,200,200,1.0
+llmsr,200,200,199,1,199,1,1,0,199,0,200,200,1.0
+pyoperon,200,195,200,0,200,0,0,0,200,0,200,195,0.975
+pysr,200,197,0,200,0,200,197,0,0,3,200,197,0.985
+tpsr,198,195,36,164,36,164,159,2,36,3,200,195,0.975
