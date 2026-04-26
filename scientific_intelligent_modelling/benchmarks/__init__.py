@@ -15,6 +15,7 @@ from .normalizers import (
     normalize_operon_artifact,
     normalize_pysr_artifact,
     normalize_qlattice_artifact,
+    normalize_ragsr_artifact,
     normalize_tpsr_artifact,
     normalize_udsr_artifact,
 )
@@ -59,6 +60,7 @@ __all__ = [
     "normalize_operon_artifact",
     "normalize_pysr_artifact",
     "normalize_qlattice_artifact",
+    "normalize_ragsr_artifact",
     "normalize_tpsr_artifact",
     "normalize_udsr_artifact",
     "llm_srbench_acc_tau",

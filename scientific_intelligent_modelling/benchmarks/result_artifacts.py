@@ -15,6 +15,7 @@ from .normalizers import (
     normalize_operon_artifact,
     normalize_pysr_artifact,
     normalize_qlattice_artifact,
+    normalize_ragsr_artifact,
     normalize_tpsr_artifact,
     normalize_udsr_artifact,
 )
@@ -57,6 +58,8 @@ def safe_build_canonical_artifact(
             artifact = normalize_gplearn_artifact(text, expected_n_features=expected_n_features)
         elif tool in {"pyoperon", "operon"}:
             artifact = normalize_operon_artifact(text, expected_n_features=expected_n_features)
+        elif tool == "ragsr":
+            artifact = normalize_ragsr_artifact(text, expected_n_features=expected_n_features)
         elif tool == "llmsr":
             artifact = normalize_llmsr_artifact(
                 text,

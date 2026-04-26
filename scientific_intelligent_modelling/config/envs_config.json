@@ -133,6 +133,24 @@
         "python -c \"from pathlib import Path; import urllib.request; p=Path('scientific_intelligent_modelling/algorithms/e2esr_wrapper/model.pt'); p.parent.mkdir(parents=True, exist_ok=True); p.exists() or urllib.request.urlretrieve('https://dl.fbaipublicfiles.com/symbolicregression/model1.pt', str(p))\""
       ]
     },
+    "sim_ragsr": {
+      "python_version": "3.10",
+      "conda_packages": [
+        "pip",
+        "pytorch"
+      ],
+      "channels": [
+        "conda-forge",
+        "pytorch"
+      ],
+      "pip_packages": [],
+      "comments": "RAG-SR / EvolutionaryForest 环境；用 post_install_commands 控制安装顺序，避免 tpot/xgboost 最新依赖触发源码构建",
+      "post_install_commands": [
+        "pip install -e .",
+        "pip install --timeout 120 --retries 5 category-encoders==2.8.1 deap==1.4.4 dill==0.4.1 lightgbm==4.6.0 linear-tree==0.3.5 mlxtend==0.23.4 sklearn2pmml==0.130.0 smt==2.13.0 umap-learn==0.5.12 hdfe==0.0.4 scorch==0.2.0 seaborn==0.13.2 matplotlib==3.10.9 cachetools==6.2.6 gplearn==0.4.2 faiss-cpu==1.13.0 skorch==1.2.0 shap==0.49.1 xgboost==2.1.4 pytest",
+        "pip install --no-deps evolutionary-forest==0.2.5"
+      ]
+    },
     "sim_qLattice": {
       "python_version": "3.10",
       "conda_packages": [

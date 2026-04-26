@@ -15,6 +15,10 @@
       "env": "sim_base",
       "regressor": "OperonRegressor"
     },
+    "ragsr": {
+      "env": "sim_ragsr",
+      "regressor": "RAGSRRegressor"
+    },
     "llmsr": {
       "env": "sim_llm",
       "regressor": "LLMSRRegressor"

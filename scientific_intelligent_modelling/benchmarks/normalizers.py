@@ -481,6 +481,27 @@ def normalize_operon_artifact(raw_equation: str, *, expected_n_features: int | N
     return validate_canonical_symbolic_program(artifact)
 
 
+def normalize_ragsr_artifact(raw_equation: str, *, expected_n_features: int | None = None) -> dict[str, Any]:
+    normalized_expression, parsed = _normalize_common_expression(str(raw_equation), shift_one_based=False)
+    variables = sorted({str(sym) for sym in getattr(parsed, "free_symbols", set())}) if parsed is not None else []
+    artifact = build_canonical_symbolic_program(
+        tool_name="ragsr",
+        raw_equation=raw_equation,
+        expected_n_features=expected_n_features,
+        python_function_source=_build_function_source(normalized_expression, variables),
+        return_expression_source=normalized_expression,
+        normalized_expression=normalized_expression,
+        variables=variables,
+        operator_set=_collect_operator_set(parsed),
+        ast_node_count=_count_sympy_nodes(parsed),
+        tree_depth=_sympy_tree_depth(parsed),
+        normalization_mode="ragsr_evolutionary_forest_expr",
+    )
+    artifact["sympy_parse_ok"] = parsed is not None
+    artifact["sympy_expression"] = normalized_expression if parsed is not None else None
+    return validate_canonical_symbolic_program(artifact)
+
+
 def normalize_dso_artifact(raw_equation: str, *, expected_n_features: int | None = None) -> dict[str, Any]:
     expr = _replace_symbolic_tokens(str(raw_equation))
     normalized_expression, parsed = _normalize_common_expression(expr)
