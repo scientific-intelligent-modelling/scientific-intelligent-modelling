@@ -36,7 +36,6 @@ def _run_with_symbolic_regressor(X, y):
         gene_num=2,
         max_height=4,
         max_trees=100,
-        categorical_encoding=None,
         verbose=False,
     )
     reg.fit(X, y)
@@ -54,7 +53,6 @@ def _run_direct_wrapper(X, y):
         gene_num=2,
         max_height=4,
         max_trees=100,
-        categorical_encoding=None,
         verbose=False,
     )
     reg.fit(X, y)

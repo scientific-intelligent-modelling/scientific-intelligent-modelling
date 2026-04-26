@@ -31,7 +31,7 @@ class _FakeEvolutionaryForestRegressor:
 
 
 class RAGSRWrapperTest(unittest.TestCase):
-    def test_params_absorb_runner_contract_and_default_numeric_categorical_mode(self):
+    def test_params_absorb_runner_contract_and_default_official_categorical_mode(self):
         reg = RAGSRRegressor(
             seed=17,
             n_features=2,
@@ -44,7 +44,7 @@ class RAGSRWrapperTest(unittest.TestCase):
         self.assertEqual(reg.params["random_state"], 17)
         self.assertEqual(reg.params["n_gen"], 1)
         self.assertEqual(reg.params["n_pop"], 10)
-        self.assertIsNone(reg.params["categorical_encoding"])
+        self.assertEqual(reg.params["categorical_encoding"], "Target")
         self.assertNotIn("n_features", reg.params)
         self.assertNotIn("feature_names", reg.params)
         self.assertNotIn("target_name", reg.params)
@@ -77,6 +77,7 @@ class RAGSRWrapperTest(unittest.TestCase):
 
             self.assertEqual(_FakeEvolutionaryForestRegressor.last_params["random_state"], 3)
             self.assertNotIn("categorical_features", _FakeEvolutionaryForestRegressor.last_params)
+            self.assertEqual(reg.model.fit_kwargs["categorical_features"], [False, False])
             self.assertEqual(reg.get_optimal_equation(), "x0 + 2*x1")
             np.testing.assert_allclose(reg.predict(X), np.array([5.0, 11.0]))
 

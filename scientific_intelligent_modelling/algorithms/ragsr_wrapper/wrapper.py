@@ -1,7 +1,8 @@
 """RAG-SR wrapper backed by EvolutionaryForestRegressor.
 
 RAG-SR 的公开仓库只是薄封装；真实实现位于 `evolutionary_forest` 包中。
-当前包装器固定数值型 SR benchmark 口径，默认不启用分类特征编码。
+默认参数尽量贴近官方 `rag_sr.py`，同时在集成层显式声明当前数值型
+benchmark 没有分类特征。
 """
 
 from __future__ import annotations
@@ -47,9 +48,10 @@ class RAGSRRegressor(BaseWrapper):
         "change_semantic_after_deletion": True,
         "include_subtree_to_lib": True,
         "library_updating_mode": "Recent",
-        # 当前 benchmark 全是数值型特征；设为 None 可避开旧 category_encoders
-        # 与新版 scikit-learn 的兼容问题。
-        "categorical_encoding": None,
+        # 官方 RAG-SR 默认使用 Target encoding，并在 fit 时传入
+        # categorical_features=np.zeros(X.shape[1])。当前 benchmark 全是数值型
+        # 特征，因此 wrapper 会在 fit 入口自动补齐全 False 的特征类型掩码。
+        "categorical_encoding": "Target",
         "root_crossover": True,
         "scaling_before_replacement": False,
         "score_func": "R2",
@@ -172,7 +174,10 @@ class RAGSRRegressor(BaseWrapper):
         x_arr = np.asarray(X, dtype=float)
         y_arr = np.asarray(y, dtype=float).reshape(-1)
         self.model = EvolutionaryForestRegressor(**self.params)
-        self.model.fit(x_arr, y_arr, **self._fit_kwargs)
+        fit_kwargs = dict(self._fit_kwargs)
+        if self.params.get("categorical_encoding") is not None:
+            fit_kwargs.setdefault("categorical_features", [False] * x_arr.shape[1])
+        self.model.fit(x_arr, y_arr, **fit_kwargs)
         self._equation = self._extract_model_expression()
         return self
 
