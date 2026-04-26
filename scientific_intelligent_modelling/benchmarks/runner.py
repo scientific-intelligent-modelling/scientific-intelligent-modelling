@@ -29,7 +29,7 @@ from scientific_intelligent_modelling.srkit.regressor import SymbolicRegressor
 
 _HIDDEN_PARAM_KEYS = {"api_key", "apikey", "token", "password", "secret"}
 _PROGRESS_DIRNAME = "progress"
-_SNAPSHOT_CAPABLE_TOOLS = {"llmsr", "drsr", "pysr", "dso", "pyoperon", "gplearn", "e2esr", "iMCTS", "tpsr", "QLattice"}
+_SNAPSHOT_CAPABLE_TOOLS = {"llmsr", "drsr", "pysr", "dso", "udsr", "pyoperon", "gplearn", "e2esr", "iMCTS", "tpsr", "QLattice"}
 _RUNNER_TASK_IDENTITY_PARAM_KEYS = {
     "task_label",
     "task_global_index",
@@ -755,6 +755,16 @@ def _extract_dso_periodic_candidate(experiment_dir: str | Path) -> dict[str, Any
     return best_item
 
 
+def _extract_udsr_periodic_candidate(experiment_dir: str | Path) -> dict[str, Any] | None:
+    base_dir = Path(experiment_dir)
+    state_item = _read_json_file(base_dir / ".udsr_current_best.json")
+    if state_item:
+        equation = state_item.get("equation")
+        if isinstance(equation, str) and equation.strip():
+            return state_item
+    return _extract_dso_periodic_candidate(experiment_dir)
+
+
 def _extract_pyoperon_periodic_candidate(experiment_dir: str | Path) -> dict[str, Any] | None:
     path = Path(experiment_dir) / ".pyoperon_current_best.json"
     item = _read_json_file(path)
@@ -831,6 +841,8 @@ def _extract_periodic_candidate(tool_name: str, experiment_dir: str | Path) -> d
         return _extract_pysr_periodic_candidate(experiment_dir)
     if tool == "dso":
         return _extract_dso_periodic_candidate(experiment_dir)
+    if tool == "udsr":
+        return _extract_udsr_periodic_candidate(experiment_dir)
     if tool == "pyoperon":
         return _extract_pyoperon_periodic_candidate(experiment_dir)
     if tool == "gplearn":

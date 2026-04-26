@@ -1,9 +1,9 @@
-# 10 个算法超参数总览表
+# 11 个算法超参数总览表
 
-这张表汇总当前 benchmark 计划中 **10 个算法** 的默认实验口径，覆盖：
+这张表汇总当前 benchmark 计划中 **11 个算法** 的默认实验口径，覆盖：
 
 - `E1` 七算法选择验证
-- `E3` 的 10 算法轻量验证
+- `E3` 的 10/11 算法轻量验证
 - `E6` 的最终 leaderboard
 
 全局默认：
@@ -23,6 +23,7 @@
 | `e2esr` | `E3 / E6` | E2E Transformer-based SR | `max_input_points=200`, `n_trees_to_refine=100` | 预训练 E2E 模型 | `max_number_bags=-1`, `stop_refinement_after=1`, `rescale=true` | `force_cpu=true` |
 | `QLattice` | `E3 / E6` | 图结构搜索 | `n_epochs=100` | `kind=regression` | `criterion=bic`, `signif=4` | `threads=1` |
 | `iMCTS` | `E3 / E6` | MCTS-based SR | `max_expressions=2000000`, `K=500`, `c=4.0`, `gamma=0.5` | `+,-,*,/,sin,cos,exp,log` | `max_depth=6`, `gp_rate=0.2`, `mutation_rate=0.1`, `exploration_rate=0.2`, `max_constants=10` | `optimization_method=LN_NELDERMEAD`, `verbose=false` |
+| `udsr` | `E3 / E6` | DSO/uDSR hybrid | `training.n_samples=2000000`, `batch_size=1000`, `gp_meld.generations=20` | `add,sub,mul,div,sin,cos,exp,log,poly` | `poly_optimizer.degree=3`, `policy_optimizer_type=pqt`, `gp_meld.run_gp_meld=true`, 官方 uDSR `prior` | 复用 `sim_dso`，独立 `udsr` 工具名，不覆盖 `dso` |
 
 ## 补充说明
 
@@ -31,4 +32,4 @@
 - 真实 `benchmark_llm.config` 不进入 Git；仓库只提交：
   - `benchmark_llm.config.example`
 - `tpsr` 与 `e2esr` 的默认口径都带有 **CPU 环境稳定性保护项**，不等同于“完全裸官方默认”。
-- `E3 / E6` 的三个算法目前已经补进同一快照目录，但还未纳入 `generate_e1_formal_assets.py` 的 `E1` wave 分发。
+- `E3 / E6` 的 `e2esr / qlattice / imcts / udsr` 目前已经补进同一快照目录，但还未纳入 `generate_e1_formal_assets.py` 的 `E1` wave 分发。

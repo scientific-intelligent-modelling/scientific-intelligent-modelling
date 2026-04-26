@@ -16,6 +16,7 @@ from .normalizers import (
     normalize_pysr_artifact,
     normalize_qlattice_artifact,
     normalize_tpsr_artifact,
+    normalize_udsr_artifact,
 )
 
 
@@ -70,6 +71,8 @@ def safe_build_canonical_artifact(
             )
         elif tool == "dso":
             artifact = normalize_dso_artifact(text, expected_n_features=expected_n_features)
+        elif tool == "udsr":
+            artifact = normalize_udsr_artifact(text, expected_n_features=expected_n_features)
         elif tool == "tpsr":
             artifact = normalize_tpsr_artifact(text, expected_n_features=expected_n_features)
         elif tool == "e2esr":

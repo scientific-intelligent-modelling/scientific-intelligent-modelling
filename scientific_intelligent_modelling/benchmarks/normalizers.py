@@ -503,6 +503,13 @@ def normalize_dso_artifact(raw_equation: str, *, expected_n_features: int | None
     return validate_canonical_symbolic_program(artifact)
 
 
+def normalize_udsr_artifact(raw_equation: str, *, expected_n_features: int | None = None) -> dict[str, Any]:
+    artifact = normalize_dso_artifact(raw_equation, expected_n_features=expected_n_features)
+    artifact["tool_name"] = "udsr"
+    artifact["normalization_mode"] = "udsr_dso_sympy_expr"
+    return validate_canonical_symbolic_program(artifact)
+
+
 def normalize_imcts_artifact(raw_equation: str, *, expected_n_features: int | None = None) -> dict[str, Any]:
     normalized_expression, parsed = _normalize_common_expression(raw_equation)
     variables = sorted({str(sym) for sym in getattr(parsed, "free_symbols", set())}) if parsed is not None else []

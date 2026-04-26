@@ -23,6 +23,10 @@
       "env": "sim_dso",
       "regressor": "DSORegressor"
     },
+    "udsr": {
+      "env": "sim_dso",
+      "regressor": "UDSRRegressor"
+    },
     "tpsr": {
       "env": "sim_tpsr",
       "regressor": "TPSRRegressor"

@@ -98,7 +98,7 @@
       "post_install_commands": [
         "pip install -e ."
       ],
-      "comments": "DSO 回归环境；依赖本地源码路径导入，不强制编译 cyfunc 扩展"
+      "comments": "DSO/uDSR 回归环境；依赖本地源码路径导入，不强制编译 cyfunc 扩展"
     },
     "sim_tpsr": {
       "python_version": "3.9",

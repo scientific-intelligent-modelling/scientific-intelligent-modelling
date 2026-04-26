@@ -63,6 +63,12 @@
       "phase": "E3/E6",
       "family": "MCTS-based SR",
       "file": "imcts.json"
+    },
+    {
+      "tool": "udsr",
+      "phase": "E3/E6",
+      "family": "uDSR / DSO + LINEAR token + GP-meld",
+      "file": "udsr.json"
     }
   ],
   "global_defaults": {

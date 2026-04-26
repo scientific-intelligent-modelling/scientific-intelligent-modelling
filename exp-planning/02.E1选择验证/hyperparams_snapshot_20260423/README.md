@@ -7,7 +7,7 @@
 - 避免后续重新运行 `generate_e1_formal_assets.py` 时覆盖当前参数口径
 - 为 `W1~W5` 分发、复查和论文复现实验提供一份稳定快照
 - 明确当前 `E1 / E3 / E6` 采用的是一套**可执行的工程基线**，不是最终调优版
-- 10 算法总览表见：
+- 11 算法总览表见：
   - [hyperparams_overview.md](./hyperparams_overview.md)
 
 ## 当前包含的算法
@@ -22,6 +22,7 @@
 - `e2esr`
 - `qlattice`
 - `imcts`
+- `udsr`
 
 ## 文件说明
 
@@ -55,6 +56,9 @@
 - `imcts.json`
   - `E3 / E6` 使用
   - MCTS-based symbolic regression
+- `udsr.json`
+  - `E3 / E6` 使用
+  - DSO/uDSR 统一框架变体，启用 LINEAR `poly` token 与 GP-meld
 
 ## 参数来源
 
@@ -68,8 +72,8 @@
 
 - 当前默认 `timeout_in_seconds = 3600`
 - 当前默认 `progress_snapshot_interval_seconds = 60`
-- `e2esr / qlattice / imcts` 不属于 `E1` 七算法，而是用于：
-  - `E3` 的 10 算法轻量验证
+- `e2esr / qlattice / imcts / udsr` 不属于 `E1` 七算法，而是用于：
+  - `E3` 的 10/11 算法轻量验证
   - `E6` 的最终 leaderboard
 - `llmsr / drsr` 使用固定 benchmark 配置：
   - `/home/zhangziwen/projects/scientific-intelligent-modelling/exp-planning/02.E1选择验证/llm_configs/benchmark_llm.config`
@@ -113,7 +117,7 @@
   - `criterion = bic`
   - `signif = 4`
   - `threads = 1`
-  - 目标是在最终 10 算法比较中固定图搜索模型的选模与线程口径
+  - 目标是在最终 10/11 算法比较中固定图搜索模型的选模与线程口径
 - `imcts` 当前采用的口径是：
   - `ops = +,-,*,/,sin,cos,exp,log`
   - `max_depth = 6`
@@ -127,4 +131,14 @@
   - `max_constants = 10`
   - `max_expressions = 2000000`
   - `optimization_method = LN_NELDERMEAD`
-  - 目标是在最终 10 算法比较中对齐仓库自带 basic 配置
+  - 目标是在最终 10/11 算法比较中对齐仓库自带 basic 配置
+- `udsr` 当前采用的口径是：
+  - 在 `dso` benchmark 预算基础上启用 uDSR 的 `poly` LINEAR token
+  - `gp_meld.run_gp_meld = true`
+  - `gp_meld.population_size = 100`
+  - `gp_meld.generations = 20`
+  - `policy_optimizer_type = pqt`
+  - `poly_optimizer_params.degree = 3`
+  - `training.n_samples = 2000000`
+  - `training.batch_size = 1000`
+  - 目标是把 DSO/uDSR 作为独立算法口径纳入后续验证，而不是覆盖 `dso` 纯 RL baseline

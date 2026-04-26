@@ -16,6 +16,7 @@ from .normalizers import (
     normalize_pysr_artifact,
     normalize_qlattice_artifact,
     normalize_tpsr_artifact,
+    normalize_udsr_artifact,
 )
 from .metrics import (
     acc_within_threshold,
@@ -59,6 +60,7 @@ __all__ = [
     "normalize_pysr_artifact",
     "normalize_qlattice_artifact",
     "normalize_tpsr_artifact",
+    "normalize_udsr_artifact",
     "llm_srbench_acc_tau",
     "llm_srbench_nmse",
     "llm_srbench_numeric_metrics",
