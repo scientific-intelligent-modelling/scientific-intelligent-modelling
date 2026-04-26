@@ -1,4 +1,13 @@
 {
+  "benchmark_variant": "udsr_trunk_dso_poly_gp_meld",
+  "component_flags": {
+    "aif": false,
+    "dsr": true,
+    "lspt": false,
+    "gp_meld": true,
+    "linear_poly": true
+  },
+  "component_notes": "保持 tool_name=udsr 与 wrapper_dir=udsr_wrapper；当前算法口径固定为 DSO controller + LINEAR/poly token + GP-meld，不标称 full uDSR。",
   "timeout_in_seconds": 3600,
   "progress_snapshot_interval_seconds": 60,
   "task": {

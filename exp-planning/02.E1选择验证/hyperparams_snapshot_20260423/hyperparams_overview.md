@@ -23,7 +23,7 @@
 | `e2esr` | `E3 / E6` | E2E Transformer-based SR | `max_input_points=200`, `n_trees_to_refine=100` | 预训练 E2E 模型 | `max_number_bags=-1`, `stop_refinement_after=1`, `rescale=true` | `force_cpu=true` |
 | `QLattice` | `E3 / E6` | 图结构搜索 | `n_epochs=100` | `kind=regression` | `criterion=bic`, `signif=4` | `threads=1` |
 | `iMCTS` | `E3 / E6` | MCTS-based SR | `max_expressions=2000000`, `K=500`, `c=4.0`, `gamma=0.5` | `+,-,*,/,sin,cos,exp,log` | `max_depth=6`, `gp_rate=0.2`, `mutation_rate=0.1`, `exploration_rate=0.2`, `max_constants=10` | `optimization_method=LN_NELDERMEAD`, `verbose=false` |
-| `udsr` | `E3 / E6` | uDSR-trunk / noAIF / noLSPT | `training.n_samples=2000000`, `batch_size=1000`, `gp_meld.generations=20` | `add,sub,mul,div,sin,cos,exp,log,sqrt,1.0,const,poly` | `poly_optimizer.degree=3`, `policy_optimizer_type=pg`, `epsilon=0.05`, `baseline=R_e`, `gp_meld.run_gp_meld=true` | 复用 `sim_dso`，独立 `udsr` 工具名，不覆盖 `dso`；不是论文 full uDSR |
+| `udsr` | `E3 / E6` | uDSR-trunk / DSO + LINEAR/poly + GP-meld | `training.n_samples=2000000`, `batch_size=1000`, `gp_meld.generations=20` | `add,sub,mul,div,sin,cos,exp,log,sqrt,1.0,const,poly` | `poly_optimizer.degree=3`, `policy_optimizer_type=pg`, `epsilon=0.05`, `baseline=R_e`, `gp_meld.run_gp_meld=true` | 保持 `udsr_wrapper` 与 `tool_name=udsr`；组件开关 `aif=false, dsr=true, lspt=false, gp_meld=true, linear_poly=true`；不是论文 full uDSR |
 
 ## 补充说明
 

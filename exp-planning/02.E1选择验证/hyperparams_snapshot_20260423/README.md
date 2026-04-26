@@ -58,7 +58,8 @@
   - MCTS-based symbolic regression
 - `udsr.json`
   - `E3 / E6` 使用
-  - uDSR trunk 变体，启用论文 token 集、LINEAR `poly` token 与 GP-meld
+  - uDSR trunk 变体，保持 `tool_name=udsr` 与 `udsr_wrapper` 目录名
+  - 启用论文 token 集、LINEAR `poly` token 与 GP-meld
   - 不包含 full uDSR 的 AIF 递归化简与 LSPT 预训练
 
 ## 参数来源
@@ -134,6 +135,8 @@
   - `optimization_method = LN_NELDERMEAD`
   - 目标是在最终 10/11 算法比较中对齐仓库自带 basic 配置
 - `udsr` 当前采用的是 `uDSR-trunk/noAIF/noLSPT` 口径：
+  - `benchmark_variant = udsr_trunk_dso_poly_gp_meld`
+  - 组件开关固定为 `aif=false, dsr=true, lspt=false, gp_meld=true, linear_poly=true`
   - 在 `dso` benchmark 预算基础上启用 uDSR 的 `poly` LINEAR token
   - `function_set = add,sub,mul,div,sin,cos,exp,log,sqrt,1.0,const,poly`
   - `gp_meld.run_gp_meld = true`

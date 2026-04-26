@@ -7,6 +7,8 @@
 - 结果目录：`/home/zhangziwen/experiment-results/udsr_remote_smoke_20260427`
 - 环境：`sim_dso`
 - 工具：`udsr`
+- 算法口径：`udsr_trunk_dso_poly_gp_meld`
+- 组件开关：`aif=false, dsr=true, lspt=false, gp_meld=true, linear_poly=true`
 - seed：`1314`
 - 单任务预算：`300s`
 - workers：`2`
@@ -30,4 +32,3 @@
 - ood nmse：`0.030123314937159886`
 
 已修复 timeout recovery：当最后 current-best 不可有限评估时，回退到最近一个可有限评估的分钟级快照。
-

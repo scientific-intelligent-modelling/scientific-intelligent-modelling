@@ -14,12 +14,14 @@ from typing import Any, Dict
 import numpy as np
 
 from scientific_intelligent_modelling.algorithms.dso_wrapper.wrapper import DSORegressor
+from scientific_intelligent_modelling.benchmarks.normalizers import annotate_udsr_trunk_artifact
 
 
 class UDSRRegressor(DSORegressor):
     """uDSR-trunk benchmark wrapper built on the DSO/uDSR source tree."""
 
     _PROGRESS_STATE_FILENAME = ".udsr_current_best.json"
+    _COMPONENT_METADATA_KEYS = {"benchmark_variant", "component_flags", "component_notes"}
     _DEFAULT_TASK = {
         "task_type": "regression",
         "function_set": [
@@ -94,7 +96,10 @@ class UDSRRegressor(DSORegressor):
 
     @classmethod
     def _build_config(cls, raw_kwargs):
-        config = super()._build_config(raw_kwargs)
+        sanitized_kwargs = dict(raw_kwargs or {})
+        for key in cls._COMPONENT_METADATA_KEYS:
+            sanitized_kwargs.pop(key, None)
+        config = super()._build_config(sanitized_kwargs)
         gp_meld = deepcopy(cls._DEFAULT_GP_MELD)
         if isinstance(config.get("gp_meld"), dict):
             gp_meld.update(config["gp_meld"])
@@ -129,4 +134,4 @@ class UDSRRegressor(DSORegressor):
         artifact = super().export_canonical_symbolic_program()
         artifact["tool_name"] = "udsr"
         artifact["normalization_mode"] = "udsr_dso_sympy_expr"
-        return artifact
+        return annotate_udsr_trunk_artifact(artifact)

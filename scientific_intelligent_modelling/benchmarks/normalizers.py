@@ -503,10 +503,33 @@ def normalize_dso_artifact(raw_equation: str, *, expected_n_features: int | None
     return validate_canonical_symbolic_program(artifact)
 
 
+UDSR_TRUNK_VARIANT = "udsr_trunk_dso_poly_gp_meld"
+UDSR_TRUNK_COMPONENT_FLAGS = {
+    "aif": False,
+    "dsr": True,
+    "lspt": False,
+    "gp_meld": True,
+    "linear_poly": True,
+}
+UDSR_TRUNK_COMPONENT_NOTES = (
+    "Benchmark uDSR trunk variant: DSO controller + LINEAR/poly token + "
+    "GP-meld, without AIF recursive decomposition or LSPT pretraining."
+)
+
+
+def annotate_udsr_trunk_artifact(artifact: dict[str, Any]) -> dict[str, Any]:
+    """给 uDSR trunk 工件补充组件口径，避免和 full uDSR 混淆。"""
+    artifact["benchmark_variant"] = UDSR_TRUNK_VARIANT
+    artifact["component_flags"] = dict(UDSR_TRUNK_COMPONENT_FLAGS)
+    artifact["component_notes"] = UDSR_TRUNK_COMPONENT_NOTES
+    return artifact
+
+
 def normalize_udsr_artifact(raw_equation: str, *, expected_n_features: int | None = None) -> dict[str, Any]:
     artifact = normalize_dso_artifact(raw_equation, expected_n_features=expected_n_features)
     artifact["tool_name"] = "udsr"
     artifact["normalization_mode"] = "udsr_dso_sympy_expr"
+    annotate_udsr_trunk_artifact(artifact)
     return validate_canonical_symbolic_program(artifact)
 
 

@@ -3,6 +3,7 @@
 ## 当前结论
 
 当前仓库里的 `udsr` 是 **uDSR-trunk**，不是 full uDSR。
+后续保持现有 `udsr_wrapper` 目录和 `tool_name=udsr`，不新建 `udsr_trunk` 工具名。
 
 已经完成的组件：
 
@@ -11,12 +12,22 @@
 - LM/LINEAR：启用 DSO 中的 `poly` token
 - benchmark 集成：统一 runner、normalizer、artifact、分钟级快照、timeout recovery
 
+当前冻结的 benchmark 口径：
+
+- `benchmark_variant = udsr_trunk_dso_poly_gp_meld`
+- `aif = false`
+- `dsr = true`
+- `lspt = false`
+- `gp_meld = true`
+- `linear_poly = true`
+
 尚未完成的 full uDSR 论文组件：
 
 - AIF：AI Feynman 式递归问题简化、子问题求解、子解重组
 - LSPT：Set Transformer encoder + controller 的预训练初始化
 
 因此在 AIF 和 LSPT 未接入并通过 smoke 前，不能把当前算法标称为 full uDSR。
+所有 `udsr` 结果 artifact 都必须带上述组件开关，保证后续 leaderboard 不会把 trunk 版误写成 full uDSR。
 
 ## 论文口径
 
