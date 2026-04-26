@@ -572,3 +572,7 @@ max_input_dimension = 4
 - 对严格白名单或会透传到底层库的 wrapper：
   - 必须先显式吸收这些元参数
   - 不要让它们作为未知参数透传给第三方库
+
+
+## commit 规则
+在commit的时候加上 Co-Authored-By: lilmortyj <781113402@qq.com>
