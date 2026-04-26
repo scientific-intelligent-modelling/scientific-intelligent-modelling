@@ -58,7 +58,8 @@
   - MCTS-based symbolic regression
 - `udsr.json`
   - `E3 / E6` 使用
-  - DSO/uDSR 统一框架变体，启用 LINEAR `poly` token 与 GP-meld
+  - uDSR trunk 变体，启用论文 token 集、LINEAR `poly` token 与 GP-meld
+  - 不包含 full uDSR 的 AIF 递归化简与 LSPT 预训练
 
 ## 参数来源
 
@@ -132,13 +133,17 @@
   - `max_expressions = 2000000`
   - `optimization_method = LN_NELDERMEAD`
   - 目标是在最终 10/11 算法比较中对齐仓库自带 basic 配置
-- `udsr` 当前采用的口径是：
+- `udsr` 当前采用的是 `uDSR-trunk/noAIF/noLSPT` 口径：
   - 在 `dso` benchmark 预算基础上启用 uDSR 的 `poly` LINEAR token
+  - `function_set = add,sub,mul,div,sin,cos,exp,log,sqrt,1.0,const,poly`
   - `gp_meld.run_gp_meld = true`
   - `gp_meld.population_size = 100`
   - `gp_meld.generations = 20`
-  - `policy_optimizer_type = pqt`
+  - `policy_optimizer_type = pg`
+  - `training.epsilon = 0.05`
+  - `training.baseline = R_e`
   - `poly_optimizer_params.degree = 3`
   - `training.n_samples = 2000000`
   - `training.batch_size = 1000`
-  - 目标是把 DSO/uDSR 作为独立算法口径纳入后续验证，而不是覆盖 `dso` 纯 RL baseline
+  - 目标是把 DSO/uDSR 主干作为独立算法口径纳入后续验证，而不是覆盖 `dso` 纯 RL baseline
+  - 注意：这不是论文 full uDSR；当前缺 AIF 递归化简和 LSPT 预训练 encoder-controller

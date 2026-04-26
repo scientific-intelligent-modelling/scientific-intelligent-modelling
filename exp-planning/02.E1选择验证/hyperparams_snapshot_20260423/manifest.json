@@ -67,7 +67,7 @@
     {
       "tool": "udsr",
       "phase": "E3/E6",
-      "family": "uDSR / DSO + LINEAR token + GP-meld",
+      "family": "uDSR-trunk / DSO + LINEAR token + GP-meld",
       "file": "udsr.json"
     }
   ],

@@ -17,7 +17,20 @@ def _build_quick_udsr_config():
         },
         "task": {
             "task_type": "regression",
-            "function_set": ["add", "sub", "mul", "div", "poly"],
+            "function_set": [
+                "add",
+                "sub",
+                "mul",
+                "div",
+                "sin",
+                "cos",
+                "exp",
+                "log",
+                "sqrt",
+                1.0,
+                "const",
+                "poly",
+            ],
             "metric": "inv_nrmse",
             "metric_params": [1.0],
             "threshold": 1e-12,
@@ -37,20 +50,17 @@ def _build_quick_udsr_config():
             "n_samples": 20,
             "batch_size": 1,
             "epsilon": 0.05,
+            "baseline": "R_e",
             "n_cores_batch": 1,
             "complexity": "token",
             "verbose": False,
             "early_stopping": True,
         },
         "policy_optimizer": {
-            "policy_optimizer_type": "pqt",
-            "learning_rate": 0.0025,
+            "policy_optimizer_type": "pg",
+            "learning_rate": 0.0005,
             "entropy_weight": 0.03,
             "entropy_gamma": 0.7,
-            "pqt_k": 10,
-            "pqt_batch_size": 1,
-            "pqt_weight": 200.0,
-            "pqt_use_pg": False,
         },
         "gp_meld": {
             "run_gp_meld": True,
@@ -120,4 +130,3 @@ def run():
 
 if __name__ == "__main__":
     run()
-

@@ -1,7 +1,7 @@
-"""uDSR wrapper.
+"""uDSR trunk wrapper.
 
-uDSR 复用当前仓库已 vendored 的 DSO 源码栈，但作为独立工具名暴露。
-核心差异是启用 uDSR 的 LINEAR/poly token，并保留 GP-meld 混合搜索。
+当前接入的是 uDSR 的 DSO/GP/LINEAR 主干，不包含论文 full uDSR 的
+AIF 递归化简和 LSPT 预训练 encoder-controller。
 """
 
 from __future__ import annotations
@@ -17,12 +17,25 @@ from scientific_intelligent_modelling.algorithms.dso_wrapper.wrapper import DSOR
 
 
 class UDSRRegressor(DSORegressor):
-    """uDSR benchmark wrapper built on the DSO/uDSR source tree."""
+    """uDSR-trunk benchmark wrapper built on the DSO/uDSR source tree."""
 
     _PROGRESS_STATE_FILENAME = ".udsr_current_best.json"
     _DEFAULT_TASK = {
         "task_type": "regression",
-        "function_set": ["add", "sub", "mul", "div", "sin", "cos", "exp", "log", "poly"],
+        "function_set": [
+            "add",
+            "sub",
+            "mul",
+            "div",
+            "sin",
+            "cos",
+            "exp",
+            "log",
+            "sqrt",
+            1.0,
+            "const",
+            "poly",
+        ],
         "metric": "inv_nrmse",
         "metric_params": [1.0],
         "threshold": 1e-12,
@@ -42,17 +55,14 @@ class UDSRRegressor(DSORegressor):
         "batch_size": 1000,
         "n_samples": 2000000,
         "epsilon": 0.05,
+        "baseline": "R_e",
         "n_cores_batch": 1,
     }
     _DEFAULT_POLICY_OPTIMIZER = {
-        "policy_optimizer_type": "pqt",
-        "learning_rate": 0.0025,
+        "policy_optimizer_type": "pg",
+        "learning_rate": 0.0005,
         "entropy_weight": 0.03,
         "entropy_gamma": 0.7,
-        "pqt_k": 10,
-        "pqt_batch_size": 1,
-        "pqt_weight": 200.0,
-        "pqt_use_pg": False,
     }
     _DEFAULT_PRIOR = {
         "length": {"min_": 4, "max_": 100, "on": True},
@@ -80,6 +90,7 @@ class UDSRRegressor(DSORegressor):
         "parallel_eval": False,
     }
     _TASK_KEYS = DSORegressor._TASK_KEYS | {"poly_optimizer_params"}
+    _TRAINING_KEYS = DSORegressor._TRAINING_KEYS | {"baseline"}
 
     @classmethod
     def _build_config(cls, raw_kwargs):
@@ -119,4 +130,3 @@ class UDSRRegressor(DSORegressor):
         artifact["tool_name"] = "udsr"
         artifact["normalization_mode"] = "udsr_dso_sympy_expr"
         return artifact
-

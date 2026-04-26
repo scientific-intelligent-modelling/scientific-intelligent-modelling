@@ -1,6 +1,6 @@
 {
   "tool_name": "udsr",
-  "display_name": "uDSR",
+  "display_name": "uDSR-trunk",
   "wrapper_class_name": "UDSRRegressor",
   "integration_mode": "python_api",
   "source_mode": "vendored",
@@ -58,7 +58,7 @@
     ],
     "constructor_param_allowlist": [],
     "fit_param_allowlist": [],
-    "equation_notes": "基于 DSO DeepSymbolicOptimizer；启用 poly token 与 GP-meld，导出 sympy 表达式。"
+    "equation_notes": "基于 DSO DeepSymbolicOptimizer；启用论文 token 集、LINEAR/poly token 与 GP-meld；不包含 full uDSR 的 AIF 递归化简和 LSPT 预训练。"
   },
   "smoke_test": {
     "problem_name": "ci_udsr_check",
