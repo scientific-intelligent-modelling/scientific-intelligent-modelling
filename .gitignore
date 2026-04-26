@@ -18,3 +18,14 @@ sim-datasets-data/
 tmp/
 artifacts/
 exp-planning/02.E1选择验证/llm_configs/benchmark_llm.config
+
+# Local E1 archives and remote rerun logs.
+# Final compact CSV/report directories are tracked separately when needed.
+exp-planning/02.E1选择验证/e1_final_results_20260424-041046*/
+exp-planning/02.E1选择验证/e1_final_results_20260424-041046*.tar.gz
+exp-planning/02.E1选择验证/e1_final_results_current_*.tar.gz
+exp-planning/02.E1选择验证/remote_reruns/
+experiment-results/benchmark_formal200_20260417/*_assets_*.tar.gz
+
+# Local assistant scratch entrypoint.
+CLAUDE.md
