@@ -110,6 +110,15 @@ class RAGSRWrapperTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "显式维度契约不一致"):
             reg.fit(X, y)
 
+    def test_deserialized_predict_replays_max_min_with_numpy_broadcasting(self):
+        reg = RAGSRRegressor(n_features=1, feature_names=["x0"], target_name="y")
+        reg._equation = "Max(1.0, x0) + Min(0.5, x0)"
+        restored = RAGSRRegressor.deserialize(reg.serialize())
+
+        pred = restored.predict(np.array([[0.2], [2.0]]))
+
+        np.testing.assert_allclose(pred, np.array([1.2, 2.5]))
+
     def test_normalize_realistic_evolutionary_forest_expression(self):
         expr = (
             "((0.0*(((sin(3.141592653589793*(-0.09446021299983642)))"

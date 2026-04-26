@@ -209,10 +209,53 @@ class RAGSRRegressor(BaseWrapper):
             value = float(sp.sympify(expression))
             return np.full((X_arr.shape[0],), value, dtype=float)
 
+        def _broadcast_maximum(*args):
+            arrays = np.broadcast_arrays(*args)
+            return np.maximum.reduce(arrays)
+
+        def _broadcast_minimum(*args):
+            arrays = np.broadcast_arrays(*args)
+            return np.minimum.reduce(arrays)
+
+        def _safe_amax(values, axis=None):
+            if isinstance(values, (tuple, list)):
+                return _broadcast_maximum(*values)
+            return np.amax(values, axis=axis)
+
+        def _safe_amin(values, axis=None):
+            if isinstance(values, (tuple, list)):
+                return _broadcast_minimum(*values)
+            return np.amin(values, axis=axis)
+
         symbols = [sp.Symbol(name) for name in ordered_variables]
-        func = sp.lambdify(symbols, sp.sympify(expression), modules="numpy")
+        parsed_expression = sp.sympify(expression)
+        func = sp.lambdify(
+            symbols,
+            parsed_expression,
+            modules=[
+                {
+                    "Max": _broadcast_maximum,
+                    "Min": _broadcast_minimum,
+                    "amax": _safe_amax,
+                    "amin": _safe_amin,
+                },
+                "numpy",
+            ],
+        )
         args = [X_arr[:, int(name[1:])] for name in ordered_variables]
-        pred = np.asarray(func(*args), dtype=float)
+        try:
+            pred = np.asarray(func(*args), dtype=float)
+        except ValueError:
+            scalar_func = sp.lambdify(
+                symbols,
+                parsed_expression,
+                modules=[{"Max": max, "Min": min, "Abs": abs}, "math"],
+            )
+            values = []
+            for row in X_arr:
+                row_args = [float(row[int(name[1:])]) for name in ordered_variables]
+                values.append(float(scalar_func(*row_args)))
+            pred = np.asarray(values, dtype=float)
         if pred.ndim == 0:
             pred = np.full((X_arr.shape[0],), float(pred), dtype=float)
         return pred.reshape(-1)
