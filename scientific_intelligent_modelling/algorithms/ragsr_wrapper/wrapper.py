@@ -6,7 +6,9 @@ RAG-SR 的公开仓库只是薄封装；真实实现位于 `evolutionary_forest`
 
 from __future__ import annotations
 
+import base64
 from copy import deepcopy
+import pickle
 from typing import Any
 
 import numpy as np
@@ -121,6 +123,7 @@ class RAGSRRegressor(BaseWrapper):
         self.params, self._fit_kwargs = self._validate_and_normalize_params(raw_kwargs)
         self.model = None
         self._equation = None
+        self._canonical_artifact = None
 
     @classmethod
     def _validate_and_normalize_params(cls, raw_params: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -174,9 +177,45 @@ class RAGSRRegressor(BaseWrapper):
         return self
 
     def predict(self, X):
-        if self.model is None:
+        if self.model is not None:
+            return np.asarray(self.model.predict(np.asarray(X, dtype=float))).reshape(-1)
+        if self._equation:
+            return self._predict_from_equation(X)
+        else:
             raise RuntimeError("RAG-SR 模型尚未训练")
-        return np.asarray(self.model.predict(np.asarray(X, dtype=float))).reshape(-1)
+
+    def _predict_from_equation(self, X):
+        """反序列化后用最终符号表达式回放预测，避免 pickle 底层 EF 模型。"""
+        artifact = self.export_canonical_symbolic_program()
+        expression = artifact.get("normalized_expression")
+        variables = artifact.get("variables") or []
+        if not expression:
+            raise RuntimeError("RAG-SR canonical 表达式为空，无法预测")
+
+        try:
+            import sympy as sp
+        except ModuleNotFoundError as exc:
+            raise RuntimeError("RAG-SR 表达式回放需要 sympy") from exc
+
+        X_arr = np.asarray(X, dtype=float)
+        if X_arr.ndim == 1:
+            X_arr = X_arr.reshape(-1, 1)
+
+        ordered_variables = sorted(
+            variables,
+            key=lambda name: int(name[1:]) if isinstance(name, str) and name.startswith("x") and name[1:].isdigit() else 0,
+        )
+        if not ordered_variables:
+            value = float(sp.sympify(expression))
+            return np.full((X_arr.shape[0],), value, dtype=float)
+
+        symbols = [sp.Symbol(name) for name in ordered_variables]
+        func = sp.lambdify(symbols, sp.sympify(expression), modules="numpy")
+        args = [X_arr[:, int(name[1:])] for name in ordered_variables]
+        pred = np.asarray(func(*args), dtype=float)
+        if pred.ndim == 0:
+            pred = np.full((X_arr.shape[0],), float(pred), dtype=float)
+        return pred.reshape(-1)
 
     def _extract_model_expression(self) -> str:
         if self.model is None:
@@ -197,4 +236,39 @@ class RAGSRRegressor(BaseWrapper):
         return [equation] if equation else []
 
     def export_canonical_symbolic_program(self):
-        return normalize_ragsr_artifact(self.get_optimal_equation())
+        if self._canonical_artifact is None:
+            self._canonical_artifact = normalize_ragsr_artifact(
+                self.get_optimal_equation(),
+                expected_n_features=self._contract_n_features,
+            )
+        return deepcopy(self._canonical_artifact)
+
+    def serialize(self):
+        """只序列化轻量状态，规避 EvolutionaryForestRegressor 内部闭包不可 pickle。"""
+        state = {
+            "params": self.params,
+            "fit_kwargs": self._fit_kwargs,
+            "equation": self.get_optimal_equation(),
+            "canonical_artifact": self.export_canonical_symbolic_program(),
+            "contract_n_features": self._contract_n_features,
+            "contract_feature_names": self._contract_feature_names,
+            "contract_target_name": self._contract_target_name,
+            "seed": self._seed,
+        }
+        return base64.b64encode(pickle.dumps(state)).decode("utf-8")
+
+    @classmethod
+    def deserialize(cls, instance_b64):
+        state = pickle.loads(base64.b64decode(instance_b64))
+        instance = cls(
+            n_features=state.get("contract_n_features"),
+            feature_names=state.get("contract_feature_names"),
+            target_name=state.get("contract_target_name"),
+            seed=state.get("seed"),
+            **(state.get("params") or {}),
+        )
+        instance._fit_kwargs = state.get("fit_kwargs") or {}
+        instance._equation = state.get("equation")
+        instance._canonical_artifact = state.get("canonical_artifact")
+        instance.model = None
+        return instance

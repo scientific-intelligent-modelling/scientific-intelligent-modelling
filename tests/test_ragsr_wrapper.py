@@ -83,7 +83,12 @@ class RAGSRWrapperTest(unittest.TestCase):
             artifact = reg.export_canonical_symbolic_program()
             self.assertEqual(artifact["tool_name"], "ragsr")
             self.assertEqual(artifact["normalized_expression"], "x0 + 2*x1")
+            self.assertEqual(artifact["expected_n_features"], 2)
             self.assertTrue(artifact["artifact_valid"])
+
+            restored = RAGSRRegressor.deserialize(reg.serialize())
+            self.assertEqual(restored.get_optimal_equation(), "x0 + 2*x1")
+            np.testing.assert_allclose(restored.predict(X), np.array([5.0, 11.0]))
         finally:
             for name, old_value in old_modules.items():
                 if old_value is None:
