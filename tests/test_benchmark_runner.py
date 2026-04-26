@@ -329,6 +329,72 @@ dataset:
             self.assertIsNotNone(result["ood_test"])
             self.assertEqual(result["equation_count"], 1)
 
+    def test_recover_timeout_falls_back_to_latest_finite_progress_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_dir = root / "dataset"
+            dataset_dir.mkdir()
+            (dataset_dir / "metadata.yaml").write_text(
+                """
+dataset:
+  target:
+    name: y
+  features:
+    - name: x0
+""".strip(),
+                encoding="utf-8",
+            )
+            for name, rows in {
+                "train.csv": "x0,y\n1,1\n2,2\n",
+                "valid.csv": "x0,y\n3,3\n",
+                "id_test.csv": "x0,y\n4,4\n",
+                "ood_test.csv": "x0,y\n5,5\n",
+            }.items():
+                (dataset_dir / name).write_text(rows, encoding="utf-8")
+
+            dataset = runner.load_canonical_dataset(dataset_dir)
+            exp_dir = root / "udsr_exp"
+            progress_dir = exp_dir / "progress"
+            progress_dir.mkdir(parents=True)
+            artifact, artifact_error = runner.safe_build_canonical_artifact(
+                tool_name="udsr",
+                equation="x0",
+                expected_n_features=1,
+            )
+            self.assertIsNone(artifact_error)
+            snapshot = {
+                "tool": "udsr",
+                "status": "ok",
+                "equation": "x0",
+                "equation_count": 1,
+                "canonical_artifact": artifact,
+                "canonical_artifact_error": None,
+                "valid": {"rmse": 0.0, "r2": 1.0, "nmse": 0.0, "acc_0_1": 1.0},
+                "id_test": {"rmse": 0.0, "r2": 1.0, "nmse": 0.0, "acc_0_1": 1.0},
+                "ood_test": {"rmse": 0.0, "r2": 1.0, "nmse": 0.0, "acc_0_1": 1.0},
+            }
+            (progress_dir / "minute_0002.json").write_text(
+                json.dumps(snapshot),
+                encoding="utf-8",
+            )
+
+            original_extract = runner._extract_periodic_candidate
+            runner._extract_periodic_candidate = lambda tool, exp_dir: {"equation": "log(-x0)"}
+            try:
+                payload = runner._recover_timeout_payload_from_candidate(
+                    tool_name="udsr",
+                    dataset=dataset,
+                    experiment_dir=exp_dir,
+                )
+            finally:
+                runner._extract_periodic_candidate = original_extract
+
+            self.assertIsNotNone(payload)
+            self.assertEqual(payload["equation"], "x0")
+            self.assertEqual(payload["valid_metrics"]["nmse"], 0.0)
+            self.assertEqual(payload["id_metrics"]["nmse"], 0.0)
+            self.assertEqual(payload["ood_metrics"]["nmse"], 0.0)
+
     def test_extract_drsr_candidate_backfills_params_from_matching_sample(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

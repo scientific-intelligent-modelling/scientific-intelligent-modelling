@@ -294,6 +294,28 @@ def _evaluate_prediction(split: DatasetSplit | None, pred: np.ndarray | None) ->
     }
 
 
+def _split_metrics_are_usable(split: DatasetSplit | None, metrics: dict[str, Any] | None) -> bool:
+    if split is None or split.rows == 0:
+        return True
+    if not isinstance(metrics, dict):
+        return False
+    # NMSE 是后续 benchmark 排名最依赖的字段；它有限即可视为该 split 可评估。
+    return _safe_float(metrics.get("nmse")) is not None
+
+
+def _recovered_metrics_are_usable(
+    dataset: LoadedDataset,
+    valid_metrics: dict[str, Any] | None,
+    id_metrics: dict[str, Any] | None,
+    ood_metrics: dict[str, Any] | None,
+) -> bool:
+    return (
+        _split_metrics_are_usable(dataset.valid, valid_metrics)
+        and _split_metrics_are_usable(dataset.id_test, id_metrics)
+        and _split_metrics_are_usable(dataset.ood_test, ood_metrics)
+    )
+
+
 def _sanitize_params(params: dict[str, Any]) -> dict[str, Any]:
     sanitized: dict[str, Any] = {}
     for key, value in (params or {}).items():
@@ -991,12 +1013,20 @@ def _recover_timeout_payload_from_candidate(
 
     candidate = _extract_periodic_candidate(tool_name, experiment_dir)
     if not candidate:
-        return None
+        return _recover_timeout_payload_from_progress_snapshots(
+            tool_name=tool_name,
+            dataset=dataset,
+            experiment_dir=experiment_dir,
+        )
 
     raw_equation = candidate.get("function") if "function" in candidate else candidate.get("equation")
     equation = str(raw_equation or "").strip()
     if not equation:
-        return None
+        return _recover_timeout_payload_from_progress_snapshots(
+            tool_name=tool_name,
+            dataset=dataset,
+            experiment_dir=experiment_dir,
+        )
 
     parameter_values = _candidate_parameter_values(candidate)
     canonical_artifact, canonical_artifact_error = safe_build_canonical_artifact(
@@ -1021,6 +1051,15 @@ def _recover_timeout_payload_from_candidate(
             if canonical_artifact_error is None:
                 canonical_artifact_error = repr(exc)
 
+    if not _recovered_metrics_are_usable(dataset, valid_metrics, id_metrics, ood_metrics):
+        snapshot_payload = _recover_timeout_payload_from_progress_snapshots(
+            tool_name=tool_name,
+            dataset=dataset,
+            experiment_dir=experiment_dir,
+        )
+        if snapshot_payload is not None:
+            return snapshot_payload
+
     return {
         "equation": equation,
         "equation_count": 1,
@@ -1030,6 +1069,49 @@ def _recover_timeout_payload_from_candidate(
         "id_metrics": id_metrics,
         "ood_metrics": ood_metrics,
     }
+
+
+def _recover_timeout_payload_from_progress_snapshots(
+    *,
+    tool_name: str,
+    dataset: LoadedDataset,
+    experiment_dir: str | Path,
+) -> dict[str, Any] | None:
+    """从最近的可评估分钟级快照回退恢复超时结果。
+
+    有些工具的 current-best 会在最后一分钟更新为数值不稳定表达式，导致最终
+    `result.json` 有公式但没有有限指标。此时应优先保留最近一个可有限评估的
+    best-so-far 快照，而不是把整条 run 降级成无效输出。
+    """
+    progress_dir = Path(experiment_dir) / _PROGRESS_DIRNAME
+    if not progress_dir.is_dir():
+        return None
+    expected_tool = str(tool_name).strip().lower()
+    for path in sorted(progress_dir.glob("minute_*.json"), reverse=True):
+        item = _read_json_file(path)
+        if not item:
+            continue
+        if str(item.get("tool") or "").strip().lower() != expected_tool:
+            continue
+        equation = str(item.get("equation") or "").strip()
+        artifact = item.get("canonical_artifact")
+        if not equation or not isinstance(artifact, dict):
+            continue
+        valid_metrics = item.get("valid")
+        id_metrics = item.get("id_test")
+        ood_metrics = item.get("ood_test")
+        if not _recovered_metrics_are_usable(dataset, valid_metrics, id_metrics, ood_metrics):
+            continue
+        return {
+            "equation": equation,
+            "equation_count": item.get("equation_count") or 1,
+            "canonical_artifact": artifact,
+            "canonical_artifact_error": item.get("canonical_artifact_error"),
+            "valid_metrics": valid_metrics,
+            "id_metrics": id_metrics,
+            "ood_metrics": ood_metrics,
+        }
+    return None
 
 
 def _periodic_snapshot_loop(
