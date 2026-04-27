@@ -85,6 +85,13 @@ class DRSRRegressor(BaseWrapper):
         self._feature_names: Optional[List[str]] = self.params.pop("feature_names", None)
         self._target_name: Optional[str] = self.params.pop("target_name", None)
 
+        # 变量名匿名化：与 llmsr 对齐，通过 anonymize 标志显式控制。
+        self._anonymize: bool = bool(self.params.pop("anonymize", False))
+        if self._anonymize:
+            n = len(self._feature_names) if self._feature_names else (self._n_features or 0)
+            self._feature_names = [f"x{i+1}" for i in range(n)]
+            self._target_name = "y"
+
     def _resolve_experiment_layout(self) -> Tuple[str, str, str]:
         """
         统一解析 DRSR 的实验目录布局，优先对齐 llmsr 的 exp_path / exp_name。
@@ -159,6 +166,10 @@ class DRSRRegressor(BaseWrapper):
         - 若 metadata 中存在 description，则优先使用 description
         - 否则退化到 name
         """
+        # 匿名化模式：使用 x1..xN, y，不加载任何描述。
+        if self._anonymize:
+            return [f"x{i+1}" for i in range(n_features)], None, None
+
         feature_names = self._feature_names
         if not isinstance(feature_names, list) or len(feature_names) != n_features:
             feature_names = [f"x{i}" for i in range(n_features)]
