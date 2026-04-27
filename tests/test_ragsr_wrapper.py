@@ -1,4 +1,5 @@
 import sys
+import tempfile
 import types
 import unittest
 
@@ -20,6 +21,8 @@ class _FakeEvolutionaryForestRegressor:
         self.X_shape = np.asarray(X).shape
         self.y_shape = np.asarray(y).shape
         self.fit_kwargs = fit_kwargs
+        if hasattr(self, "callback"):
+            self.callback()
         return self
 
     def predict(self, X):
@@ -90,6 +93,46 @@ class RAGSRWrapperTest(unittest.TestCase):
             restored = RAGSRRegressor.deserialize(reg.serialize())
             self.assertEqual(restored.get_optimal_equation(), "x0 + 2*x1")
             np.testing.assert_allclose(restored.predict(X), np.array([5.0, 11.0]))
+        finally:
+            for name, old_value in old_modules.items():
+                if old_value is None:
+                    sys.modules.pop(name, None)
+                else:
+                    sys.modules[name] = old_value
+
+    def test_fit_writes_ragsr_current_best_snapshot(self):
+        fake_package = types.ModuleType("evolutionary_forest")
+        fake_forest = types.ModuleType("evolutionary_forest.forest")
+        fake_forest.EvolutionaryForestRegressor = _FakeEvolutionaryForestRegressor
+
+        old_modules = {
+            name: sys.modules.get(name)
+            for name in ("evolutionary_forest", "evolutionary_forest.forest")
+        }
+        try:
+            sys.modules["evolutionary_forest"] = fake_package
+            sys.modules["evolutionary_forest.forest"] = fake_forest
+            with tempfile.TemporaryDirectory() as tmpdir:
+                reg = RAGSRRegressor(
+                    seed=3,
+                    n_features=2,
+                    feature_names=["x0", "x1"],
+                    target_name="y",
+                    exp_path=tmpdir,
+                    exp_name="ragsr_snapshot_test",
+                    n_gen=1,
+                    n_pop=10,
+                )
+                X = np.array([[1.0, 2.0], [3.0, 4.0]])
+                y = np.array([5.0, 11.0])
+                reg.fit(X, y)
+
+                snapshot_path = f"{tmpdir}/ragsr_snapshot_test/.ragsr_current_best.json"
+                with open(snapshot_path, encoding="utf-8") as f:
+                    content = f.read()
+
+                self.assertIn('"tool": "ragsr"', content)
+                self.assertIn('"equation": "x0 + 2*x1"', content)
         finally:
             for name, old_value in old_modules.items():
                 if old_value is None:

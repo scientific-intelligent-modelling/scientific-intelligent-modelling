@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import base64
 from copy import deepcopy
+import json
+from pathlib import Path
 import pickle
+import time
 from typing import Any
 
 import numpy as np
@@ -73,6 +76,7 @@ class RAGSRRegressor(BaseWrapper):
         "selective_retrain": True,
         "negative_data_augmentation": True,
         "negative_local_search": False,
+        "time_limit": None,
     }
     _META_PARAMS = {
         "exp_name",
@@ -114,6 +118,7 @@ class RAGSRRegressor(BaseWrapper):
         "neural_pool",
         "weight_of_contrastive_learning",
         "neural_pool_dropout",
+        "time_limit",
     }
 
     def __init__(self, **kwargs: Any):
@@ -122,10 +127,34 @@ class RAGSRRegressor(BaseWrapper):
         self._contract_feature_names = raw_kwargs.get("feature_names")
         self._contract_target_name = raw_kwargs.get("target_name")
         self._seed = raw_kwargs.get("seed")
+        self._timeout_in_seconds = self._as_positive_float(raw_kwargs.get("timeout_in_seconds"))
+        self._experiment_dir = self._resolve_experiment_dir(raw_kwargs)
         self.params, self._fit_kwargs = self._validate_and_normalize_params(raw_kwargs)
+        if self._timeout_in_seconds is not None and self.params.get("time_limit") is None:
+            # 给 EvolutionaryForest 一个软超时，让它有机会在外层硬杀前正常返回。
+            self.params["time_limit"] = max(1.0, self._timeout_in_seconds - 5.0)
         self.model = None
         self._equation = None
         self._canonical_artifact = None
+
+    @staticmethod
+    def _as_positive_float(value: Any) -> float | None:
+        try:
+            value = float(value)
+        except Exception:
+            return None
+        return value if value > 0 else None
+
+    @staticmethod
+    def _resolve_experiment_dir(raw_params: dict[str, Any]) -> Path | None:
+        exp_path = raw_params.get("exp_path")
+        exp_name = raw_params.get("exp_name")
+        if not exp_path or not exp_name:
+            return None
+        try:
+            return Path(str(exp_path)).expanduser().resolve() / str(exp_name)
+        except Exception:
+            return None
 
     @classmethod
     def _validate_and_normalize_params(cls, raw_params: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -174,12 +203,62 @@ class RAGSRRegressor(BaseWrapper):
         x_arr = np.asarray(X, dtype=float)
         y_arr = np.asarray(y, dtype=float).reshape(-1)
         self.model = EvolutionaryForestRegressor(**self.params)
+        self._install_current_best_callback()
         fit_kwargs = dict(self._fit_kwargs)
         if self.params.get("categorical_encoding") is not None:
             fit_kwargs.setdefault("categorical_features", [False] * x_arr.shape[1])
         self.model.fit(x_arr, y_arr, **fit_kwargs)
         self._equation = self._extract_model_expression()
+        self._write_current_best_snapshot(source="final")
         return self
+
+    def _install_current_best_callback(self) -> None:
+        if self.model is None or self._experiment_dir is None:
+            return
+        original_callback = getattr(self.model, "callback", None)
+        if not callable(original_callback):
+            return
+
+        def _callback_with_snapshot():
+            result = original_callback()
+            self._write_current_best_snapshot(source="callback")
+            return result
+
+        setattr(self.model, "callback", _callback_with_snapshot)
+
+    def _write_current_best_snapshot(self, *, source: str) -> None:
+        if self.model is None or self._experiment_dir is None:
+            return
+        try:
+            equation = self._extract_model_expression()
+        except Exception:
+            return
+        if not equation:
+            return
+        payload = {
+            "tool": "ragsr",
+            "equation": str(equation),
+            "iteration": getattr(self.model, "current_gen", None),
+            "source": source,
+            "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        try:
+            hof = getattr(self.model, "hof", None)
+            if hof:
+                fitness = getattr(hof[0], "fitness", None)
+                values = getattr(fitness, "values", None)
+                if values:
+                    payload["score"] = float(values[0])
+        except Exception:
+            pass
+        try:
+            path = self._experiment_dir / ".ragsr_current_best.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = path.with_suffix(path.suffix + ".tmp")
+            tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            tmp_path.replace(path)
+        except Exception:
+            return
 
     def predict(self, X):
         if self.model is not None:

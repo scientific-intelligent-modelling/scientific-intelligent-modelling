@@ -29,7 +29,20 @@ from scientific_intelligent_modelling.srkit.regressor import SymbolicRegressor
 
 _HIDDEN_PARAM_KEYS = {"api_key", "apikey", "token", "password", "secret"}
 _PROGRESS_DIRNAME = "progress"
-_SNAPSHOT_CAPABLE_TOOLS = {"llmsr", "drsr", "pysr", "dso", "udsr", "pyoperon", "gplearn", "e2esr", "iMCTS", "tpsr", "QLattice"}
+_SNAPSHOT_CAPABLE_TOOLS = {
+    "llmsr",
+    "drsr",
+    "pysr",
+    "dso",
+    "udsr",
+    "pyoperon",
+    "gplearn",
+    "e2esr",
+    "iMCTS",
+    "tpsr",
+    "QLattice",
+    "ragsr",
+}
 _RUNNER_TASK_IDENTITY_PARAM_KEYS = {
     "task_label",
     "task_global_index",
@@ -853,6 +866,17 @@ def _extract_qlattice_periodic_candidate(experiment_dir: str | Path) -> dict[str
     return item
 
 
+def _extract_ragsr_periodic_candidate(experiment_dir: str | Path) -> dict[str, Any] | None:
+    path = Path(experiment_dir) / ".ragsr_current_best.json"
+    item = _read_json_file(path)
+    if not item:
+        return None
+    equation = item.get("equation")
+    if not isinstance(equation, str) or not equation.strip():
+        return None
+    return item
+
+
 def _extract_periodic_candidate(tool_name: str, experiment_dir: str | Path) -> dict[str, Any] | None:
     tool = str(tool_name).strip().lower()
     if tool == "llmsr":
@@ -877,6 +901,8 @@ def _extract_periodic_candidate(tool_name: str, experiment_dir: str | Path) -> d
         return _extract_tpsr_periodic_candidate(experiment_dir)
     if tool == "qlattice":
         return _extract_qlattice_periodic_candidate(experiment_dir)
+    if tool == "ragsr":
+        return _extract_ragsr_periodic_candidate(experiment_dir)
     return None
 
 
@@ -919,6 +945,8 @@ def _write_progress_payload(
 def _resolve_progress_snapshot_interval_seconds(tool_name: str, params: dict[str, Any]) -> int | None:
     raw = params.pop("progress_snapshot_interval_seconds", None)
     if raw is None:
+        if str(tool_name).strip().lower() == "ragsr":
+            return 60
         if tool_name in _SNAPSHOT_CAPABLE_TOOLS:
             return 600
         return None
