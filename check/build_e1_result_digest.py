@@ -316,6 +316,22 @@ def _dataset_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+def _dataset_algorithm_nmse_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "dataset_id": row["dataset_id"],
+            "dataset_name": row["dataset_name"],
+            "family": row["family"],
+            "algorithm": row["method"],
+            "train_nmse": row.get("train_nmse"),
+            "valid_nmse": row.get("valid_nmse"),
+            "id_nmse": row.get("id_nmse"),
+            "ood_nmse": row.get("ood_nmse"),
+        }
+        for row in rows
+    ]
+
+
 def _write_summary(rows: list[dict[str, Any]], output_dir: Path) -> None:
     method_rows = _counter_rows(rows, ["method"])
     method_family_rows = _counter_rows(rows, ["method", "family"])
@@ -396,6 +412,7 @@ def _write_summary(rows: list[dict[str, Any]], output_dir: Path) -> None:
         "- `e1_method_summary.csv`: method-level status and validity summary.",
         "- `e1_method_family_summary.csv`: method x family status and validity summary.",
         "- `e1_dataset_coverage.csv`: per-dataset valid method coverage.",
+        "- `e1_dataset_algorithm_nmse_table.csv`: compact dataset x algorithm NMSE table with family labels.",
         "- `e1_status_mismatch.csv`: rows whose launcher status differs from internal `result.json` status.",
         "- `e1_nonvalid_cases.csv`: rows excluded by `valid_output=false`.",
         "- `e1_dataset_identity_audit.csv`: expected Candidate-200 dataset identity versus actual `result.json` dataset.",
@@ -428,6 +445,7 @@ def _write_summary(rows: list[dict[str, Any]], output_dir: Path) -> None:
     _write_csv(output_dir / "e1_method_summary.csv", method_rows)
     _write_csv(output_dir / "e1_method_family_summary.csv", method_family_rows)
     _write_csv(output_dir / "e1_dataset_coverage.csv", dataset_rows)
+    _write_csv(output_dir / "e1_dataset_algorithm_nmse_table.csv", _dataset_algorithm_nmse_rows(rows))
     _write_csv(output_dir / "e1_status_mismatch.csv", status_mismatch_rows)
     _write_csv(output_dir / "e1_nonvalid_cases.csv", nonvalid_rows)
     _write_csv(output_dir / "e1_dataset_identity_audit.csv", identity_audit_rows)

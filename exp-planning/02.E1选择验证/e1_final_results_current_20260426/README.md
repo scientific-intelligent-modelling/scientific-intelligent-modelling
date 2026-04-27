@@ -15,6 +15,7 @@
 - `remaining_nonvalid_cases.csv`：剩余 15 条未形成完整指标的 run。
 - `remaining_nonvalid_explanation.md`：剩余无效项的解释和代表例子。
 - `digest/e1_result_table.csv`：当前完整 1400-run 结果总表。
+- `digest/e1_dataset_algorithm_nmse_table.csv`：当前 `200×7` 数据集-算法 NMSE 明细表，包含 `family` 标签。
 - `digest/e1_result_digest.md`：当前 digest 文本汇总。
 - `digest/e1_nonvalid_cases.csv`：digest 口径下的剩余无效项。
 - `digest/e1_dataset_identity_audit.csv`：数据集身份审计结果。
