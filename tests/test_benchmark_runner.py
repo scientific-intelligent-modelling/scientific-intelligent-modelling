@@ -141,9 +141,11 @@ dataset:
             self.assertEqual(result["dataset"], dataset_dir.name)
             self.assertEqual(result["equation"], "x0")
             self.assertEqual(result["equation_count"], 2)
+            self.assertIsNotNone(result["train"])
             self.assertIsNotNone(result["valid"])
             self.assertIsNotNone(result["id_test"])
             self.assertIsNotNone(result["ood_test"])
+            self.assertAlmostEqual(result["train"]["nmse"], 0.0, places=10)
             self.assertTrue(result["experiment_dir"])
 
             experiment_result = Path(result["experiment_dir"]) / "result.json"
@@ -334,9 +336,11 @@ dataset:
             self.assertIn("TimeoutError", result["raw_timeout_error"])
             self.assertEqual(result["equation"], "x0")
             self.assertIsNotNone(result["canonical_artifact"])
+            self.assertIsNotNone(result["train"])
             self.assertIsNotNone(result["valid"])
             self.assertIsNotNone(result["id_test"])
             self.assertIsNotNone(result["ood_test"])
+            self.assertEqual(result["train"]["nmse"], 0.0)
             self.assertEqual(result["equation_count"], 1)
 
     def test_recover_timeout_falls_back_to_latest_finite_progress_snapshot(self):
@@ -401,6 +405,7 @@ dataset:
 
             self.assertIsNotNone(payload)
             self.assertEqual(payload["equation"], "x0")
+            self.assertEqual(payload["train_metrics"]["nmse"], 0.0)
             self.assertEqual(payload["valid_metrics"]["nmse"], 0.0)
             self.assertEqual(payload["id_metrics"]["nmse"], 0.0)
             self.assertEqual(payload["ood_metrics"]["nmse"], 0.0)

@@ -114,6 +114,7 @@ class BenchmarkProgressSnapshotsTest(unittest.TestCase):
                 str(sp.expand(expr)),
                 str(sp.expand(sp.sympify("2.0*x0 + 3.0*x1 + 1.0"))),
             )
+            self.assertAlmostEqual(payload["train"]["rmse"], 0.0, places=10)
             self.assertAlmostEqual(payload["valid"]["rmse"], 0.0, places=10)
             self.assertAlmostEqual(payload["id_test"]["rmse"], 0.0, places=10)
             self.assertAlmostEqual(payload["ood_test"]["rmse"], 0.0, places=10)

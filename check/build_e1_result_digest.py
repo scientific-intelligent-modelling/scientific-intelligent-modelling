@@ -180,9 +180,11 @@ def _digest_row(raw: dict[str, Any], candidates: dict[int, dict[str, str]]) -> d
     expression = result.get("equation") or ""
     has_expression = bool(expression)
 
+    train_nmse = _num(_nested(result, "train", "nmse"))
     valid_nmse = _num(_nested(result, "valid", "nmse"))
     id_nmse = _num(_nested(result, "id_test", "nmse"))
     ood_nmse = _num(_nested(result, "ood_test", "nmse"))
+    train_r2 = _num(_nested(result, "train", "r2"))
     id_r2 = _num(_nested(result, "id_test", "r2"))
     ood_r2 = _num(_nested(result, "ood_test", "r2"))
     has_full_metrics = id_nmse is not None and ood_nmse is not None
@@ -232,9 +234,11 @@ def _digest_row(raw: dict[str, Any], candidates: dict[int, dict[str, str]]) -> d
             has_full_metrics,
             str(result.get("timeout_type") or ""),
         ),
+        "train_nmse": train_nmse,
         "valid_nmse": valid_nmse,
         "id_nmse": id_nmse,
         "ood_nmse": ood_nmse,
+        "train_r2": train_r2,
         "id_r2": id_r2,
         "ood_r2": ood_r2,
         "runtime": _num(result.get("seconds")) or _num(raw.get("seconds")),

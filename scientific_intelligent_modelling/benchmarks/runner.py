@@ -984,15 +984,18 @@ def _build_periodic_snapshot_payload(
         parameter_values=parameter_values,
     )
 
+    train_metrics = None
     valid_metrics = None
     id_metrics = None
     ood_metrics = None
     error = None
     if canonical_artifact is not None:
         try:
+            train_pred = _predict_from_canonical_artifact(canonical_artifact, dataset.train.X) if dataset.train else None
             valid_pred = _predict_from_canonical_artifact(canonical_artifact, dataset.valid.X) if dataset.valid else None
             id_pred = _predict_from_canonical_artifact(canonical_artifact, dataset.id_test.X) if dataset.id_test else None
             ood_pred = _predict_from_canonical_artifact(canonical_artifact, dataset.ood_test.X) if dataset.ood_test else None
+            train_metrics = _evaluate_prediction(dataset.train, train_pred)
             valid_metrics = _evaluate_prediction(dataset.valid, valid_pred)
             id_metrics = _evaluate_prediction(dataset.id_test, id_pred)
             ood_metrics = _evaluate_prediction(dataset.ood_test, ood_pred)
@@ -1013,6 +1016,7 @@ def _build_periodic_snapshot_payload(
         equation_count=1,
         canonical_artifact=canonical_artifact,
         canonical_artifact_error=canonical_artifact_error,
+        train_metrics=train_metrics,
         valid_metrics=valid_metrics,
         id_metrics=id_metrics,
         ood_metrics=ood_metrics,
@@ -1069,14 +1073,17 @@ def _recover_timeout_payload_from_candidate(
         parameter_values=parameter_values,
     )
 
+    train_metrics = None
     valid_metrics = None
     id_metrics = None
     ood_metrics = None
     if canonical_artifact is not None:
         try:
+            train_pred = _predict_from_canonical_artifact(canonical_artifact, dataset.train.X) if dataset.train else None
             valid_pred = _predict_from_canonical_artifact(canonical_artifact, dataset.valid.X) if dataset.valid else None
             id_pred = _predict_from_canonical_artifact(canonical_artifact, dataset.id_test.X) if dataset.id_test else None
             ood_pred = _predict_from_canonical_artifact(canonical_artifact, dataset.ood_test.X) if dataset.ood_test else None
+            train_metrics = _evaluate_prediction(dataset.train, train_pred)
             valid_metrics = _evaluate_prediction(dataset.valid, valid_pred)
             id_metrics = _evaluate_prediction(dataset.id_test, id_pred)
             ood_metrics = _evaluate_prediction(dataset.ood_test, ood_pred)
@@ -1098,6 +1105,7 @@ def _recover_timeout_payload_from_candidate(
         "equation_count": 1,
         "canonical_artifact": canonical_artifact,
         "canonical_artifact_error": canonical_artifact_error,
+        "train_metrics": train_metrics,
         "valid_metrics": valid_metrics,
         "id_metrics": id_metrics,
         "ood_metrics": ood_metrics,
@@ -1135,11 +1143,19 @@ def _recover_timeout_payload_from_progress_snapshots(
         ood_metrics = item.get("ood_test")
         if not _recovered_metrics_are_usable(dataset, valid_metrics, id_metrics, ood_metrics):
             continue
+        train_metrics = item.get("train")
+        if train_metrics is None:
+            try:
+                train_pred = _predict_from_canonical_artifact(artifact, dataset.train.X)
+                train_metrics = _evaluate_prediction(dataset.train, train_pred)
+            except Exception:
+                train_metrics = None
         return {
             "equation": equation,
             "equation_count": item.get("equation_count") or 1,
             "canonical_artifact": artifact,
             "canonical_artifact_error": item.get("canonical_artifact_error"),
+            "train_metrics": train_metrics,
             "valid_metrics": valid_metrics,
             "id_metrics": id_metrics,
             "ood_metrics": ood_metrics,
@@ -1232,6 +1248,7 @@ def build_result_payload(
     equation_count: int | None,
     canonical_artifact: dict[str, Any] | None,
     canonical_artifact_error: str | None,
+    train_metrics: dict[str, float | None] | None,
     valid_metrics: dict[str, float | None] | None,
     id_metrics: dict[str, float | None] | None,
     ood_metrics: dict[str, float | None] | None,
@@ -1269,6 +1286,7 @@ def build_result_payload(
         "equation_count": equation_count,
         "canonical_artifact": canonical_artifact,
         "canonical_artifact_error": canonical_artifact_error,
+        "train": train_metrics,
         "valid": valid_metrics,
         "id_test": id_metrics,
         "ood_test": ood_metrics,
@@ -1342,6 +1360,7 @@ def run_benchmark_task(
     equation_count = None
     canonical_artifact = None
     canonical_artifact_error = None
+    train_metrics = None
     valid_metrics = None
     id_metrics = None
     ood_metrics = None
@@ -1389,6 +1408,7 @@ def run_benchmark_task(
             equation_count = len(equations) if isinstance(equations, list) else None
         except Exception:
             equation_count = None
+        train_metrics = _evaluate_split(reg, dataset.train)
         valid_metrics = _evaluate_split(reg, dataset.valid)
         id_metrics = _evaluate_split(reg, dataset.id_test)
         ood_metrics = _evaluate_split(reg, dataset.ood_test)
@@ -1408,6 +1428,7 @@ def run_benchmark_task(
             equation_count = recovered_payload["equation_count"]
             canonical_artifact = recovered_payload["canonical_artifact"]
             canonical_artifact_error = recovered_payload["canonical_artifact_error"]
+            train_metrics = recovered_payload["train_metrics"]
             valid_metrics = recovered_payload["valid_metrics"]
             id_metrics = recovered_payload["id_metrics"]
             ood_metrics = recovered_payload["ood_metrics"]
@@ -1447,6 +1468,7 @@ def run_benchmark_task(
         equation_count=equation_count,
         canonical_artifact=canonical_artifact,
         canonical_artifact_error=canonical_artifact_error,
+        train_metrics=train_metrics,
         valid_metrics=valid_metrics,
         id_metrics=id_metrics,
         ood_metrics=ood_metrics,
