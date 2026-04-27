@@ -74,6 +74,16 @@ def _candidate_index() -> dict[int, dict[str, str]]:
     return {int(row["global_index"]): row for row in rows}
 
 
+def _srsd_variant(subgroup: str) -> str:
+    prefix = "srsd/srsd-feynman_"
+    if not subgroup.startswith(prefix):
+        return ""
+    raw = subgroup.removeprefix(prefix)
+    if raw.endswith("_dummy"):
+        return f"{raw.removesuffix('_dummy')} dummy"
+    return f"{raw} non-dummy"
+
+
 _FEATURE_COUNT_CACHE: dict[str, int | None] = {}
 
 
@@ -208,6 +218,7 @@ def _digest_row(raw: dict[str, Any], candidates: dict[int, dict[str, str]]) -> d
         "dataset_dir": candidate.get("dataset_rel") or candidate.get("dataset_dir") or raw.get("dataset_dir", ""),
         **identity,
         "family": candidate.get("family", ""),
+        "srsd_variant": _srsd_variant(candidate.get("subgroup", "")),
         "subgroup": candidate.get("subgroup", ""),
         "basename": candidate.get("basename", ""),
         "pool": candidate.get("pool", ""),
@@ -302,6 +313,7 @@ def _dataset_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "dataset_name": first["dataset_name"],
                 "dataset_dir": first["dataset_dir"],
                 "family": first["family"],
+                "srsd_variant": first["srsd_variant"],
                 "subgroup": first["subgroup"],
                 "selection_mode": first["selection_mode"],
                 "candidate_advantage_side": first["candidate_advantage_side"],
@@ -322,6 +334,7 @@ def _dataset_algorithm_nmse_rows(rows: list[dict[str, Any]]) -> list[dict[str, A
             "dataset_id": row["dataset_id"],
             "dataset_name": row["dataset_name"],
             "family": row["family"],
+            "srsd_variant": row["srsd_variant"],
             "algorithm": row["method"],
             "train_nmse": row.get("train_nmse"),
             "valid_nmse": row.get("valid_nmse"),
