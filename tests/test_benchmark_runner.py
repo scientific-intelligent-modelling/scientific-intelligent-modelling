@@ -280,6 +280,10 @@ dataset:
             result = json.loads(result_path.read_text(encoding="utf-8"))
             self.assertEqual(result["status"], "timed_out")
             self.assertIn("TimeoutError", result["error"])
+            self.assertTrue(result["budget_exhausted"])
+            self.assertEqual(result["timeout_type"], "no_valid_output")
+            self.assertFalse(result["recovered_from_timeout"])
+            self.assertEqual(result["termination_reason"], "no_valid_output")
             self.assertTrue(result["experiment_dir"])
 
     def test_run_benchmark_task_recovers_timeout_result_from_candidate_artifacts(self):
@@ -321,7 +325,13 @@ dataset:
                 runner._extract_periodic_candidate = original_extract
 
             result = json.loads(result_path.read_text(encoding="utf-8"))
-            self.assertEqual(result["status"], "timed_out")
+            self.assertEqual(result["status"], "ok")
+            self.assertIsNone(result["error"])
+            self.assertTrue(result["budget_exhausted"])
+            self.assertEqual(result["timeout_type"], "budget_exhausted_with_output")
+            self.assertTrue(result["recovered_from_timeout"])
+            self.assertEqual(result["termination_reason"], "budget_exhausted_with_output")
+            self.assertIn("TimeoutError", result["raw_timeout_error"])
             self.assertEqual(result["equation"], "x0")
             self.assertIsNotNone(result["canonical_artifact"])
             self.assertIsNotNone(result["valid"])

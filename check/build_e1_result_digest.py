@@ -151,7 +151,10 @@ def _timeout_type(
     has_expression: bool,
     artifact_valid: str,
     has_full_metrics: bool,
+    explicit_timeout_type: str = "",
 ) -> str:
+    if explicit_timeout_type:
+        return explicit_timeout_type
     if task_status != "timed_out" and result_status != "timed_out":
         return "not_timeout"
     if valid_output:
@@ -220,7 +223,15 @@ def _digest_row(raw: dict[str, Any], candidates: dict[int, dict[str, str]]) -> d
         "has_full_metrics": _bool_text(has_full_metrics),
         "has_expression": _bool_text(has_expression),
         "artifact_valid": artifact_valid,
-        "timeout_type": _timeout_type(task_status, result_status, valid_output, has_expression, artifact_valid, has_full_metrics),
+        "timeout_type": _timeout_type(
+            task_status,
+            result_status,
+            valid_output,
+            has_expression,
+            artifact_valid,
+            has_full_metrics,
+            str(result.get("timeout_type") or ""),
+        ),
         "valid_nmse": valid_nmse,
         "id_nmse": id_nmse,
         "ood_nmse": ood_nmse,

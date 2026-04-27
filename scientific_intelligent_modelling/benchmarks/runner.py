@@ -1277,6 +1277,29 @@ def build_result_payload(
     }
 
 
+def _timeout_type_for_payload(
+    *,
+    dataset: LoadedDataset,
+    equation: str | None,
+    canonical_artifact: dict[str, Any] | None,
+    valid_metrics: dict[str, Any] | None,
+    id_metrics: dict[str, Any] | None,
+    ood_metrics: dict[str, Any] | None,
+) -> str:
+    if (
+        isinstance(equation, str)
+        and equation.strip()
+        and isinstance(canonical_artifact, dict)
+        and _recovered_metrics_are_usable(dataset, valid_metrics, id_metrics, ood_metrics)
+    ):
+        return "budget_exhausted_with_output"
+    if isinstance(equation, str) and equation.strip() and isinstance(canonical_artifact, dict):
+        return "partial_output"
+    if isinstance(equation, str) and equation.strip():
+        return "unvalidated_expression"
+    return "no_valid_output"
+
+
 def run_benchmark_task(
     *,
     tool_name: str,
@@ -1323,6 +1346,9 @@ def run_benchmark_task(
     id_metrics = None
     ood_metrics = None
     experiment_dir = None
+    budget_exhausted = False
+    timeout_type = "not_timeout"
+    raw_timeout_error = None
 
     reg = SymbolicRegressor(
         tool_name,
@@ -1367,8 +1393,10 @@ def run_benchmark_task(
         id_metrics = _evaluate_split(reg, dataset.id_test)
         ood_metrics = _evaluate_split(reg, dataset.ood_test)
     except TimeoutError as exc:
+        budget_exhausted = True
+        raw_timeout_error = repr(exc)
         status = "timed_out"
-        error = repr(exc)
+        error = raw_timeout_error
         experiment_dir = getattr(reg, "experiment_dir", experiment_dir)
         recovered_payload = _recover_timeout_payload_from_candidate(
             tool_name=tool_name,
@@ -1383,6 +1411,21 @@ def run_benchmark_task(
             valid_metrics = recovered_payload["valid_metrics"]
             id_metrics = recovered_payload["id_metrics"]
             ood_metrics = recovered_payload["ood_metrics"]
+            timeout_type = _timeout_type_for_payload(
+                dataset=dataset,
+                equation=equation,
+                canonical_artifact=canonical_artifact,
+                valid_metrics=valid_metrics,
+                id_metrics=id_metrics,
+                ood_metrics=ood_metrics,
+            )
+            if timeout_type == "budget_exhausted_with_output":
+                # 预算耗尽但已恢复出可评估 best-so-far，应按有效完成处理；
+                # 原始超时原因保留在 raw_timeout_error，避免巡检误判为失败。
+                status = "ok"
+                error = None
+        else:
+            timeout_type = "no_valid_output"
     except Exception as exc:
         status = "error"
         error = repr(exc)
@@ -1413,6 +1456,14 @@ def run_benchmark_task(
         expected_dataset_rel=task_identity.get("expected_dataset_rel"),
         expected_dataset_dir=task_identity.get("expected_dataset_dir"),
     )
+    result["budget_exhausted"] = bool(budget_exhausted)
+    result["timeout_type"] = timeout_type
+    result["raw_timeout_error"] = raw_timeout_error
+    result["recovered_from_timeout"] = timeout_type == "budget_exhausted_with_output"
+    if budget_exhausted:
+        result["termination_reason"] = timeout_type
+    else:
+        result["termination_reason"] = "completed" if status == "ok" else status
 
     result_path = output_dir / "result.json"
     write_result_payload(result, primary_path=result_path, experiment_dir=experiment_dir)
