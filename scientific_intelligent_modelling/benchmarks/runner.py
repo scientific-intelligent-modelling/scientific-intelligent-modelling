@@ -1256,12 +1256,13 @@ def build_runner_params(
             params.setdefault("background", background)
             params.setdefault("metadata_path", str(dataset.dataset_dir / "metadata.yaml"))
 
-            # SRSD 含 distractor 的数据集：所有变量描述统一设为汇总信息，
-            # 告知总变量数、哪些是 active（含含义）、哪些是 distractor。
+            # SRSD 含 distractor 的数据集：变量描述统一标 "meaning or meaningless"，
+            # 汇总信息（总变量数、active变量及含义）追加到 background。
             if dataset.feature_descriptions:
                 srsd_summary = _build_srsd_distractor_summary(dataset.feature_names, dataset.feature_descriptions)
                 if srsd_summary is not None:
-                    params["feature_descriptions"] = [srsd_summary] * len(dataset.feature_names)
+                    params["background"] = f"{background} {srsd_summary}"
+                    params["feature_descriptions"] = ["meaning or meaningless"] * len(dataset.feature_names)
                 else:
                     params.setdefault("feature_descriptions", dataset.feature_descriptions)
             else:
