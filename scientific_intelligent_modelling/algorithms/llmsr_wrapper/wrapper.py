@@ -318,6 +318,7 @@ class LLMSRRegressor(BaseWrapper):
                 metadata_path=self.params.get("metadata_path"),
                 feature_descriptions=self.params.get("feature_descriptions"),
                 target_description=self.params.get("target_description"),
+                anonymize=bool(self.params.get("anonymize", False)),
                 wandb_config=wandb_cfg,
             )
             core.fit()

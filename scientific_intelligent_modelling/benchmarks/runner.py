@@ -1249,6 +1249,15 @@ def build_runner_params(
     params.setdefault("feature_names", list(dataset.feature_names))
     params.setdefault("target_name", dataset.target_name)
 
+    # 变量名匿名化：将原始列名替换为 x1..xN，目标列名替换为 y。
+    # 对 llmsr/drsr 生效，可通过 params_override 中的 anonymize 开关控制。
+    anonymize = _as_bool(params.pop("anonymize", None), default=False)
+    if anonymize:
+        n = len(dataset.feature_names)
+        params["feature_names"] = [f"x{i+1}" for i in range(n)]
+        params["target_name"] = "y"
+        params["anonymize"] = True
+
     if tool_name in {"llmsr", "drsr"}:
         inject_prompt_semantics = _as_bool(params.get("inject_prompt_semantics"), default=True)
         if inject_prompt_semantics:
@@ -1256,10 +1265,16 @@ def build_runner_params(
             params.setdefault("background", background)
             params.setdefault("metadata_path", str(dataset.dataset_dir / "metadata.yaml"))
 
-            # SRSD 含 distractor 的数据集：变量描述统一标 "meaning or meaningless"，
-            # 汇总信息（总变量数、active变量及含义）追加到 background。
-            if dataset.feature_descriptions:
-                srsd_summary = _build_srsd_distractor_summary(dataset.feature_names, dataset.feature_descriptions)
+            # 匿名化模式下不注入变量/目标描述。
+            if params.get("anonymize"):
+                params.pop("feature_descriptions", None)
+                params.pop("target_description", None)
+            elif dataset.feature_descriptions:
+                # SRSD 含 distractor 的数据集：变量描述统一标 "meaning or meaningless"，
+                # 汇总信息追加到 background。
+                srsd_summary = _build_srsd_distractor_summary(
+                    dataset.feature_names, dataset.feature_descriptions
+                )
                 if srsd_summary is not None:
                     params["background"] = f"{background} {srsd_summary}"
                     params["feature_descriptions"] = ["meaning or meaningless"] * len(dataset.feature_names)
@@ -1267,7 +1282,7 @@ def build_runner_params(
                     params.setdefault("feature_descriptions", dataset.feature_descriptions)
             else:
                 params.setdefault("feature_descriptions", dataset.feature_descriptions)
-            if dataset.target_description:
+            if not params.get("anonymize") and dataset.target_description:
                 params.setdefault("target_description", dataset.target_description)
         else:
             params.setdefault("background", _NEUTRAL_SR_BACKGROUND)
