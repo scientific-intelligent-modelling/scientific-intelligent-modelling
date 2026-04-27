@@ -69,6 +69,12 @@
       "phase": "E3/E6",
       "family": "uDSR-trunk / DSO + LINEAR token + GP-meld",
       "file": "udsr.json"
+    },
+    {
+      "tool": "ragsr",
+      "phase": "E3/E6",
+      "family": "RAG-SR / EvolutionaryForest",
+      "file": "ragsr.json"
     }
   ],
   "global_defaults": {

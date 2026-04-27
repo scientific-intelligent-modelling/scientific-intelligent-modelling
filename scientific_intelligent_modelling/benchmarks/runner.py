@@ -43,6 +43,13 @@ _SNAPSHOT_CAPABLE_TOOLS = {
     "QLattice",
     "ragsr",
 }
+_SNAPSHOT_CAPABLE_TOOL_KEYS = {tool.lower() for tool in _SNAPSHOT_CAPABLE_TOOLS}
+
+
+def _is_snapshot_capable_tool(tool_name: str) -> bool:
+    return str(tool_name).strip().lower() in _SNAPSHOT_CAPABLE_TOOL_KEYS
+
+
 _RUNNER_TASK_IDENTITY_PARAM_KEYS = {
     "task_label",
     "task_global_index",
@@ -945,10 +952,8 @@ def _write_progress_payload(
 def _resolve_progress_snapshot_interval_seconds(tool_name: str, params: dict[str, Any]) -> int | None:
     raw = params.pop("progress_snapshot_interval_seconds", None)
     if raw is None:
-        if str(tool_name).strip().lower() == "ragsr":
+        if _is_snapshot_capable_tool(tool_name):
             return 60
-        if tool_name in _SNAPSHOT_CAPABLE_TOOLS:
-            return 600
         return None
     try:
         value = int(raw)
@@ -1329,7 +1334,7 @@ def run_benchmark_task(
     snapshot_stop_event: threading.Event | None = None
     snapshot_thread: threading.Thread | None = None
 
-    if progress_snapshot_interval_seconds and experiment_dir and tool_name in _SNAPSHOT_CAPABLE_TOOLS:
+    if progress_snapshot_interval_seconds and experiment_dir and _is_snapshot_capable_tool(tool_name):
         snapshot_stop_event = threading.Event()
         snapshot_thread = threading.Thread(
             target=_periodic_snapshot_loop,

@@ -49,6 +49,24 @@ def _equation_function() -> str:
 
 
 class BenchmarkProgressSnapshotsTest(unittest.TestCase):
+    def test_snapshot_capable_tools_default_to_one_minute_interval(self):
+        for tool in runner._SNAPSHOT_CAPABLE_TOOLS:
+            with self.subTest(tool=tool):
+                params = {}
+                interval = runner._resolve_progress_snapshot_interval_seconds(tool.lower(), params)
+                self.assertEqual(interval, 60)
+                self.assertNotIn("progress_snapshot_interval_seconds", params)
+
+        self.assertIsNone(
+            runner._resolve_progress_snapshot_interval_seconds("not_snapshot_capable", {})
+        )
+
+    def test_snapshot_interval_override_still_takes_precedence(self):
+        params = {"progress_snapshot_interval_seconds": 30}
+        interval = runner._resolve_progress_snapshot_interval_seconds("pysr", params)
+        self.assertEqual(interval, 30)
+        self.assertNotIn("progress_snapshot_interval_seconds", params)
+
     def test_build_periodic_snapshot_payload_for_llmsr(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

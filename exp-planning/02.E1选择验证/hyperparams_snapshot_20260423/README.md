@@ -7,7 +7,7 @@
 - 避免后续重新运行 `generate_e1_formal_assets.py` 时覆盖当前参数口径
 - 为 `W1~W5` 分发、复查和论文复现实验提供一份稳定快照
 - 明确当前 `E1 / E3 / E6` 采用的是一套**可执行的工程基线**，不是最终调优版
-- 11 算法总览表见：
+- 12 算法总览表见：
   - [hyperparams_overview.md](./hyperparams_overview.md)
 
 ## 当前包含的算法
@@ -23,6 +23,7 @@
 - `qlattice`
 - `imcts`
 - `udsr`
+- `ragsr`
 
 ## 文件说明
 
@@ -61,6 +62,11 @@
   - uDSR trunk 变体，保持 `tool_name=udsr` 与 `udsr_wrapper` 目录名
   - 启用论文 token 集、LINEAR `poly` token 与 GP-meld
   - 不包含 full uDSR 的 AIF 递归化简与 LSPT 预训练
+- `ragsr.json`
+  - `E3 / E6` 使用
+  - RAG-SR / EvolutionaryForest 口径
+  - 对齐官方 Target encoding 默认值
+  - 启用每分钟 best-so-far 快照恢复
 
 ## 参数来源
 
@@ -74,8 +80,8 @@
 
 - 当前默认 `timeout_in_seconds = 3600`
 - 当前默认 `progress_snapshot_interval_seconds = 60`
-- `e2esr / qlattice / imcts / udsr` 不属于 `E1` 七算法，而是用于：
-  - `E3` 的 10/11 算法轻量验证
+- `e2esr / qlattice / imcts / udsr / ragsr` 不属于 `E1` 七算法，而是用于：
+  - `E3` 的多算法轻量验证
   - `E6` 的最终 leaderboard
 - `llmsr / drsr` 使用固定 benchmark 配置：
   - `/home/zhangziwen/projects/scientific-intelligent-modelling/exp-planning/02.E1选择验证/llm_configs/benchmark_llm.config`
@@ -119,7 +125,7 @@
   - `criterion = bic`
   - `signif = 4`
   - `threads = 1`
-  - 目标是在最终 10/11 算法比较中固定图搜索模型的选模与线程口径
+  - 目标是在最终多算法比较中固定图搜索模型的选模与线程口径
 - `imcts` 当前采用的口径是：
   - `ops = +,-,*,/,sin,cos,exp,log`
   - `max_depth = 6`
@@ -133,7 +139,7 @@
   - `max_constants = 10`
   - `max_expressions = 2000000`
   - `optimization_method = LN_NELDERMEAD`
-  - 目标是在最终 10/11 算法比较中对齐仓库自带 basic 配置
+  - 目标是在最终多算法比较中对齐仓库自带 basic 配置
 - `udsr` 当前采用的是 `uDSR-trunk/noAIF/noLSPT` 口径：
   - `benchmark_variant = udsr_trunk_dso_poly_gp_meld`
   - 组件开关固定为 `aif=false, dsr=true, lspt=false, gp_meld=true, linear_poly=true`
@@ -150,3 +156,13 @@
   - `training.batch_size = 1000`
   - 目标是把 DSO/uDSR 主干作为独立算法口径纳入后续验证，而不是覆盖 `dso` 纯 RL baseline
   - 注意：这不是论文 full uDSR；当前缺 AIF 递归化简和 LSPT 预训练 encoder-controller
+- `ragsr` 当前采用的是 `RAG-SR / EvolutionaryForest` 口径：
+  - `benchmark_variant = ragsr_evolutionary_forest_official_defaults`
+  - `n_gen = 100`
+  - `n_pop = 200`
+  - `max_trees = 10000`
+  - `gene_num = 10`
+  - `basic_primitives = Add,Sub,Mul,AQ,Sqrt,AbsLog,Abs,Square,RSin,RCos,Max,Min,Neg`
+  - `categorical_encoding = Target`
+  - `time_limit` 默认由 `timeout_in_seconds` 自动派生
+  - 目标是把 RAG-SR 作为 EvolutionaryForest/RAG family 代表纳入后续验证，并保证 timeout 后能用分钟级快照恢复 best-so-far
