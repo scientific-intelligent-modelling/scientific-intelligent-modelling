@@ -1252,14 +1252,24 @@ def build_runner_params(
     if tool_name in {"llmsr", "drsr"}:
         inject_prompt_semantics = _as_bool(params.get("inject_prompt_semantics"), default=True)
         if inject_prompt_semantics:
-            params.setdefault("background", _build_background(dataset.metadata, dataset.feature_names))
+            background = _build_background(dataset.metadata, dataset.feature_names)
+            params.setdefault("background", background)
             params.setdefault("metadata_path", str(dataset.dataset_dir / "metadata.yaml"))
-            # SRSD 含 distractor 的数据集：变量描述改为汇总格式，
-            # 不再逐个描述变量，而是告知总变量数及哪些是 active/distractor。
+
+            # SRSD 含 distractor 的数据集：将汇总信息追加到 background，
+            # 变量描述简化为 active/distractor 标签。
             if dataset.feature_descriptions:
                 srsd_summary = _build_srsd_distractor_summary(dataset.feature_names, dataset.feature_descriptions)
                 if srsd_summary is not None:
-                    params["feature_descriptions"] = [srsd_summary] * len(dataset.feature_names)
+                    params["background"] = f"{background} {srsd_summary}"
+                    # 生成简化的变量标签，不再逐个附上物理含义
+                    feat_labels = []
+                    for desc in dataset.feature_descriptions:
+                        if desc and "meaningless" in str(desc).lower():
+                            feat_labels.append("distractor feature (no physical meaning)")
+                        else:
+                            feat_labels.append("active feature")
+                    params["feature_descriptions"] = feat_labels
                 else:
                     params.setdefault("feature_descriptions", dataset.feature_descriptions)
             else:
