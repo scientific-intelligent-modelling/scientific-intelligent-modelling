@@ -563,5 +563,233 @@ dataset:
             self.assertEqual(params["target_name"], "output")
 
 
-if __name__ == "__main__":
-    unittest.main()
+class SrsdDistractorTest(unittest.TestCase):
+    """测试 SRSD distractor 汇总描述逻辑。"""
+
+    def _make_dataset(
+        self,
+        root: Path,
+        description: str,
+        feature_names: list[str],
+        target_name: str,
+        feature_descs: list[str | None],
+        target_desc: str | None = None,
+    ):
+        dataset_dir = root / "dataset"
+        dataset_dir.mkdir()
+        feat_lines = "\n".join(
+            f'    - name: {n}\n      description: {d or ""}'
+            for n, d in zip(feature_names, feature_descs)
+        )
+        target_line = f"  target:\n    name: {target_name}\n    description: {target_desc or ''}"
+        meta = f"""
+dataset:
+  description: {description}
+{target_line}
+  features:
+{feat_lines}
+""".strip()
+        (dataset_dir / "metadata.yaml").write_text(meta, encoding="utf-8")
+        header = ",".join(feature_names + [target_name])
+        (dataset_dir / "train.csv").write_text(
+            f"{header}\n" + "0.5,0.5,1.0\n" * 10, encoding="utf-8"
+        )
+        return runner.load_canonical_dataset(dataset_dir)
+
+    def test_distractor_summary_with_dummy(self):
+        """含 meaningless 变量的数据集应生成汇总描述。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset = self._make_dataset(
+                root,
+                "Calculate the Energy given Spring constant, Position",
+                feature_names=["x0", "x1", "x2", "x3", "x4"],
+                target_name="y",
+                feature_descs=["meaningless", "k_spring, Spring constant", "x, Position", "meaningless", "meaningless"],
+                target_desc="U, Elastic energy",
+            )
+            params = runner.build_runner_params(
+                "llmsr", dataset, root / "bench_results", seed=1314,
+            )
+
+            # background 应追加汇总信息
+            self.assertIn("There are 5 variables", params["background"])
+            self.assertIn("x1 (k_spring, Spring constant)", params["background"])
+            self.assertIn("x2 (x, Position)", params["background"])
+            self.assertIn("remaining 3 variables are distractor", params["background"])
+
+            # 每个变量的描述统一为 "meaning or meaningless"
+            self.assertEqual(
+                params["feature_descriptions"],
+                ["meaning or meaningless"] * 5,
+            )
+
+    def test_distractor_summary_without_dummy(self):
+        """不含 meaningless 变量的数据集保持原始描述。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset = self._make_dataset(
+                root,
+                "Calculate the Force given Mass, Acceleration",
+                feature_names=["m", "a"],
+                target_name="F",
+                feature_descs=["Mass", "Acceleration"],
+                target_desc="Force",
+            )
+            params = runner.build_runner_params(
+                "llmsr", dataset, root / "bench_results", seed=1314,
+            )
+
+            # background 保持原样
+            self.assertEqual(
+                params["background"],
+                "Calculate the Force given Mass, Acceleration",
+            )
+            # feature_descriptions 保持原始
+            self.assertEqual(params["feature_descriptions"], ["Mass", "Acceleration"])
+
+    def test_distractor_skipped_for_non_llm_tool(self):
+        """非 llmsr/drsr 的工具不应触发 distractor 逻辑。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset = self._make_dataset(
+                root,
+                "Calculate the Energy",
+                feature_names=["x0", "x1"],
+                target_name="y",
+                feature_descs=["meaningless", "mass"],
+                target_desc="Energy",
+            )
+            params = runner.build_runner_params(
+                "gplearn", dataset, root / "bench_results", seed=1314,
+            )
+
+            # gplearn 不注入 background/feature_descriptions
+            self.assertNotIn("background", params)
+            self.assertNotIn("feature_descriptions", params)
+
+
+class AnonymizeTest(unittest.TestCase):
+    """测试变量名匿名化逻辑。"""
+
+    def _make_dataset(self, root: Path):
+        dataset_dir = root / "dataset"
+        dataset_dir.mkdir()
+        (dataset_dir / "metadata.yaml").write_text(
+            """
+dataset:
+  description: Test dataset
+  target:
+    name: output
+    description: the target variable
+  features:
+    - name: mu
+      description: Coefficient of friction
+    - name: Nn
+      description: Normal force
+""".strip(),
+            encoding="utf-8",
+        )
+        (dataset_dir / "train.csv").write_text("mu,Nn,output\n1,2,3\n", encoding="utf-8")
+        return runner.load_canonical_dataset(dataset_dir)
+
+    def test_anonymize_enabled_for_llmsr(self):
+        """anonymize=True 时变量名应变为 x1..xN，目标名为 y。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset = self._make_dataset(root)
+            params = runner.build_runner_params(
+                "llmsr",
+                dataset,
+                root / "bench_results",
+                seed=1314,
+                params_override={"anonymize": True},
+            )
+
+            self.assertEqual(params["feature_names"], ["x1", "x2"])
+            self.assertEqual(params["target_name"], "y")
+            self.assertIs(params["anonymize"], True)
+
+    def test_anonymize_removes_descriptions(self):
+        """anonymize=True 时不应注入变量/目标描述。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset = self._make_dataset(root)
+            params = runner.build_runner_params(
+                "llmsr",
+                dataset,
+                root / "bench_results",
+                seed=1314,
+                params_override={"anonymize": True},
+            )
+
+            self.assertNotIn("feature_descriptions", params)
+            self.assertNotIn("target_description", params)
+
+    def test_anonymize_disabled_by_default(self):
+        """默认 anonymize=False，变量名保持原始。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset = self._make_dataset(root)
+            params = runner.build_runner_params(
+                "llmsr",
+                dataset,
+                root / "bench_results",
+                seed=1314,
+            )
+
+            self.assertEqual(params["feature_names"], ["mu", "Nn"])
+            self.assertEqual(params["target_name"], "output")
+            self.assertNotIn("anonymize", params)
+
+    def test_anonymize_works_for_drsr(self):
+        """anonymize 对 drsr 同样生效。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset = self._make_dataset(root)
+            params = runner.build_runner_params(
+                "drsr",
+                dataset,
+                root / "bench_results",
+                seed=1314,
+                params_override={"anonymize": True},
+            )
+
+            self.assertEqual(params["feature_names"], ["x1", "x2"])
+            self.assertEqual(params["target_name"], "y")
+
+    def test_anonymize_with_srsd_distractor(self):
+        """anonymize + SRSD distractor 时，以 anonymize 优先，不注入描述。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dataset_dir = root / "dataset"
+            dataset_dir.mkdir()
+            (dataset_dir / "metadata.yaml").write_text(
+                """
+dataset:
+  description: Calculate Energy
+  target:
+    name: y
+    description: Energy
+  features:
+    - name: x0
+      description: meaningless
+    - name: x1
+      description: k_spring, Spring constant
+""".strip(),
+                encoding="utf-8",
+            )
+            (dataset_dir / "train.csv").write_text("x0,x1,y\n1,2,3\n", encoding="utf-8")
+            dataset = runner.load_canonical_dataset(dataset_dir)
+
+            params = runner.build_runner_params(
+                "llmsr",
+                dataset,
+                root / "bench_results",
+                seed=1314,
+                params_override={"anonymize": True},
+            )
+
+            self.assertEqual(params["feature_names"], ["x1", "x2"])
+            self.assertNotIn("feature_descriptions", params)
+            self.assertNotIn("target_description", params)
